@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Apex Box · Grabador</title>
+  <link rel="icon" href="../icons/icon-48.png" />
+  <link rel="stylesheet" href="recorder.css" />
+  <script src="recorder.js" defer></script>
+</head>
+<body>
+  <main class="wrap">
+    <header class="head">
+      <h1><span class="mark" aria-hidden="true">■</span> Apex Box</h1>
+      <span class="rec-pill" id="rec-pill">NO REC</span>
+    </header>
+
+    <!-- Configuración -->
+    <form class="card" id="setup-form" autocomplete="off">
+      <label class="field">
+        <span>Tipo de reunión</span>
+        <select id="meeting-type">
+          <option value="ejecutiva" selected>Ejecutiva</option>
+          <option value="consejo">Consejo / Junta directiva</option>
+          <option value="comite">Comité</option>
+          <option value="asamblea">Asamblea</option>
+          <option value="seguimiento">Seguimiento</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Título</span>
+        <input id="title" type="text" maxlength="140" placeholder="Ej. Comité semanal de ventas" />
+      </label>
+
+      <div class="field">
+        <span>Tipo de grabación</span>
+        <div class="seg" role="radiogroup">
+          <label><input type="radio" name="mode" value="presencial" checked /> Presencial</label>
+          <label><input type="radio" name="mode" value="virtual" /> Virtual</label>
+        </div>
+        <small class="hint" id="mode-hint">Graba el micrófono de este equipo.</small>
+      </div>
+
+      <label class="field">
+        <span>Modelo</span>
+        <select id="engine">
+          <option value="Mc-Lewis" selected>Mc-Lewis · Híbrido</option>
+          <option value="Mc-Ayrton">Mc-Ayrton · Máxima precisión</option>
+          <option value="Mc-Norris">Mc-Norris · Huella vocal</option>
+          <option value="Mc-Piastri">Mc-Piastri · Ultra rápido</option>
+        </select>
+      </label>
+    </form>
+
+    <!-- Grabar + estadísticas -->
+    <section class="card">
+      <div class="clock" id="clock">00:00:00</div>
+
+      <div class="audio" aria-label="Nivel de audio">
+        <canvas id="wave" class="wave" height="64" aria-hidden="true"></canvas>
+        <p class="signal idle" id="signal" role="status" aria-live="polite">Sin grabar</p>
+        <ul class="sources" id="sources"></ul>
+      </div>
+
+      <button type="button" class="btn rec" id="rec-btn">● Grabar</button>
+      <button type="button" class="btn primary hidden" id="login-btn">Iniciar sesión en Apex Vox</button>
+      <p class="account" id="account">Comprobando sesión…</p>
+
+      <dl class="stats">
+        <div><dt>Bloques enviados</dt><dd id="stat-blocks">0</dd></div>
+        <div><dt>Segmentos</dt><dd id="stat-segments">0</dd></div>
+        <div><dt>Hablantes</dt><dd id="stat-speakers">0</dd></div>
+        <div><dt>Pendientes</dt><dd id="stat-pending">0</dd></div>
+      </dl>
+
+      <p class="status hidden" id="status" role="status"></p>
+    </section>
+
+    <!-- Resultado -->
+    <section class="card result hidden" id="result">
+      <h2>Reunión lista</h2>
+      <p id="result-meta"></p>
+      <a id="result-link" class="btn primary" target="_blank" rel="noopener">Ver notas, resumen y acta ↗</a>
+      <div class="row">
+        <input id="result-url" type="text" readonly />
+        <button type="button" class="btn ghost" id="copy-btn">Copiar</button>
+      </div>
+      <button type="button" class="btn ghost" id="new-btn">Nueva grabación</button>
+    </section>
+
+    <footer class="foot">
+      <span>Conectado a <strong>apex-vox.ialabs.app</strong></span>
+      <a href="https://groq.com" target="_blank" rel="noopener noreferrer">
+        <img
+          src="powered-by-groq-light.svg"
+          alt="Powered by Groq for fast inference."
+          width="118"
+          height="24"
+        />
+      </a>
+    </footer>
+  </main>
+</body>
+</html>

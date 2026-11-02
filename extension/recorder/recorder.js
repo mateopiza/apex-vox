@@ -1,6 +1,6 @@
 /**
- * Apex Box — Grabador en pestaña fija (extension/recorder/recorder.js)
- * --------------------------------------------------------------------
+ * Apex Box — Grabador en pestaña fija (recorder/recorder.js)
+ * ----------------------------------------------------------
  * 1. El usuario elige tipo de reunión, título, tipo de grabación y modelo.
  * 2. Graba en bloques de 3 min (cada bloque se sube y se libera de la RAM).
  * 3. Al detener, finaliza la sesión y entrega un enlace con notas, resumen y acta.
@@ -128,7 +128,12 @@
     const headers = Object.assign({}, options.headers || {});
     if (st.token) headers.Authorization = `Bearer ${st.token}`;
     const res = await fetch(`${st.serverUrl}${path}`, Object.assign({}, options, { headers }));
-    const data = await res.json().catch(() => ({}));
+    let data = {};
+    try {
+      data = await res.json();
+    } catch (_) {
+      data = {};
+    }
     if (res.status === 401) {
       st.token = null;
       st.user = null;
@@ -166,7 +171,9 @@
     el.account.classList.toggle("warn", !signedIn);
     if (signedIn) {
       const q = st.user.quota || {};
-      const plan = q.is_unlimited ? "Apex Pro" : `Plan gratis · ${Math.max(0, Math.floor((q.remaining_today_seconds || 0) / 60))} min disponibles hoy`;
+      const plan = q.is_unlimited
+        ? "Apex Pro"
+        : `Plan gratis · ${Math.max(0, Math.floor((q.remaining_today_seconds || 0) / 60))} min disponibles hoy`;
       el.account.textContent = `${st.user.email} · ${plan}`;
     } else {
       el.account.textContent = "Inicia sesión en Apex Vox para grabar. Después vuelve a esta pestaña.";
@@ -223,7 +230,11 @@
     chrome.action.setBadgeText({ text: noSound ? "MUDO" : badgeTime(sec) });
     chrome.action.setTitle({
       title: `Apex Box · REC ${hhmmss(sec)}${
-        sig.kind === "off" ? " · ⚠ fuente desconectada" : noSound ? ` · ⚠ sin sonido hace ${sig.silentSec} s` : " · captando sonido"
+        sig.kind === "off"
+          ? " · ⚠ fuente desconectada"
+          : noSound
+          ? ` · ⚠ sin sonido hace ${sig.silentSec} s`
+          : " · captando sonido"
       }`,
     });
     if (document.hidden) return;
@@ -282,7 +293,7 @@
       const micSrc = st.audioCtx.createMediaStreamSource(mic);
       micSrc.connect(out);
       st.meterSources.push({ label: "Micrófono", stream: mic, node: micSrc });
-    } catch (err) {
+    } catch (_) {
       showStatus("Grabando solo el audio de la reunión (sin micrófono).");
     }
     return out.stream;
@@ -307,11 +318,20 @@
     sink.connect(ctx.destination);
 
     const now = Date.now();
-    el.sources.innerHTML = "";
+    el.sources.textContent = "";
     st.meters = st.meterSources.map(({ label, stream, node }) => {
       const row = document.createElement("li");
-      row.innerHTML = `<span></span><span class="bar"><i></i></span><span class="state"></span>`;
-      row.firstChild.textContent = label;
+      const labelSpan = document.createElement("span");
+      labelSpan.textContent = label;
+      const barSpan = document.createElement("span");
+      barSpan.className = "bar";
+      const barFill = document.createElement("i");
+      barSpan.appendChild(barFill);
+      const stateSpan = document.createElement("span");
+      stateSpan.className = "state";
+      row.appendChild(labelSpan);
+      row.appendChild(barSpan);
+      row.appendChild(stateSpan);
       el.sources.appendChild(row);
 
       const meter = { label, level: 0, lastSoundAt: now, ended: false, row };
@@ -408,7 +428,7 @@
     st.meters = [];
     st.meterSources = [];
     st.wave = [];
-    el.sources.innerHTML = "";
+    el.sources.textContent = "";
     renderMeters();
   }
 
@@ -416,7 +436,9 @@
     st.streams.forEach((s) => s.getTracks().forEach((t) => t.stop()));
     st.streams = [];
     if (st.audioCtx) {
-      await st.audioCtx.close().catch(() => {});
+      try {
+        await st.audioCtx.close();
+      } catch (_) {}
       st.audioCtx = null;
     }
   }
@@ -449,16 +471,19 @@
   }
 
   function sendBlock(item) {
-    const p = uploadBlock(item)
-      .catch(() => {
+    let p;
+    p = (async () => {
+      try {
+        await uploadBlock(item);
+      } catch (_) {
         item.attempts = (item.attempts || 0) + 1;
         if (item.attempts < MAX_RETRIES) st.retryQueue.push(item);
         else st.failedBlocks += 1;
-      })
-      .finally(() => {
+      } finally {
         st.inFlight.delete(p);
         renderStats();
-      });
+      }
+    })();
     st.inFlight.add(p);
     renderStats();
     return p;
@@ -493,17 +518,21 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Grabar / Detener
+  // Grabar / Detener (con bloqueo de estado en chrome.storage.session)
   // ---------------------------------------------------------------------------
 
   async function startRecording() {
+    const { recordingState = "idle" } = await chrome.storage.session.get("recordingState");
+    if (recordingState === "starting" || recordingState === "stopping" || st.busy) return;
+
     if (!st.token || !st.user) {
       renderAccount();
       showStatus("Inicia sesión en Apex Vox para grabar.", true);
       return;
     }
-    // Crear el AudioContext en el mismo clic (antes de cualquier await) evita que Chrome
-    // lo deje suspendido por la política de autoplay.
+
+    await chrome.storage.session.set({ recordingState: "starting" });
+    // Crear el AudioContext en el mismo clic evita que Chrome lo deje suspendido
     st.audioCtx = new AudioContext();
     st.busy = true;
     renderRecordingState();
@@ -512,7 +541,11 @@
 
     try {
       const stream = await acquireStream();
-      if (st.audioCtx.state === "suspended") await st.audioCtx.resume().catch(() => {});
+      if (st.audioCtx.state === "suspended") {
+        try {
+          await st.audioCtx.resume();
+        } catch (_) {}
+      }
       await startMeters();
       const platform = mode() === "virtual" && st.source ? detectPlatform(st.source.url) : null;
       const session = await api("/api/box/sessions", {
@@ -542,6 +575,7 @@
         recording: true,
       });
 
+      await chrome.storage.session.set({ recordingState: "recording" });
       st.recorder = startBlock(stream);
       // Rotación sin cortes: arranca el siguiente bloque antes de cerrar el anterior.
       st.rotationTimer = setInterval(() => {
@@ -553,12 +587,13 @@
       tick();
       st.tickTimer = setInterval(tick, 1000);
       showStatus("");
-      chrome.storage.local.set({
+      await chrome.storage.local.set({
         lastMeetingType: el.meetingType.value,
         lastMode: mode(),
         lastEngine: el.engine.value,
       });
     } catch (err) {
+      await chrome.storage.session.set({ recordingState: "idle" });
       await releaseStreams();
       resetMeters();
       showStatus(`No se pudo iniciar: ${err.message}`, true);
@@ -570,6 +605,10 @@
   }
 
   async function stopRecording() {
+    const { recordingState = "idle" } = await chrome.storage.session.get("recordingState");
+    if (recordingState === "starting" || recordingState === "stopping") return;
+
+    await chrome.storage.session.set({ recordingState: "stopping" });
     st.busy = true;
     renderRecordingState();
     clearInterval(st.rotationTimer);
@@ -610,12 +649,13 @@
     } catch (err) {
       showStatus(`Error al finalizar: ${err.message}`, true);
     } finally {
+      await chrome.storage.session.set({ recordingState: "idle" });
       st.recording = false;
       st.busy = false;
       st.recorder = null;
       resetMeters();
       setIdleIndicator();
-      loadSession();
+      await loadSession();
       renderStats();
       renderRecordingState();
     }
@@ -646,13 +686,15 @@
     renderStats();
   });
 
-  el.saveServer.addEventListener("click", async () => {
-    st.serverUrl = (el.serverUrl.value || CLOUD_URL).trim().replace(/\/+$/, "");
-    el.serverUrl.value = st.serverUrl;
-    await chrome.storage.local.set({ serverUrl: st.serverUrl });
-    showStatus(`Servidor: ${st.serverUrl}`);
-    loadSession();
-  });
+  if (el.saveServer && el.serverUrl) {
+    el.saveServer.addEventListener("click", async () => {
+      st.serverUrl = (el.serverUrl.value || CLOUD_URL).trim().replace(/\/+$/, "");
+      el.serverUrl.value = st.serverUrl;
+      await chrome.storage.local.set({ serverUrl: st.serverUrl });
+      showStatus(`Servidor: ${st.serverUrl}`);
+      await loadSession();
+    });
+  }
 
   window.addEventListener("beforeunload", (e) => {
     if (st.recording) {
@@ -682,7 +724,11 @@
 
   (async () => {
     const saved = await chrome.storage.local.get(["serverUrl", "lastMeetingType", "lastMode", "lastEngine"]);
-    if (saved.serverUrl) st.serverUrl = el.serverUrl.value = saved.serverUrl;
+    if (saved.serverUrl && el.serverUrl) {
+      st.serverUrl = el.serverUrl.value = saved.serverUrl;
+    } else {
+      st.serverUrl = CLOUD_URL;
+    }
     if (saved.lastMeetingType) el.meetingType.value = saved.lastMeetingType;
     if (saved.lastEngine) el.engine.value = saved.lastEngine;
     if (saved.lastMode) setMode(saved.lastMode);

@@ -1,0 +1,46 @@
+{
+  "manifest_version": 3,
+  "name": "Apex Box — Grabador de Reuniones",
+  "short_name": "Apex Box",
+  "version": "3.2.0",
+  "description": "Graba reuniones presenciales o videollamadas en una pestaña fija y obtén transcripción, notas, resumen y acta en Apex Vox.",
+  "homepage_url": "https://apex-vox.ialabs.app",
+  "minimum_chrome_version": "116",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "Apex Box · Abrir grabador",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "permissions": [
+    "storage",
+    "tabs",
+    "tabCapture"
+  ],
+  "host_permissions": [
+    "https://apex-vox.ialabs.app/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://apex-vox.ialabs.app/*"
+      ],
+      "js": [
+        "content/session-bridge.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
+}

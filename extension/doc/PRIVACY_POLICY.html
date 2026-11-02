@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Política de Privacidad — Apex Box (Extensión de Chrome)</title>
+  <style>
+    :root {
+      --bg: #f3f3ee;
+      --card: #ffffff;
+      --ink: #302b28;
+      --muted: #686a6e;
+      --line: #cecebf;
+      --orange: #f43e01;
+    }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--ink);
+      font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      padding: 40px 20px;
+    }
+    main {
+      max-width: 780px;
+      margin: 0 auto;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 36px 40px;
+    }
+    h1 { margin-top: 0; font-size: 28px; }
+    h2 { margin-top: 28px; font-size: 20px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+    .badge {
+      display: inline-block;
+      background: var(--orange);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 999px;
+      margin-bottom: 8px;
+    }
+    .meta { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+    ul { padding-left: 22px; }
+    li { margin-bottom: 8px; }
+    code { background: #f3f3ee; padding: 2px 6px; border-radius: 4px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <main>
+    <span class="badge">APEX BOX · CHROME EXTENSION</span>
+    <h1>Política de Privacidad — Apex Box — Grabador de Reuniones</h1>
+    <p class="meta">Última actualización: 2 de noviembre de 2026</p>
+
+    <p>
+      Esta Política de Privacidad describe cómo la extensión para Google Chrome
+      <strong>Apex Box — Grabador de Reuniones</strong> ("la Extensión"), operada por
+      <strong>Apex Vox / IALabs</strong>, recopila, almacena y utiliza la información cuando usted la instala y utiliza.
+    </p>
+
+    <h2>1. Qué datos recopilamos</h2>
+    <p>La Extensión únicamente accede a los datos estrictamente necesarios para grabar las reuniones que el usuario decide iniciar manualmente:</p>
+    <ul>
+      <li>
+        <strong>Información de autenticación (Authentication Info):</strong>
+        Cuando inicia sesión en <code>https://apex-vox.ialabs.app</code>, la Extensión sincroniza su token de sesión activo hacia el almacenamiento local del navegador (<code>chrome.storage.local</code>) para asociar las grabaciones a su cuenta.
+      </li>
+      <li>
+        <strong>Comunicaciones personales / Audio de reuniones (Personal Communications):</strong>
+        Únicamente cuando usted pulsa explícitamente el botón <strong>«● Grabar»</strong> en la pestaña del grabador, la Extensión captura el audio del micrófono de su dispositivo (Modo Presencial) o el audio de la pestaña de videollamada seleccionada junto con su micrófono (Modo Virtual), además del título y tipo de reunión seleccionados por usted.
+      </li>
+      <li>
+        <strong>Preferencias locales de configuración:</strong>
+        Último tipo de reunión, modo de grabación y modelo de transcripción elegido, guardados localmente en su navegador.
+      </li>
+    </ul>
+
+    <h2>2. Cómo se almacenan y transmiten los datos</h2>
+    <ul>
+      <li>
+        <strong>Almacenamiento local:</strong> Sus preferencias de grabación, el estado de grabación en curso y el token de sesión permanecen almacenados localmente en su navegador mediante <code>chrome.storage.local</code> y <code>chrome.storage.session</code>.
+      </li>
+      <li>
+        <strong>Transmisión cifrada a Apex Vox:</strong> Durante una grabación activa iniciada por usted, el audio se divide en bloques de 3 minutos que se transmiten mediante conexión cifrada HTTPS (TLS) exclusivamente a <code>https://apex-vox.ialabs.app</code> y se liberan inmediatamente de la memoria RAM del navegador.
+      </li>
+    </ul>
+
+    <h2>3. Cómo utilizamos los datos</h2>
+    <p>Los datos recopilados se utilizan exclusivamente para cumplir el propósito único de la Extensión:</p>
+    <ul>
+      <li>Autenticar su sesión de usuario en Apex Vox.</li>
+      <li>Transcribir el audio de la reunión grabada e identificar a los distintos hablantes.</li>
+      <li>Generar automáticamente las notas, el resumen ejecutivo y el acta formal de la reunión en su cuenta de Apex Vox.</li>
+    </ul>
+
+    <h2>4. Servicios de terceros y uso de datos (Cumplimiento Chrome Web Store)</h2>
+    <ul>
+      <li><strong>No vendemos datos a terceros:</strong> No vendemos, alquilamos ni transferimos datos de usuarios a terceros fuera de los casos de uso aprobados.</li>
+      <li><strong>Propósito único:</strong> No utilizamos ni transferimos datos de usuarios para fines no relacionados con el propósito único de la Extensión.</li>
+      <li><strong>Sin uso crediticio:</strong> No utilizamos ni transferimos datos de usuarios para determinar la solvencia crediticia ni para fines de préstamos.</li>
+      <li><strong>Sin rastreadores ni historial web:</strong> La Extensión no recopila su historial general de navegación ni ejecuta scripts de analítica o publicidad de terceros.</li>
+    </ul>
+
+    <h2>5. Retención, control del usuario y eliminación de datos</h2>
+    <ul>
+      <li><strong>Control explícito:</strong> La Extensión nunca graba sin su acción explícita y muestra en todo momento el indicador <code>REC</code> y el tiempo transcurrido en el icono del navegador.</li>
+      <li><strong>Cierre de sesión y desinstalación:</strong> Al cerrar sesión en <code>https://apex-vox.ialabs.app</code>, el token se borra de la Extensión. Al desinstalar la Extensión, todo el almacenamiento local en el navegador se elimina automáticamente.</li>
+      <li><strong>Eliminación en la nube:</strong> Usted puede gestionar y eliminar sus grabaciones, transcripciones y actas en cualquier momento desde su cuenta en <a href="https://apex-vox.ialabs.app">https://apex-vox.ialabs.app</a>.</li>
+    </ul>
+
+    <h2>6. Contacto</h2>
+    <p>
+      Para cualquier consulta relacionada con la privacidad o el soporte técnico de Apex Box, visite
+      <a href="https://apex-vox.ialabs.app">https://apex-vox.ialabs.app</a>.
+    </p>
+  </main>
+</body>
+</html>
