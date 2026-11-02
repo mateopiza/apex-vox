@@ -67,6 +67,7 @@ def test_continuous_multi_block_recording_and_live_notes_to_summa_and_minutes(
     finalizing into a continuous transcript + Apex Summa report + Official Minutes.
     """
     client = TestClient(app)
+    _sign_in(client, pro=True)
 
     # 1. Create a Virtual Meeting session (Google Meet / Zoom / Teams)
     create_res = client.post(
@@ -258,13 +259,18 @@ def test_chrome_extension_mv3_package_icons_and_official_groq_badge() -> None:
         }
         assert expected_files.issubset(names)
         # Simplified design: no side panel, offscreen document or injected content scripts
-        assert not any(n.startswith(("sidepanel/", "offscreen/", "content/")) for n in names)
+        assert not any(n.startswith(("sidepanel/", "offscreen/")) for n in names)
+        assert "content/session-bridge.js" in names
 
         manifest = json.loads(zf.read("manifest.json").decode("utf-8"))
         assert manifest["manifest_version"] == 3
         assert set(manifest["permissions"]) == {"storage", "tabs", "tabCapture"}
         assert "side_panel" not in manifest
-        assert "content_scripts" not in manifest
+        # Único script de contenido: el puente de sesión, solo en el dominio de Apex Vox
+        scripts = manifest["content_scripts"]
+        assert len(scripts) == 1 and scripts[0]["js"] == ["content/session-bridge.js"]
+        assert "https://apex-vox.ialabs.app/*" in scripts[0]["matches"]
+        assert all("meet.google.com" not in m and "zoom.us" not in m for m in scripts[0]["matches"])
         assert "default_popup" not in manifest["action"]
 
         recorder_html = zf.read("recorder/recorder.html").decode("utf-8")
@@ -318,3 +324,62 @@ def test_s4_presigned_url_uses_region_from_endpoint(monkeypatch) -> None:
     assert url.startswith("https://s3.eu-amsterdam-1.megas4.com/")
     assert "eu-amsterdam-1%2Fs3%2Faws4_request" in url
     assert "X-Amz-Expires=600" in url and "X-Amz-Signature=" in url
+
+
+
+def _sign_in(client: TestClient, pro: bool = False) -> dict:
+    import uuid as _uuid
+
+    from app.services.supabase_service import supabase_service
+
+    res = client.post(
+        "/api/auth/register",
+        json={"email": f"box_{_uuid.uuid4().hex[:8]}@apexvox.ai", "password": "longpassword1", "full_name": "Box"},
+    )
+    assert res.status_code == 200, res.text
+    profile = res.json()
+    if pro:
+        supabase_service.activate_paid_period(profile["user_id"], f"BOXTEST-{profile['user_id'][:8]}", "USD", "test")
+    client.headers.update({"Authorization": f"Bearer {profile['access_token']}"})
+    return profile
+
+
+def test_apex_box_requires_login_and_isolates_sessions() -> None:
+    """Sin sesión no se graba; el plan sale del token; nadie ve sesiones ajenas."""
+    anon = TestClient(app)
+    assert anon.post("/api/box/sessions", json={"title": "x"}).status_code == 401
+    assert anon.get("/api/box/sessions").status_code == 401
+
+    owner = TestClient(app)
+    _sign_in(owner)
+    created = owner.post("/api/box/sessions", json={"title": "Mía", "plan": "pro", "user_id": "otro"})
+    assert created.status_code == 200, created.text
+    box_id = created.json()["box_session_id"]
+    from app.services.apex_box import apex_box_manager
+
+    session = apex_box_manager.get_session(box_id)
+    assert session.plan == "free"  # el cliente no puede elegir plan ni dueño
+    assert session.user_id != "otro"
+    assert [s["box_session_id"] for s in owner.get("/api/box/sessions").json()] == [box_id]
+
+    intruder = TestClient(app)
+    _sign_in(intruder)
+    assert intruder.get(f"/api/box/sessions/{box_id}").status_code == 404
+    assert intruder.post(f"/api/box/sessions/{box_id}/notes", json={"text": "hola"}).status_code == 404
+    assert intruder.post(f"/api/box/sessions/{box_id}/finalize", json={}).status_code == 404
+    assert intruder.get("/api/box/sessions").json() == []
+
+
+def test_apex_box_blocks_count_against_free_daily_quota() -> None:
+    import io as _io
+
+    client = TestClient(app)
+    _sign_in(client)
+    box_id = client.post("/api/box/sessions", json={"title": "Cuota"}).json()["box_session_id"]
+    res = client.post(
+        f"/api/box/sessions/{box_id}/blocks",
+        files={"file": ("b.webm", _io.BytesIO(b"x" * 10), "audio/webm")},
+        data={"block_index": "0", "duration_hint_sec": str(3 * 3600)},  # 3 h > 2 h gratis
+    )
+    assert res.status_code == 402
+    assert "Apex Pro" in res.json()["detail"]

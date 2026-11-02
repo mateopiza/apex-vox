@@ -17,12 +17,13 @@ Web App to:
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import RedirectResponse, Response
 
+from app.api.deps import is_paid, require_user
 from app.models.schemas import (
     BoxBlockUploadResponse,
     BoxCreateSessionRequest,
@@ -43,8 +44,20 @@ from app.services.apex_box import (
     extension_download_name,
 )
 from app.services.storage_s4 import mega_s4_storage
+from app.services.supabase_service import supabase_service
 
 logger = logging.getLogger("app.api.routes_box")
+
+
+def _owned_session(box_session_id: str, user: Dict[str, Any]):
+    """La sesión debe pertenecer a la cuenta; si no existe o es de otra, 404 (sin revelar cuál)."""
+    try:
+        session = apex_box_manager.get_session(box_session_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Sesión de Apex Box no encontrada.") from exc
+    if session.user_id != user["user_id"]:
+        raise HTTPException(status_code=404, detail="Sesión de Apex Box no encontrada.")
+    return session
 router = APIRouter(prefix="/api/box", tags=["Apex Box — Grabación Ilimitada por Bloques & Notas"])
 
 
@@ -68,27 +81,39 @@ async def get_optimal_block_configuration(
 @router.post("/sessions", response_model=BoxSessionStateResponse)
 async def create_box_recording_session(
     payload: BoxCreateSessionRequest,
+    user: Dict[str, Any] = Depends(require_user),
 ) -> BoxSessionStateResponse:
     """
-    Initialize an unlimited block-recording session in Presencial (Mic/Room/Mobile)
-    or Virtual (Zoom, Google Meet, Microsoft Teams, Webex) mode.
+    Initialize a block-recording session in Presencial (Mic/Room/Mobile) or Virtual
+    (Zoom, Google Meet, Microsoft Teams, Webex) mode. Requires a signed-in account:
+    the owner and plan come from the session token, never from the request body.
     """
+    quota = supabase_service.get_user_quota(user["user_id"])
+    if not quota.is_unlimited and (quota.remaining_today_seconds or 0) <= 0:
+        raise HTTPException(
+            status_code=402,
+            detail="Ya usaste tus horas gratis de hoy. Activa Apex Pro (USD 10 / mes) para grabar sin límite.",
+        )
+    payload.user_id = user["user_id"]
+    payload.plan = "pro" if is_paid(user) else "free"
     return apex_box_manager.create_session(payload)
 
 
 @router.get("/sessions", response_model=List[BoxSessionStateResponse])
 async def list_box_recording_sessions(
-    user_id: Optional[str] = Query(default=None),
+    user: Dict[str, Any] = Depends(require_user),
 ) -> List[BoxSessionStateResponse]:
-    """List active and recent Apex Box recording sessions."""
-    return apex_box_manager.list_sessions(user_id=user_id)
+    """List the signed-in account's active and recent Apex Box recording sessions."""
+    return apex_box_manager.list_sessions(user_id=user["user_id"])
 
 
 @router.get("/sessions/{box_session_id}", response_model=BoxSessionStateResponse)
 async def get_box_recording_session(
     box_session_id: str,
+    user: Dict[str, Any] = Depends(require_user),
 ) -> BoxSessionStateResponse:
     """Retrieve live state, uploaded blocks, incremental transcript segments, and notes."""
+    _owned_session(box_session_id, user)
     try:
         return apex_box_manager.get_session_state(box_session_id)
     except KeyError as exc:
@@ -99,8 +124,10 @@ async def get_box_recording_session(
 async def update_box_recording_status(
     box_session_id: str,
     status: str = Query(..., description="recording | paused"),
+    user: Dict[str, Any] = Depends(require_user),
 ) -> BoxSessionStateResponse:
     """Pause or resume an active Apex Box recording session."""
+    _owned_session(box_session_id, user)
     try:
         return apex_box_manager.update_session_status(box_session_id, status)
     except KeyError as exc:
@@ -115,11 +142,18 @@ async def upload_recording_block(
     duration_hint_sec: Optional[float] = Form(default=None),
     transcribe_immediately: bool = Form(default=True),
     api_key: Optional[str] = Form(default=None),
+    user: Dict[str, Any] = Depends(require_user),
 ) -> BoxBlockUploadResponse:
     """
     Upload a single recorded block, align it to the continuous global timeline (00:00:00 -> 10:00:00+),
     transcribe it incrementally, and return the new segments so the client can immediately free RAM.
     """
+    _owned_session(box_session_id, user)
+    try:
+        # Los bloques descuentan del límite diario del plan gratis (Apex Pro: ilimitado).
+        supabase_service.check_and_consume_quota(user["user_id"], max(0.0, float(duration_hint_sec or 0.0)))
+    except PermissionError as exc:
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
     content = await file.read()
     try:
         return apex_box_manager.ingest_block(
@@ -144,8 +178,10 @@ async def upload_recording_block(
 async def add_live_meeting_note(
     box_session_id: str,
     payload: BoxNoteRequest,
+    user: Dict[str, Any] = Depends(require_user),
 ) -> BoxNoteItem:
     """Add a timestamped note ('nota', 'acuerdo', 'tarea', 'alerta', 'idea', 'pregunta') during a meeting."""
+    _owned_session(box_session_id, user)
     try:
         return apex_box_manager.add_note(box_session_id, payload)
     except KeyError as exc:
@@ -159,8 +195,10 @@ async def update_live_meeting_note(
     box_session_id: str,
     note_id: str,
     payload: BoxNoteRequest,
+    user: Dict[str, Any] = Depends(require_user),
 ) -> BoxNoteItem:
     """Update an existing live timestamped note."""
+    _owned_session(box_session_id, user)
     try:
         return apex_box_manager.update_note(box_session_id, note_id, payload)
     except KeyError as exc:
@@ -171,8 +209,10 @@ async def update_live_meeting_note(
 async def delete_live_meeting_note(
     box_session_id: str,
     note_id: str,
+    user: Dict[str, Any] = Depends(require_user),
 ) -> List[BoxNoteItem]:
     """Delete a live timestamped note from the session."""
+    _owned_session(box_session_id, user)
     try:
         return apex_box_manager.delete_note(box_session_id, note_id)
     except KeyError as exc:
@@ -183,12 +223,14 @@ async def delete_live_meeting_note(
 async def finalize_box_recording_session(
     box_session_id: str,
     payload: Optional[BoxFinalizeRequest] = None,
+    user: Dict[str, Any] = Depends(require_user),
 ) -> BoxFinalizeResponse:
     """
     Finalize a multi-hour block recording session, merge timeline audio, integrate
     all live notes into Apex Summa (Objectives, Callouts, Calendar Tasks, Corporate Minutes),
     and return the complete TranscriptionResult + MinutesDocumentResponse.
     """
+    _owned_session(box_session_id, user)
     try:
         return apex_box_manager.finalize_session(box_session_id, payload)
     except KeyError as exc:

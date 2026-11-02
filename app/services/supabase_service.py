@@ -575,7 +575,7 @@ class SupabaseCloudService:
                 raise PermissionError(
                     f"Has alcanzado el límite de 2 horas gratis al día ({settings.FREE_DAILY_SECONDS}s). "
                     f"Disponible hoy: {rem:.0f}s, requerido: {duration_seconds:.0f}s. "
-                    f"Activa la prueba gratis de 3 días del Plan Apex Pro ($30.000 COP / $10 USD mes) para transcripciones ilimitadas."
+                    f"Activa Apex Pro (USD {settings.PRO_PRICE_USD:g} / mes) para transcripciones ilimitadas."
                 )
 
             current_entry["used_seconds"] = round(used_before + max(0.0, duration_seconds), 3)

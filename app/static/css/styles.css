@@ -3353,3 +3353,12 @@ dialog.apex-dialog[open] {
   font-size: 13px;
   color: var(--text-secondary);
 }
+
+/* Apex Box: botón de detener visible y distinguible del de iniciar */
+.btn-primary.box-stop-btn {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.btn-primary.box-stop-btn:hover {
+  background: #000;
+}

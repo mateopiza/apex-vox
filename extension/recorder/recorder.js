@@ -28,6 +28,8 @@
     pill: $("rec-pill"),
     clock: $("clock"),
     recBtn: $("rec-btn"),
+    loginBtn: $("login-btn"),
+    account: $("account"),
     blocks: $("stat-blocks"),
     segments: $("stat-segments"),
     speakers: $("stat-speakers"),
@@ -68,6 +70,8 @@
     meters: [], // [{ label, level, lastSoundAt, ended, row }]
     wave: [],
     lastTickAt: 0,
+    token: null,
+    user: null,
   };
 
   // ---------------------------------------------------------------------------
@@ -121,10 +125,52 @@
   }
 
   async function api(path, options = {}) {
-    const res = await fetch(`${st.serverUrl}${path}`, options);
+    const headers = Object.assign({}, options.headers || {});
+    if (st.token) headers.Authorization = `Bearer ${st.token}`;
+    const res = await fetch(`${st.serverUrl}${path}`, Object.assign({}, options, { headers }));
     const data = await res.json().catch(() => ({}));
+    if (res.status === 401) {
+      st.token = null;
+      st.user = null;
+      renderAccount();
+      throw new Error("Tu sesión expiró. Inicia sesión en Apex Vox y vuelve a intentarlo.");
+    }
     if (!res.ok) throw new Error(data.detail || `El servidor respondió HTTP ${res.status}`);
     return data;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Sesión: el token llega desde la web de Apex Vox (content/session-bridge.js)
+  // ---------------------------------------------------------------------------
+
+  async function loadSession() {
+    const { authToken, authOrigin } = await chrome.storage.local.get(["authToken", "authOrigin"]);
+    st.token = authToken && authOrigin === new URL(st.serverUrl).origin ? authToken : null;
+    st.user = null;
+    if (st.token) {
+      try {
+        st.user = await api("/api/auth/me");
+      } catch (_) {
+        st.user = null;
+      }
+    }
+    renderAccount();
+  }
+
+  function renderAccount() {
+    const signedIn = Boolean(st.token && st.user);
+    if (!st.recording) {
+      el.recBtn.classList.toggle("hidden", !signedIn);
+      el.loginBtn.classList.toggle("hidden", signedIn);
+    }
+    el.account.classList.toggle("warn", !signedIn);
+    if (signedIn) {
+      const q = st.user.quota || {};
+      const plan = q.is_unlimited ? "Apex Pro" : `Plan gratis · ${Math.max(0, Math.floor((q.remaining_today_seconds || 0) / 60))} min disponibles hoy`;
+      el.account.textContent = `${st.user.email} · ${plan}`;
+    } else {
+      el.account.textContent = "Inicia sesión en Apex Vox para grabar. Después vuelve a esta pestaña.";
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -451,6 +497,11 @@
   // ---------------------------------------------------------------------------
 
   async function startRecording() {
+    if (!st.token || !st.user) {
+      renderAccount();
+      showStatus("Inicia sesión en Apex Vox para grabar.", true);
+      return;
+    }
     // Crear el AudioContext en el mismo clic (antes de cualquier await) evita que Chrome
     // lo deje suspendido por la política de autoplay.
     st.audioCtx = new AudioContext();
@@ -564,6 +615,7 @@
       st.recorder = null;
       resetMeters();
       setIdleIndicator();
+      loadSession();
       renderStats();
       renderRecordingState();
     }
@@ -574,6 +626,10 @@
   // ---------------------------------------------------------------------------
 
   el.recBtn.addEventListener("click", () => (st.recording ? stopRecording() : startRecording()));
+  el.loginBtn.addEventListener("click", () => chrome.tabs.create({ url: `${st.serverUrl}/?view=portal&login=1` }));
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && (changes.authToken || changes.authOrigin) && !st.recording) loadSession();
+  });
   el.form.addEventListener("change", renderModeHint);
   el.form.addEventListener("submit", (e) => e.preventDefault());
 
@@ -595,6 +651,7 @@
     el.serverUrl.value = st.serverUrl;
     await chrome.storage.local.set({ serverUrl: st.serverUrl });
     showStatus(`Servidor: ${st.serverUrl}`);
+    loadSession();
   });
 
   window.addEventListener("beforeunload", (e) => {
@@ -641,6 +698,7 @@
     renderStats();
     renderRecordingState();
     renderMeters();
+    await loadSession();
   })();
 
   document.addEventListener("visibilitychange", () => !document.hidden && renderMeters());

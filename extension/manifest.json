@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Apex Box — Grabador de Reuniones",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "Graba reuniones presenciales o virtuales (Zoom, Meet, Teams) desde una pestaña fija y recibe un enlace con notas, resumen y acta.",
   "icons": {
     "16": "icons/icon-16.png",
@@ -28,5 +28,18 @@
     "https://apex-vox.ialabs.app/*",
     "http://localhost:8000/*",
     "http://127.0.0.1:8000/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://apex-vox.ialabs.app/*",
+        "http://localhost:8000/*",
+        "http://127.0.0.1:8000/*"
+      ],
+      "js": [
+        "content/session-bridge.js"
+      ],
+      "run_at": "document_idle"
+    }
   ]
 }

@@ -278,7 +278,7 @@ class ApexBoxManager:
         with self._lock:
             items = list(self._sessions.values())
             if user_id:
-                items = [s for s in items if not s.user_id or s.user_id == user_id]
+                items = [s for s in items if s.user_id == user_id]
             items.sort(key=lambda x: x.updated_at, reverse=True)
             return [self._to_state_response(s) for s in items[:25]]
 

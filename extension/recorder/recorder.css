@@ -124,3 +124,6 @@ input:disabled, select:disabled { opacity: 0.6; }
 .sources li.warn .state { color: #b45309; }
 .sources li.off .state { color: var(--orange-dark); }
 .rec-pill.on.warn { background: #d97706; border-color: #d97706; }
+
+.account { margin: 0; font-size: 12px; text-align: center; color: var(--muted); }
+.account.warn { color: #b45309; font-weight: 600; }

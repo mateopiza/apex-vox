@@ -2438,6 +2438,23 @@
   const boxStartBtnText = document.getElementById("box-start-btn-text");
   const boxCutBlockBtn = document.getElementById("box-cut-block-btn");
   const boxStopRecBtn = document.getElementById("box-stop-rec-btn");
+
+  // Mientras graba: oculta "Iniciar" y muestra "Enviar bloque ahora" + "Detener y finalizar".
+  // Con bloques ya enviados (p. ej. de prueba) también se puede finalizar sin estar grabando.
+  function setBoxRecordingButtons(recording, canFinalize = recording) {
+    if (boxStartRecBtn) {
+      boxStartRecBtn.disabled = recording;
+      boxStartRecBtn.classList.toggle("hidden", recording);
+    }
+    if (boxCutBlockBtn) {
+      boxCutBlockBtn.disabled = !recording;
+      boxCutBlockBtn.classList.toggle("hidden", !recording);
+    }
+    if (boxStopRecBtn) {
+      boxStopRecBtn.disabled = !canFinalize;
+      boxStopRecBtn.classList.toggle("hidden", !canFinalize);
+    }
+  }
   const boxSimulate10hBtn = document.getElementById("box-simulate-10h-btn");
   const boxStatusAlert = document.getElementById("box-status-alert");
 
@@ -2529,6 +2546,13 @@
 
   async function ensureBoxBackendSession() {
     if (boxState.boxSessionId) return boxState.boxSessionId;
+    if (!state.token) {
+      requireSession(t(
+        "Inicia sesión o crea tu cuenta para grabar con Apex Box.",
+        "Sign in or create your account to record with Apex Box."
+      ));
+      throw new Error(t("Debes iniciar sesión para grabar.", "You must sign in to record."));
+    }
     const blockSec = boxBlockDurationSelect ? Number(boxBlockDurationSelect.value) || 180 : 180;
     boxState.blockDurationSec = blockSec;
 
@@ -2541,10 +2565,9 @@
       diarization_engine: (boxEngineSelect && boxEngineSelect.value) || "Mc-Lewis",
       block_duration_sec: blockSec,
       device_type: /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "") ? "mobile_pwa" : "web_app",
-      plan: state.plan || "pro",
     };
 
-    const res = await fetch("/api/box/sessions", {
+    const res = await authFetch("/api/box/sessions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -2757,7 +2780,7 @@
 
       showBoxAlert(`Enviando y transcribiendo Bloque #${blockIndex + 1} (${(blob.size / 1024).toFixed(1)} KB · RAM liberada)...`, "info");
 
-      const res = await fetch(`/api/box/sessions/${sessionId}/blocks`, {
+      const res = await authFetch(`/api/box/sessions/${sessionId}/blocks`, {
         method: "POST",
         body: formData,
       });
@@ -2856,6 +2879,13 @@
 
   async function startBoxRecording() {
     if (boxState.status !== "idle") return;
+    if (!state.token) {
+      requireSession(t(
+        "Inicia sesión o crea tu cuenta para grabar con Apex Box.",
+        "Sign in or create your account to record with Apex Box."
+      ));
+      return;
+    }
     boxState.status = "starting";
     try {
       const blockSec = boxBlockDurationSelect ? Number(boxBlockDurationSelect.value) || 180 : 180;
@@ -2894,9 +2924,7 @@
 
       startBoxWaveformVisualizer(stream);
 
-      if (boxStartRecBtn) boxStartRecBtn.disabled = true;
-      if (boxCutBlockBtn) boxCutBlockBtn.disabled = false;
-      if (boxStopRecBtn) boxStopRecBtn.disabled = false;
+      setBoxRecordingButtons(true);
 
       showBoxAlert(
         `Grabando en continuo (${boxState.mode === "virtual" ? "Reunión Virtual + Mic" : "Reunión Presencial / App Móvil"}). Rotación automática cada ${Math.round(blockSec / 60)} min con 0 ms de pérdida y RAM constante.`,
@@ -2960,16 +2988,14 @@
     }
 
     if (boxMasterClock) boxMasterClock.classList.remove("recording");
-    if (boxStartRecBtn) boxStartRecBtn.disabled = false;
-    if (boxCutBlockBtn) boxCutBlockBtn.disabled = true;
-    if (boxStopRecBtn) boxStopRecBtn.disabled = true;
+    setBoxRecordingButtons(false);
     boxState.status = "idle";
 
     if (!boxState.boxSessionId) return;
 
     try {
       showBoxAlert("Consolidando todos los bloques y notas en vivo con Apex Summa y Generador de Actas...", "info");
-      const res = await fetch(`/api/box/sessions/${boxState.boxSessionId}/finalize`, {
+      const res = await authFetch(`/api/box/sessions/${boxState.boxSessionId}/finalize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -3043,7 +3069,7 @@
       const idx = boxState.blocks.length;
       const wavBlob = createSyntheticWavBlob(4, 440 + (idx % 3) * 110);
       await uploadAndTranscribeBoxBlock(wavBlob, idx, 180.0, "audio/wav");
-      if (boxStopRecBtn) boxStopRecBtn.disabled = false;
+      if (boxState.status !== "recording") setBoxRecordingButtons(false, true);
     } catch (err) {
       showBoxAlert(err.message, "error");
     }
@@ -3065,7 +3091,7 @@
 
     try {
       const sessionId = await ensureBoxBackendSession();
-      const res = await fetch(`/api/box/sessions/${sessionId}/notes`, {
+      const res = await authFetch(`/api/box/sessions/${sessionId}/notes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -3090,7 +3116,7 @@
   async function handleDeleteBoxNote(noteId) {
     if (!boxState.boxSessionId) return;
     try {
-      const res = await fetch(`/api/box/sessions/${boxState.boxSessionId}/notes/${noteId}`, {
+      const res = await authFetch(`/api/box/sessions/${boxState.boxSessionId}/notes/${noteId}`, {
         method: "DELETE",
       });
       if (res.ok) {
@@ -3186,6 +3212,11 @@
   const initialViewParam = urlParams.get("view");
   if (initialViewParam && ["landing", "playground", "box", "portal"].includes(initialViewParam)) {
     switchView(initialViewParam);
+  }
+
+  // ?login=1 (desde la extensión): pide iniciar sesión si no hay sesión activa
+  if (urlParams.get("login") && !state.token && authDialog && !authDialog.open) {
+    authDialog.showModal();
   }
 
   // Deep link ?job=<job_id> (enlace final del grabador de la extensión): abre notas, resumen y acta
