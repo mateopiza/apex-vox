@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import hmac
 import json
 import logging
 import secrets
@@ -36,8 +37,48 @@ from app.models.schemas import QuotaUsageResponse, UserProfileResponse
 logger = logging.getLogger("app.services.supabase_service")
 
 
-def _hash_password(password: str, salt: str = "apex_vox_salt") -> str:
+_PBKDF2_ITERATIONS = 310_000
+MIN_PASSWORD_LENGTH = 8
+
+
+def _legacy_hash_password(password: str, salt: str = "apex_vox_salt") -> str:
+    """Pre-2.1 scheme (unsalted SHA-256). Only used to verify and migrate old accounts."""
     return hashlib.sha256(f"{salt}:{password}".encode("utf-8")).hexdigest()
+
+
+def _hash_password(password: str) -> str:
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), _PBKDF2_ITERATIONS)
+    return f"pbkdf2_sha256${_PBKDF2_ITERATIONS}${salt}${digest.hex()}"
+
+
+def _verify_password(password: str, stored: str) -> bool:
+    if not stored:
+        return False
+    if stored.startswith("pbkdf2_sha256$"):
+        try:
+            _, iterations, salt, expected = stored.split("$", 3)
+            digest = hashlib.pbkdf2_hmac(
+                "sha256", password.encode("utf-8"), salt.encode("utf-8"), int(iterations)
+            )
+            return hmac.compare_digest(digest.hex(), expected)
+        except ValueError:
+            return False
+    return hmac.compare_digest(_legacy_hash_password(password), stored)
+
+
+def _now() -> dt.datetime:
+    return dt.datetime.now(dt.timezone.utc)
+
+
+def _parse_iso(value: Optional[str]) -> Optional[dt.datetime]:
+    if not value:
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=dt.timezone.utc)
 
 
 def _today_str() -> str:
@@ -92,7 +133,10 @@ class SupabaseCloudService:
         with self._lock:
             self._ensure_seed_state()
             try:
-                return json.loads(self._db_file.read_text(encoding="utf-8"))
+                db = json.loads(self._db_file.read_text(encoding="utf-8"))
+                for key in ("users", "tokens", "daily_usage", "subscriptions", "transcriptions", "payments", "handoffs"):
+                    db.setdefault(key, {})
+                return db
             except Exception:
                 return {
                     "users": {},
@@ -100,6 +144,8 @@ class SupabaseCloudService:
                     "daily_usage": {},
                     "subscriptions": {},
                     "transcriptions": {},
+                    "payments": {},
+                    "handoffs": {},
                 }
 
     def _save_db(self, db: Dict[str, Any]) -> None:
@@ -148,8 +194,11 @@ class SupabaseCloudService:
         clean_email = email.strip().lower()
         if not clean_email or "@" not in clean_email:
             raise ValueError("Correo electrónico inválido / Invalid email address.")
-        if len(password or "") < 4:
-            raise ValueError("La contraseña debe tener al menos 4 caracteres.")
+        if len(password or "") < MIN_PASSWORD_LENGTH:
+            raise ValueError(
+                f"La contraseña debe tener al menos {MIN_PASSWORD_LENGTH} caracteres / "
+                f"Password must be at least {MIN_PASSWORD_LENGTH} characters."
+            )
 
         with self._lock:
             db = self._load_db()
@@ -159,7 +208,6 @@ class SupabaseCloudService:
 
             user_id = str(uuid.uuid4())
             now_iso = dt.datetime.now(dt.timezone.utc).isoformat()
-            token = f"apx_{secrets.token_urlsafe(24)}"
 
             user_record = {
                 "user_id": user_id,
@@ -170,12 +218,15 @@ class SupabaseCloudService:
                 "preferred_language": preferred_language if preferred_language in ("es", "en") else "es",
                 "trial_started_at": None,
                 "trial_ends_at": None,
+                "trial_used": False,
+                "pro_until": None,
                 "auto_billing_enabled": False,
+                "auth_providers": ["email"],
                 "created_at": now_iso,
             }
 
             db["users"][user_id] = user_record
-            db["tokens"][token] = user_id
+            token = self._issue_token(db, user_id)
             self._save_db(db)
 
         # Sync to Supabase Cloud if configured
@@ -207,7 +258,6 @@ class SupabaseCloudService:
 
     def login_user(self, email: str, password: str) -> UserProfileResponse:
         clean_email = email.strip().lower()
-        pwd_hash = _hash_password(password)
 
         with self._lock:
             db = self._load_db()
@@ -217,27 +267,182 @@ class SupabaseCloudService:
                     matched_user = u
                     break
 
-            if not matched_user or matched_user.get("password_hash") != pwd_hash:
+            if not matched_user or not _verify_password(password, matched_user.get("password_hash", "")):
                 raise ValueError("Credenciales inválidas. Verifica tu correo y contraseña.")
 
-            token = f"apx_{secrets.token_urlsafe(24)}"
+            # Transparently migrate legacy SHA-256 hashes to PBKDF2.
+            if not str(matched_user.get("password_hash", "")).startswith("pbkdf2_sha256$"):
+                matched_user["password_hash"] = _hash_password(password)
             user_id = matched_user["user_id"]
-            db["tokens"][token] = user_id
+            token = self._issue_token(db, user_id)
             self._save_db(db)
 
+        return self._profile_response(user_id, token)
+
+    # -------------------------------------------------------------------------
+    # Sessions
+    # -------------------------------------------------------------------------
+
+    def _issue_token(self, db: Dict[str, Any], user_id: str) -> str:
+        token = f"apx_{secrets.token_urlsafe(32)}"
+        expires = _now() + dt.timedelta(days=settings.SESSION_TTL_DAYS)
+        db["tokens"][token] = {"user_id": user_id, "expires_at": expires.isoformat()}
+        return token
+
+    @staticmethod
+    def _clean_token(authorization: Optional[str]) -> str:
+        clean = (authorization or "").strip()
+        if clean.lower().startswith("bearer "):
+            clean = clean[7:].strip()
+        return clean
+
+    def get_user_by_token(self, authorization: Optional[str]) -> Optional[Dict[str, Any]]:
+        """Resolve a session token (raw or 'Bearer <token>'). User ids are never accepted."""
+        token = self._clean_token(authorization)
+        if not token.startswith("apx_"):
+            return None
+        with self._lock:
+            db = self._load_db()
+            entry = db["tokens"].get(token)
+            if entry is None:
+                return None
+            if isinstance(entry, str):  # legacy, non-expiring token
+                uid = entry
+            else:
+                expires = _parse_iso(entry.get("expires_at"))
+                if expires and _now() >= expires:
+                    db["tokens"].pop(token, None)
+                    self._save_db(db)
+                    return None
+                uid = entry.get("user_id")
+            user = db["users"].get(uid)
+            if user and self._refresh_plan_expiry(user):
+                self._save_db(db)
+            return dict(user) if user else None
+
+    def revoke_token(self, authorization: Optional[str]) -> None:
+        token = self._clean_token(authorization)
+        with self._lock:
+            db = self._load_db()
+            if db["tokens"].pop(token, None) is not None:
+                self._save_db(db)
+
+    def _profile_response(self, user_id: str, token: str = "") -> UserProfileResponse:
+        with self._lock:
+            user = self._load_db()["users"].get(user_id) or {}
         quota = self.get_user_quota(user_id)
         return UserProfileResponse(
             user_id=user_id,
-            email=matched_user["email"],
-            full_name=matched_user.get("full_name", ""),
-            plan=matched_user.get("plan", "free"),
-            preferred_language=matched_user.get("preferred_language", "es"),
+            email=user.get("email", ""),
+            full_name=user.get("full_name", ""),
+            plan=quota.plan,
+            preferred_language=user.get("preferred_language", "es"),
             access_token=token,
-            created_at=matched_user.get("created_at", ""),
+            created_at=user.get("created_at", ""),
             quota=quota,
         )
 
+    def get_profile(self, user_id: str) -> UserProfileResponse:
+        return self._profile_response(user_id)
+
+    # -------------------------------------------------------------------------
+    # OAuth (Google / GitHub via Supabase Auth)
+    # -------------------------------------------------------------------------
+
+    def upsert_oauth_user(
+        self,
+        email: str,
+        full_name: str,
+        provider: str,
+        preferred_language: str = "es",
+    ) -> UserProfileResponse:
+        """Sign in (or create) the account that owns this provider-verified e-mail."""
+        clean_email = (email or "").strip().lower()
+        if not clean_email or "@" not in clean_email:
+            raise ValueError("El proveedor no devolvió un correo verificado.")
+        now_iso = _now().isoformat()
+        with self._lock:
+            db = self._load_db()
+            user = next(
+                (u for u in db["users"].values() if u.get("email", "").lower() == clean_email),
+                None,
+            )
+            created = user is None
+            if created:
+                user = {
+                    "user_id": str(uuid.uuid4()),
+                    "email": clean_email,
+                    "full_name": (full_name or "").strip() or clean_email.split("@")[0].capitalize(),
+                    "password_hash": "",
+                    "plan": "free",
+                    "preferred_language": preferred_language if preferred_language in ("es", "en") else "es",
+                    "trial_started_at": None,
+                    "trial_ends_at": None,
+                    "trial_used": False,
+                    "pro_until": None,
+                    "auto_billing_enabled": False,
+                    "auth_providers": [provider],
+                    "created_at": now_iso,
+                }
+                db["users"][user["user_id"]] = user
+            else:
+                providers = set(user.get("auth_providers") or ["email"])
+                providers.add(provider)
+                user["auth_providers"] = sorted(providers)
+                if full_name and not user.get("full_name"):
+                    user["full_name"] = full_name.strip()
+            token = self._issue_token(db, user["user_id"])
+            self._save_db(db)
+
+        if created:
+            self._sync_to_supabase_table(
+                "profiles",
+                {
+                    "id": user["user_id"],
+                    "email": clean_email,
+                    "full_name": user["full_name"],
+                    "plan": "free",
+                    "preferred_language": user["preferred_language"],
+                    "created_at": now_iso,
+                },
+                upsert_col="email",
+            )
+        return self._profile_response(user["user_id"], token)
+
+    def create_handoff_code(self, access_token: str, ttl_seconds: int = 120) -> str:
+        """One-time code that lets the browser pick up a session after an OAuth redirect."""
+        code = secrets.token_urlsafe(24)
+        with self._lock:
+            db = self._load_db()
+            now = _now()
+            db["handoffs"] = {
+                k: v for k, v in db["handoffs"].items()
+                if (_parse_iso(v.get("expires_at")) or now) > now
+            }
+            db["handoffs"][code] = {
+                "token": access_token,
+                "expires_at": (now + dt.timedelta(seconds=ttl_seconds)).isoformat(),
+            }
+            self._save_db(db)
+        return code
+
+    def consume_handoff_code(self, code: str) -> Optional[UserProfileResponse]:
+        with self._lock:
+            db = self._load_db()
+            entry = db["handoffs"].pop(code or "", None)
+            self._save_db(db)
+        if not entry:
+            return None
+        expires = _parse_iso(entry.get("expires_at"))
+        if expires and _now() >= expires:
+            return None
+        user = self.get_user_by_token(entry["token"])
+        if not user:
+            return None
+        return self._profile_response(user["user_id"], entry["token"])
+
     def get_user_by_token_or_id(self, identifier: Optional[str]) -> Optional[Dict[str, Any]]:
+        """Internal helper for server-trusted ids. Never pass client-supplied ids here."""
         if not identifier:
             return None
         clean = identifier.strip()
@@ -247,7 +452,8 @@ class SupabaseCloudService:
         with self._lock:
             db = self._load_db()
             if clean in db["tokens"]:
-                uid = db["tokens"][clean]
+                entry = db["tokens"][clean]
+                uid = entry if isinstance(entry, str) else entry.get("user_id")
                 return db["users"].get(uid)
             if clean in db["users"]:
                 return db["users"][clean]
@@ -257,10 +463,30 @@ class SupabaseCloudService:
     # Quota & Plan Management (2h Free/day vs Unlimited Pro)
     # -------------------------------------------------------------------------
 
+    @staticmethod
+    def _refresh_plan_expiry(user: Dict[str, Any]) -> bool:
+        """Downgrade expired trials / paid periods to the free plan. Returns True if changed."""
+        plan = str(user.get("plan", "free")).lower()
+        now = _now()
+        if plan == "trial":
+            ends = _parse_iso(user.get("trial_ends_at"))
+            if ends and now >= ends:
+                pro_until = _parse_iso(user.get("pro_until"))
+                user["plan"] = "pro" if pro_until and pro_until > now else "free"
+                return True
+        elif plan == "pro":
+            pro_until = _parse_iso(user.get("pro_until"))
+            if pro_until and now >= pro_until:
+                user["plan"] = "free"
+                return True
+        return False
+
     def get_user_quota(self, user_id: str) -> QuotaUsageResponse:
         with self._lock:
             db = self._load_db()
             user = db["users"].get(user_id)
+            if user and self._refresh_plan_expiry(user):
+                self._save_db(db)
             plan = (user.get("plan", "free") if user else "free").lower()
             today = _today_str()
             usage_key = f"{user_id}:{today}"
@@ -292,7 +518,9 @@ class SupabaseCloudService:
                 summa_enabled=is_paid,
                 trial_active=(plan == "trial"),
                 trial_ends_at=user.get("trial_ends_at") if user else None,
-                auto_billing_enabled=bool(user.get("auto_billing_enabled", False)) if user else False,
+                auto_billing_enabled=False,
+                pro_until=user.get("pro_until") if user else None,
+                trial_available=bool(user) and not user.get("trial_used") and plan == "free",
             )
 
     def check_and_consume_quota(
@@ -325,6 +553,7 @@ class SupabaseCloudService:
                 db["users"][uid]["plan"] = plan_override
 
             user = db["users"][uid]
+            self._refresh_plan_expiry(user)
             plan = user.get("plan", "free").lower()
             is_paid = plan in ("pro", "trial")
 
@@ -351,67 +580,113 @@ class SupabaseCloudService:
 
         return self.get_user_quota(uid)
 
-    def upgrade_user_to_pro(
-        self,
-        user_id: str,
-        start_trial: bool = True,
-        currency: str = "COP",
-        order_id: Optional[str] = None,
-        auto_billing: bool = True,
-    ) -> UserProfileResponse:
-        """
-        Activate the 3-day free trial or full Pro subscription ($30,000 COP / $10 USD)
-        with automatic recurring billing via Bold API.
-        """
+    def start_trial(self, user_id: str) -> UserProfileResponse:
+        """Start the one-time 3-day Apex Pro trial for a registered account."""
         with self._lock:
             db = self._load_db()
-            now = dt.datetime.now(dt.timezone.utc)
-            trial_ends = (now + dt.timedelta(days=settings.PRO_TRIAL_DAYS)).isoformat()
+            user = db["users"].get(user_id)
+            if not user:
+                raise LookupError("Cuenta no encontrada.")
+            self._refresh_plan_expiry(user)
+            if user.get("trial_used"):
+                raise PermissionError("La prueba gratis de 3 días ya fue utilizada en esta cuenta.")
+            if user.get("plan") in ("pro", "trial"):
+                raise PermissionError("Tu cuenta ya tiene Apex Pro activo.")
+            now = _now()
+            user["plan"] = "trial"
+            user["trial_used"] = True
+            user["trial_started_at"] = now.isoformat()
+            user["trial_ends_at"] = (now + dt.timedelta(days=settings.PRO_TRIAL_DAYS)).isoformat()
+            self._save_db(db)
+        return self._profile_response(user_id)
 
-            if user_id not in db["users"]:
-                db["users"][user_id] = {
-                    "user_id": user_id,
-                    "email": f"{user_id}@apexvox.local",
-                    "full_name": "Usuario Apex Pro",
-                    "password_hash": "",
-                    "plan": "trial" if start_trial else "pro",
-                    "preferred_language": "es",
-                    "created_at": now.isoformat(),
-                }
-
-            user = db["users"][user_id]
-            user["plan"] = "trial" if start_trial else "pro"
-            user["trial_started_at"] = now.isoformat() if start_trial else user.get("trial_started_at")
-            user["trial_ends_at"] = trial_ends if start_trial else None
-            user["auto_billing_enabled"] = auto_billing
-
-            sub_id = order_id or f"BOLD-{uuid.uuid4().hex[:10].upper()}"
-            amount = settings.PRO_PRICE_COP if currency.upper() == "COP" else int(settings.PRO_PRICE_USD)
-            db["subscriptions"][sub_id] = {
-                "order_id": sub_id,
+    def record_pending_payment(
+        self,
+        user_id: str,
+        reference: str,
+        payment_link: str,
+        amount: int,
+        currency: str,
+    ) -> None:
+        with self._lock:
+            db = self._load_db()
+            db["payments"][reference] = {
+                "reference": reference,
+                "payment_link": payment_link,
                 "user_id": user_id,
-                "plan": user["plan"],
-                "status": "trial_active" if start_trial else "active",
                 "amount": amount,
-                "currency": currency.upper(),
-                "trial_days": settings.PRO_TRIAL_DAYS,
-                "trial_ends_at": trial_ends,
-                "auto_billing": auto_billing,
-                "created_at": now.isoformat(),
+                "currency": currency,
+                "status": "pending",
+                "created_at": _now().isoformat(),
             }
             self._save_db(db)
 
-        quota = self.get_user_quota(user_id)
-        return UserProfileResponse(
-            user_id=user_id,
-            email=user["email"],
-            full_name=user.get("full_name", "Usuario Apex Pro"),
-            plan=user["plan"],
-            preferred_language=user.get("preferred_language", "es"),
-            access_token="",
-            created_at=user.get("created_at", ""),
-            quota=quota,
-        )
+    def list_pending_payments(self, user_id: str) -> List[Dict[str, Any]]:
+        with self._lock:
+            db = self._load_db()
+            return [
+                dict(p) for p in db["payments"].values()
+                if p.get("user_id") == user_id and p.get("status") == "pending"
+            ]
+
+    def activate_paid_period(
+        self,
+        user_id: str,
+        reference: str,
+        currency: str = "COP",
+        source: str = "bold",
+    ) -> UserProfileResponse:
+        """
+        Grant PRO_PERIOD_DAYS of Apex Pro for an approved payment. Idempotent per
+        payment reference, so webhook retries and manual confirmation never stack.
+        """
+        with self._lock:
+            db = self._load_db()
+            user = db["users"].get(user_id)
+            if not user:
+                raise LookupError("Cuenta no encontrada.")
+            payment = db["payments"].setdefault(
+                reference,
+                {
+                    "reference": reference,
+                    "user_id": user_id,
+                    "currency": currency,
+                    "status": "pending",
+                    "created_at": _now().isoformat(),
+                },
+            )
+            if payment.get("user_id") != user_id:
+                raise PermissionError("La referencia de pago no pertenece a esta cuenta.")
+            if payment.get("status") == "paid":
+                self._save_db(db)
+                return self._profile_response(user_id)
+
+            now = _now()
+            self._refresh_plan_expiry(user)
+            # Stack on top of whatever access is still running (trial or paid period).
+            candidates = [_parse_iso(user.get("pro_until"))]
+            if user.get("plan") == "trial":
+                candidates.append(_parse_iso(user.get("trial_ends_at")))
+            start = max([d for d in candidates if d and d > now] or [now])
+            user["pro_until"] = (start + dt.timedelta(days=settings.PRO_PERIOD_DAYS)).isoformat()
+            if user.get("plan") != "trial":
+                user["plan"] = "pro"
+            payment.update(
+                {"status": "paid", "paid_at": now.isoformat(), "source": source, "currency": currency.upper()}
+            )
+            db["subscriptions"][reference] = {
+                "order_id": reference,
+                "user_id": user_id,
+                "plan": "pro",
+                "status": "active",
+                "amount": settings.PRO_PRICE_COP if currency.upper() == "COP" else int(settings.PRO_PRICE_USD),
+                "currency": currency.upper(),
+                "period_days": settings.PRO_PERIOD_DAYS,
+                "pro_until": user["pro_until"],
+                "created_at": now.isoformat(),
+            }
+            self._save_db(db)
+        return self._profile_response(user_id)
 
     def save_transcription_record(self, record: Dict[str, Any]) -> None:
         """Persist transcription metadata and Mega S4 keys in Supabase Cloud & local DB."""
@@ -431,7 +706,7 @@ class SupabaseCloudService:
             db = self._load_db()
             items: List[Dict[str, Any]] = []
             for jid, rec in db.get("transcriptions", {}).items():
-                if user_id and rec.get("user_id") and rec.get("user_id") != user_id:
+                if user_id and rec.get("user_id") != user_id:
                     continue
                 exp_str = rec.get("expires_at")
                 if exp_str:
