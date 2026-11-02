@@ -428,12 +428,11 @@ PAGES = {
 }
 
 
-def render_page(slug: str, lang: str, asset_version: str) -> str:
+def render_page(slug: str, lang: str, asset_version: str, base: str) -> str:
     import html as _html
 
     lang = lang if lang in ("es", "en") else "es"
     title, sections = PAGES[slug][lang]
-    base = settings.PUBLIC_BASE_URL or "https://apex-vox.ialabs.app"
     ctx = _ctx()
     nav_labels = {
         "es": [("terminos", "Términos"), ("habeas-data", "Habeas Data"), ("privacidad", "Privacidad"), ("seguridad", "Seguridad")],

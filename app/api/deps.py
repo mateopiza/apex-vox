@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
+import hmac
 import ipaddress
-
 import threading
 import time
 from typing import Any, Dict, Optional
 
-from fastapi import HTTPException, Header, Query, Request
+from fastapi import Depends, HTTPException, Header, Query, Request
 
 from app.config import settings
 from app.services.supabase_service import supabase_service
@@ -125,49 +125,40 @@ def requester_key(request: Request, user: Optional[Dict[str, Any]]) -> str:
 MEDIA_TOKEN_TTL_SECONDS = 6 * 3600
 
 
+def _media_sig(resource: str, exp: int) -> str:
+    return supabase_service._digest(f"media:{resource}:{exp}")[:32]
+
+
 def media_token(resource: str, ttl: int = MEDIA_TOKEN_TTL_SECONDS) -> str:
     """Token de solo lectura para un recurso, p. ej. 'job:<id>' o 'session:<id>'."""
-    import time
-
     exp = int(time.time()) + ttl
-    return f"{exp}.{supabase_service._digest(f'media:{resource}:{exp}')[:32]}"
+    return f"{exp}.{_media_sig(resource, exp)}"
 
 
 def media_token_valid(resource: str, token: Optional[str]) -> bool:
-    import hmac
-    import time
-
     try:
         exp_text, sig = (token or "").split(".", 1)
         exp = int(exp_text)
     except ValueError:
         return False
-    if exp < time.time():
-        return False
-    return hmac.compare_digest(sig, supabase_service._digest(f"media:{resource}:{exp}")[:32])
+    return exp >= time.time() and hmac.compare_digest(sig, _media_sig(resource, exp))
 
 
 def job_owner(job_id: str) -> Optional[str]:
-    """Cuenta dueña del trabajo, o la clave del invitado que creó la sesión."""
+    """Cuenta dueña del trabajo, o la clave del invitado que lo creó."""
     from app.services.job_manager import job_manager
 
     owner = job_manager.job_owner(job_id)
     if owner:
         return owner
-    result = job_manager.get_job_result(job_id)
-    if result and result.user_id:
-        return result.user_id
-    status = job_manager.get_job_status(job_id)
-    session_id = (status.session_id if status else None) or (result.session_id if result else None)
-    session = job_manager.get_session(session_id) if session_id else None
-    return session.owner if session else None
+    result = job_manager.get_job_result(job_id)  # resultados recargados del disco tras un reinicio
+    return result.user_id if result else None
 
 
 def require_job_owner(
-    job_id: str, request: Request, authorization: Optional[str] = Header(default=None)
+    job_id: str, request: Request, user: Optional[Dict[str, Any]] = Depends(optional_user)
 ) -> str:
     """El trabajo debe pertenecer a quien lo pide; si no, 404 (no se revela si existe)."""
-    user = optional_user(request, authorization)
     owner = job_owner(job_id)
     if not owner or owner != requester_key(request, user):
         raise HTTPException(status_code=404, detail="Trabajo no encontrado.")
@@ -178,43 +169,96 @@ def require_job_media(
     job_id: str,
     request: Request,
     t: Optional[str] = Query(default=None, description="Token de descarga firmado"),
-    authorization: Optional[str] = Header(default=None),
+    user: Optional[Dict[str, Any]] = Depends(optional_user),
 ) -> str:
     """Audio, exportaciones y calendario: dueño o token de descarga válido."""
     if media_token_valid(f"job:{job_id}", t):
         return job_id
-    return require_job_owner(job_id, request, authorization)
+    return require_job_owner(job_id, request, user)
+
+
+def require_session_owner(
+    session_id: str, request: Request, user: Optional[Dict[str, Any]] = Depends(optional_user)
+) -> str:
+    """La sesión de subida debe pertenecer a quien la pide; si no, 404."""
+    from app.services.job_manager import job_manager
+
+    if not job_manager.session_owned_by(session_id, requester_key(request, user)):
+        raise HTTPException(status_code=404, detail="Sesión no encontrada.")
+    return session_id
 
 
 def require_session_media(
     session_id: str,
     request: Request,
     t: Optional[str] = Query(default=None, description="Token de descarga firmado"),
-    authorization: Optional[str] = Header(default=None),
+    user: Optional[Dict[str, Any]] = Depends(optional_user),
 ) -> str:
     """Pistas de una sesión de subida: dueño o token de descarga válido."""
-    from app.services.job_manager import job_manager
-
     if media_token_valid(f"session:{session_id}", t):
         return session_id
-    user = optional_user(request, authorization)
-    if not job_manager.session_owned_by(session_id, requester_key(request, user)):
-        raise HTTPException(status_code=404, detail="Sesión no encontrada.")
-    return session_id
+    return require_session_owner(session_id, request, user)
 
 
 def require_admin(x_admin_key: Optional[str] = Header(default=None)) -> None:
     """Operational endpoints: disabled unless ADMIN_API_KEY is set and matches."""
-    import hmac
-
     if not settings.ADMIN_API_KEY or not x_admin_key or not hmac.compare_digest(x_admin_key, settings.ADMIN_API_KEY):
         raise HTTPException(status_code=404, detail="Not Found")
 
 
-def public_base_url(request: Request) -> str:
-    """Absolute origin of the app, e.g. https://apex-vox.ialabs.app."""
-    if settings.PUBLIC_BASE_URL:
-        return settings.PUBLIC_BASE_URL
+# -----------------------------------------------------------------------------
+# Idioma de la página según la petición
+# -----------------------------------------------------------------------------
+
+_SPANISH_COUNTRIES = {
+    "ES", "MX", "CO", "AR", "PE", "VE", "CL", "EC", "GT", "CU", "BO", "DO", "HN",
+    "PY", "SV", "NI", "CR", "PA", "UY", "PR", "GQ",
+}
+
+
+def _default_language(accept_language: str, country: str = "") -> str:
+    """
+    Idioma inicial: el del dispositivo si es español o inglés; si el dispositivo usa otro
+    idioma (o no lo indica), el del país del visitante (cabecera CF-IPCountry de Cloudflare).
+    """
+    device = _preferred_language(accept_language, default="")
+    if device:
+        return device
+    return "es" if (country or "").strip().upper() in _SPANISH_COUNTRIES else "en"
+
+
+def _preferred_language(accept_language: str, default: str = "en") -> str:
+    """'es' o 'en' según la preferencia del navegador; `default` si no pide ninguno de los dos."""
+    best_lang, best_q = default, -1.0
+    for part in accept_language.split(","):
+        piece = part.strip()
+        if not piece:
+            continue
+        tag, _, params = piece.partition(";")
+        q = 1.0
+        if params.strip().startswith("q="):
+            try:
+                q = float(params.strip()[2:])
+            except ValueError:
+                q = 0.0
+        base = tag.strip().lower().split("-")[0]
+        if base in ("es", "en") and q > best_q:
+            best_lang, best_q = base, q
+    return best_lang
+
+
+def request_language(request: Request) -> str:
+    """?lang=es|en si viene en la URL; si no, el del dispositivo y luego el del país."""
+    forced = request.query_params.get("lang")
+    if forced in ("es", "en"):
+        return forced
+    return _default_language(request.headers.get("accept-language", ""), request.headers.get("cf-ipcountry", ""))
+
+
+def public_base_url(request: Optional[Request] = None) -> str:
+    """Absolute origin of the app, e.g. https://apex-vox.ialabs.app (from the request if not configured)."""
+    if settings.PUBLIC_BASE_URL or request is None:
+        return settings.PUBLIC_BASE_URL or "https://apex-vox.ialabs.app"
     return str(request.base_url).rstrip("/")
 
 

@@ -39,7 +39,7 @@ import uuid
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 from app.config import (
     BASE_DIR,
@@ -234,7 +234,7 @@ class ApexBoxManager:
     def create_session(self, req: BoxCreateSessionRequest) -> BoxSessionStateResponse:
         with self._lock:
             box_id = f"box_{uuid.uuid4().hex[:10]}"
-            upload_session = job_manager.create_or_get_session()
+            upload_session = job_manager.create_or_get_session(owner=req.user_id or None)
             mode = (req.mode or "presencial").strip().lower()
             if mode not in ("presencial", "virtual"):
                 mode = "presencial"
@@ -794,8 +794,8 @@ class ApexBoxManager:
         result.summa_report = summa_report
 
         # Persist result in job_manager so all existing /api/jobs/{job_id}/* and export routes work seamlessly
-        with job_manager._lock:
-            job_manager._jobs[job_id] = JobStatusResponse(
+        job_manager.register_job(
+            JobStatusResponse(
                 job_id=job_id,
                 session_id=session.upload_session_id,
                 status="completed",
@@ -803,8 +803,10 @@ class ApexBoxManager:
                 current_step="Grabación por bloques Apex Box finalizada y sincronizada.",
                 total_chunks=len(session.blocks),
                 completed_chunks=len(session.blocks),
-            )
-            job_manager._results[job_id] = result
+            ),
+            result,
+            owner=session.user_id,
+        )
 
         result_json_bytes = json.dumps(
             result.model_dump(mode="json"), ensure_ascii=False, indent=2

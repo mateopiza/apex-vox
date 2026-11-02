@@ -137,6 +137,11 @@ async def start_transcription_job(
     )
 
 
+def _with_media_token(result: TranscriptionResult) -> TranscriptionResult:
+    """Copia del resultado con el token de descarga (el token nunca se guarda)."""
+    return result.model_copy(update={"media_token": media_token(f"job:{result.job_id}")})
+
+
 @router.get("/jobs/{job_id}/status", response_model=JobStatusResponse)
 async def get_job_status(job_id: str = Depends(require_job_owner)) -> JobStatusResponse:
     """Poll the current status and progress percentage of a transcription job."""
@@ -151,7 +156,7 @@ async def get_job_result(job_id: str = Depends(require_job_owner)) -> Transcript
     """Retrieve the complete chronological transcription and speaker diarization result."""
     result = job_manager.get_job_result(job_id)
     if result:
-        return result.model_copy(update={"media_token": media_token(f"job:{job_id}")})
+        return _with_media_token(result)
 
     status = job_manager.get_job_status(job_id)
     if status:
@@ -174,8 +179,7 @@ async def rename_job_speakers(
 ) -> TranscriptionResult:
     """Rename speaker labels across all segments of a completed transcription job."""
     try:
-        result = job_manager.rename_speakers(job_id, payload.speaker_map)
-        return result.model_copy(update={"media_token": media_token(f"job:{job_id}")})
+        return _with_media_token(job_manager.rename_speakers(job_id, payload.speaker_map))
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

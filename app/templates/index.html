@@ -29,6 +29,7 @@
   <meta name="twitter:description" content="{{DESCRIPTION}}" />
   <meta name="twitter:image" content="{{BASE_URL}}/static/og/og-{{OG_LANG}}.png" />
   <script type="application/ld+json">{{JSON_LD}}</script>
+  <script type="application/json" id="page-meta">{{PAGE_META}}</script>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
   <link rel="icon" href="/static/icons/favicon-32.png" type="image/png" sizes="32x32" />
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" sizes="180x180" />
@@ -775,11 +776,11 @@
             <div class="box-clock-row">
               <div>
                 <div class="box-clock-label" data-i18n="box_lbl_elapsed">TIEMPO GRABADO</div>
-                <div class="box-master-clock" id="box-master-clock">00:00:00</div>
+                <div class="box-master-clock" id="box-master-clock" data-no-translate>00:00:00</div>
               </div>
               <div class="box-block-timer-box">
                 <div class="box-clock-label" id="box-current-block-title">BLOQUE 1</div>
-                <div class="box-block-countdown" id="box-block-countdown">00:00 / 03:00</div>
+                <div class="box-block-countdown" id="box-block-countdown" data-no-translate>00:00 / 03:00</div>
               </div>
             </div>
 
@@ -928,7 +929,7 @@
 
           <ul id="box-blocks-list" class="track-list box-blocks-compact"></ul>
 
-          <div id="box-live-segments" class="segments-container" aria-live="polite">
+          <div id="box-live-segments" class="segments-container" aria-live="polite" data-no-translate>
             <div class="empty-state empty-state--compact">
               <h3 class="empty-state-title" data-i18n="box_empty_live_title">Aquí verás lo que se dice</h3>
               <p class="empty-state-desc" data-i18n="box_empty_live_desc">Pulsa <strong>Grabar</strong> y la transcripción aparecerá cada 3 minutos.</p>

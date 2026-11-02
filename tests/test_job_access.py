@@ -67,3 +67,16 @@ def test_signed_download_links() -> None:
 
 def test_unknown_job_is_404() -> None:
     assert _account().get("/api/jobs/job_doesnotexist/status").status_code == 404
+
+
+def test_recording_upload_session_belongs_to_its_account() -> None:
+    """Las pistas de una grabación de Apex Box no se pueden escuchar sin ser el dueño."""
+    from app.models.schemas import BoxCreateSessionRequest
+    from app.services.apex_box import apex_box_manager
+
+    owner = _account()
+    state = apex_box_manager.create_session(BoxCreateSessionRequest(user_id=owner.user_id))
+    upload_id = apex_box_manager._sessions[state.box_session_id].upload_session_id
+    assert job_manager.session_owned_by(upload_id, owner.user_id)
+    assert not job_manager.session_owned_by(upload_id, "otra_cuenta")
+    assert TestClient(app).get(f"/api/sessions/{upload_id}").status_code == 404

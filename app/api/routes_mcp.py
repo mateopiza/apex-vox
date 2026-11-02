@@ -15,14 +15,13 @@ Conector MCP + OAuth 2.1 (app/api/routes_mcp.py)
 from __future__ import annotations
 
 import html
-import json
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
 
-from app.api.deps import client_ip, public_base_url, require_user, throttle
+from app.api.deps import client_ip, public_base_url, request_language, require_user, throttle
 from app.services import mcp_oauth, mcp_server
 from app.services.mcp_oauth import OAuthError
 
@@ -147,19 +146,10 @@ _CONSENT = {
 }
 
 
-def _consent_lang(request: Request) -> str:
-    from app.main import _default_language
-
-    forced = request.query_params.get("lang")
-    if forced in ("es", "en"):
-        return forced
-    return _default_language(request.headers.get("accept-language", ""), request.headers.get("cf-ipcountry", ""))
-
-
 @router.get("/oauth/authorize", include_in_schema=False)
 async def authorize(request: Request) -> HTMLResponse:
     params = dict(request.query_params)
-    lang = _consent_lang(request)
+    lang = request_language(request)
     c = _CONSENT[lang]
     try:
         client = mcp_oauth.validate_authorize_request(params)

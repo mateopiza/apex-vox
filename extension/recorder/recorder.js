@@ -15,7 +15,7 @@ const UI_LANG = String((chrome.i18n && chrome.i18n.getUILanguage()) || navigator
 const L = (es, en) => (UI_LANG === "en" ? en : es);
 const STATIC_EN = {
   "Apex Box · Grabador": "Apex Box · Recorder",
-  "NO REC": "NO REC",
+  "NO REC": "NOT REC",
   "Tipo de reunión": "Meeting type",
   "Ejecutiva": "Executive",
   "Consejo / Junta directiva": "Board of directors",
@@ -302,7 +302,7 @@ translateStatic();
   }
 
   function setIdleIndicator() {
-    document.title = "Apex Box · Grabador";
+    document.title = L("Apex Box · Grabador", "Apex Box · Recorder");
     chrome.action.setBadgeText({ text: "" });
     chrome.action.setTitle({ title: L("Apex Box · No grabando", "Apex Box · Not recording") });
   }

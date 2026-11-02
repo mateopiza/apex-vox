@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
-from app.api.deps import media_token, optional_user, requester_key, require_session_media
+from app.api.deps import media_token, optional_user, requester_key, require_session_media, require_session_owner
 from app.config import settings
 from app.models.schemas import ReorderRequest, UploadResponse
 from app.services.job_manager import job_manager
@@ -94,14 +94,8 @@ def _upload_response(session_id: str, files) -> UploadResponse:
 
 
 @router.get("/sessions/{session_id}", response_model=UploadResponse)
-async def get_session_files(
-    request: Request,
-    session_id: str,
-    user: Optional[Dict[str, Any]] = Depends(optional_user),
-) -> UploadResponse:
+async def get_session_files(session_id: str = Depends(require_session_owner)) -> UploadResponse:
     """Retrieve the current ordered list of audio files in a session."""
-    if not job_manager.session_owned_by(session_id, requester_key(request, user)):
-        raise HTTPException(status_code=404, detail="Sesión no encontrada.")
     try:
         files = job_manager.get_session_files(session_id)
         return _upload_response(session_id, files)
@@ -111,14 +105,9 @@ async def get_session_files(
 
 @router.put("/sessions/{session_id}/order", response_model=UploadResponse)
 async def update_session_order(
-    session_id: str,
-    payload: ReorderRequest,
-    request: Request,
-    user: Optional[Dict[str, Any]] = Depends(optional_user),
+    payload: ReorderRequest, session_id: str = Depends(require_session_owner)
 ) -> UploadResponse:
     """Update the processing sequence order of uploaded audio files."""
-    if not job_manager.session_owned_by(session_id, requester_key(request, user)):
-        raise HTTPException(status_code=404, detail="Sesión no encontrada.")
     try:
         files = job_manager.reorder_session_files(session_id, payload.file_order)
         return _upload_response(session_id, files)
@@ -128,14 +117,9 @@ async def update_session_order(
 
 @router.delete("/sessions/{session_id}/files/{file_id}", response_model=UploadResponse)
 async def delete_session_file(
-    session_id: str,
-    file_id: str,
-    request: Request,
-    user: Optional[Dict[str, Any]] = Depends(optional_user),
+    file_id: str, session_id: str = Depends(require_session_owner)
 ) -> UploadResponse:
     """Remove a specific audio track from the session."""
-    if not job_manager.session_owned_by(session_id, requester_key(request, user)):
-        raise HTTPException(status_code=404, detail="Sesión no encontrada.")
     try:
         files = job_manager.remove_file_from_session(session_id, file_id)
         return _upload_response(session_id, files)

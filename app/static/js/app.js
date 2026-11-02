@@ -24,9 +24,10 @@
     return "en";
   }
 
+  const QUERY_LANG = ["es", "en"].find((l) => l === new URLSearchParams(location.search).get("lang")) || null;
+
   const state = {
-    lang: (["es", "en"].includes(new URLSearchParams(location.search).get("lang")) && new URLSearchParams(location.search).get("lang"))
-      || localStorage.getItem("apex_vox_lang_choice") || detectInitialLanguage(),
+    lang: QUERY_LANG || localStorage.getItem("apex_vox_lang_choice") || detectInitialLanguage(),
     activeView: "playground",
     user: JSON.parse(localStorage.getItem("apex_vox_user") || "null"),
     token: localStorage.getItem("apex_vox_token") || null,
@@ -663,17 +664,8 @@
       "Mc-Norris · Huella vocal": "Mc-Norris · Voiceprint",
       "Mc-Piastri · Ultra rápido": "Mc-Piastri · Ultra fast"
   };
-  const PAGE_META = {
-    es: {
-      title: "Apex Vox — Transcribe y resume tus reuniones con IA",
-      description: "Transcribe audios y reuniones con oradores identificados, resúmenes, tareas y actas. Graba en Zoom, Meet o Teams. 2 horas gratis al día.",
-    },
-    en: {
-      title: "Apex Vox — Transcribe and summarize your meetings with AI",
-      description: "Transcribe audio and meetings with identified speakers, summaries, tasks and minutes. Record Zoom, Meet or Teams. 2 free hours a day.",
-    },
-  };
   const originalText = new WeakMap();
+  let englishApplied = false;
   const I18N_ATTRS = ["placeholder", "aria-label", "title", "alt"];
 
   function translateNode(root, lang) {
@@ -682,7 +674,7 @@
     let node;
     while ((node = walker.nextNode())) {
       const parent = node.parentElement;
-      if (!parent || parent.closest("[data-i18n], script, style, code, textarea")) continue;
+      if (!parent || parent.closest("[data-i18n], [data-no-translate], script, style, code, textarea")) continue;
       if (!originalText.has(node)) originalText.set(node, node.nodeValue);
       const orig = originalText.get(node);
       const key = orig.replace(/\s+/g, " ").trim();
@@ -704,8 +696,17 @@
     });
   }
 
+  const PAGE_META = (() => {
+    try {
+      return JSON.parse(document.getElementById("page-meta").textContent);
+    } catch (e) {
+      return {};
+    }
+  })();
+
   function applyPageMeta(lang) {
     const meta = PAGE_META[lang] || PAGE_META.es;
+    if (!meta) return;
     document.title = meta.title;
     const desc = document.querySelector('meta[name="description"]');
     if (desc) desc.setAttribute("content", meta.description);
@@ -732,7 +733,8 @@
       langEnBtn.classList.toggle("active", clean === "en");
     }
 
-    translateNode(document.body, clean);
+    if (clean === "en" || englishApplied) translateNode(document.body, clean);
+    englishApplied = englishApplied || clean === "en";
     applyPageMeta(clean);
     const dict = I18N[clean] || I18N.es;
     document.querySelectorAll("[data-i18n]").forEach((el) => {
@@ -798,7 +800,6 @@
       loadUserPortalSummary();
     } else if (viewName === "box") {
       if (typeof loadMeetingBots === "function") loadMeetingBots();
-      loadBoxOptimalConfig();
     }
   }
 
@@ -841,6 +842,11 @@
     const headers = Object.assign({}, extra || {});
     if (state.token) headers.Authorization = `Bearer ${state.token}`;
     return headers;
+  }
+
+  // Enlaces que el navegador abre sin cabecera Authorization (audio, descargas): token firmado
+  function withMediaToken(url, token) {
+    return token ? `${url}?t=${encodeURIComponent(token)}` : url;
   }
 
   function authFetch(url, options) {
@@ -1734,7 +1740,10 @@
       const chunkLabel = file.is_over_25mb
         ? `<span class="meta-tag chunk-warn">Auto-Chunk &lt;25MB</span>`
         : `<span class="meta-tag">Almacenado</span>`;
-      const audioSrc = `/api/sessions/${encodeURIComponent(state.sessionId)}/files/${encodeURIComponent(file.file_id)}/audio${state.sessionMediaToken ? `?t=${encodeURIComponent(state.sessionMediaToken)}` : ""}`;
+      const audioSrc = withMediaToken(
+        `/api/sessions/${encodeURIComponent(state.sessionId)}/files/${encodeURIComponent(file.file_id)}/audio`,
+        state.sessionMediaToken
+      );
       const listenLabel = isEn ? "Listen" : "Escuchar";
       const pauseLabel = isEn ? "Pause" : "Pausar";
 
@@ -2075,16 +2084,12 @@
     if (summaBox) summaBox.classList.toggle("hidden", isGuestResult);
     if (guestCta) guestCta.classList.toggle("hidden", !isGuestResult);
 
-    const mediaQ = result.media_token ? `?t=${encodeURIComponent(result.media_token)}` : "";
-    mergedAudioPlayer.src = `/api/jobs/${result.job_id}/audio${mediaQ}`;
+    mergedAudioPlayer.src = withMediaToken(`/api/jobs/${result.job_id}/audio`, result.media_token);
 
     const jid = result.job_id;
-    document.getElementById("export-txt").href = `/api/jobs/${jid}/export/txt${mediaQ}`;
-    document.getElementById("export-srt").href = `/api/jobs/${jid}/export/srt${mediaQ}`;
-    document.getElementById("export-vtt").href = `/api/jobs/${jid}/export/vtt${mediaQ}`;
-    document.getElementById("export-json").href = `/api/jobs/${jid}/export/json${mediaQ}`;
-    document.getElementById("export-csv").href = `/api/jobs/${jid}/export/csv${mediaQ}`;
-    document.getElementById("export-md").href = `/api/jobs/${jid}/export/md${mediaQ}`;
+    ["txt", "srt", "vtt", "json", "csv", "md"].forEach((fmt) => {
+      document.getElementById(`export-${fmt}`).href = withMediaToken(`/api/jobs/${jid}/export/${fmt}`, result.media_token);
+    });
 
     if (!isGuestResult) renderApexSumma(result);
     renderSpeakerTabs(result);
@@ -2250,7 +2255,7 @@
     // 5. Próximas Tareas en Forma de Calendario
     const icsBtn = document.getElementById("summa-download-ics-btn");
     if (icsBtn) {
-      icsBtn.href = `/api/jobs/${result.job_id}/calendar.ics${result.media_token ? `?t=${encodeURIComponent(result.media_token)}` : ""}`;
+      icsBtn.href = withMediaToken(`/api/jobs/${result.job_id}/calendar.ics`, result.media_token);
       icsBtn.dataset.jobId = result.job_id;
     }
     const calGrid = document.getElementById("summa-calendar-grid");
@@ -2792,16 +2797,18 @@
   // ---------------------------------------------------------------------------
   // Apex Box — Unlimited Block Recorder (Desktop, Virtual Zoom/Meet/Teams & Mobile Web App)
   // ---------------------------------------------------------------------------
+  const IS_IOS = /iPhone|iPad|iPod/i.test(navigator.userAgent || "") ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const IS_ANDROID = /Android/i.test(navigator.userAgent || "");
+
   const boxState = {
     mode: "presencial", // "presencial" | "virtual"
     status: "idle", // "idle" | "starting" | "recording" | "stopping"
     boxSessionId: null,
     blockDurationSec: 180,
     nextBlockIndex: 0,
-    completedBlocksCount: 0,
     startedAtMs: null,
     blockStartedAtMs: null,
-    rotationTimer: null,
     clockTimer: null,
     activeRecorder: null,
     activeStream: null,
@@ -2814,7 +2821,6 @@
     recordedMsBefore: 0, // tiempo grabado antes de una pausa/interrupción
     runStartedAtMs: null,
     rotating: false,
-    interrupted: false,
     uploads: [], // envíos en curso: se esperan antes de crear el resumen
     segments: [],
     notes: [],
@@ -2823,15 +2829,10 @@
 
   const boxModePresencialBtn = document.getElementById("box-mode-presencial-btn");
   const boxModeVirtualBtn = document.getElementById("box-mode-virtual-btn");
-  const boxActiveModeBadge = document.getElementById("box-active-mode-badge");
   const boxTitleInput = document.getElementById("box-title-input");
   const boxPlatformSelect = document.getElementById("box-platform-select");
-  const boxBlockDurationSelect = document.getElementById("box-block-duration-select");
   const boxEngineSelect = document.getElementById("box-engine-select");
-  const boxLanguageSelect = document.getElementById("box-language-select");
 
-  const boxRamBadge = document.getElementById("box-ram-badge");
-  const boxRamFormulaText = document.getElementById("box-ram-formula-text");
   const boxMasterClock = document.getElementById("box-master-clock");
   const boxBlockClock = document.getElementById("box-block-countdown");
   const boxBlockTitle = document.getElementById("box-current-block-title");
@@ -2840,13 +2841,11 @@
   const boxWaveformCanvas = document.getElementById("box-waveform-canvas");
 
   const boxStartRecBtn = document.getElementById("box-start-rec-btn");
-  const boxStartBtnText = document.getElementById("box-start-btn-text");
   const boxCutBlockBtn = document.getElementById("box-cut-block-btn");
   const boxStopRecBtn = document.getElementById("box-stop-rec-btn");
 
   // Mientras graba: oculta "Iniciar" y muestra "Enviar bloque ahora" + "Detener y finalizar".
-  // Con bloques ya enviados (p. ej. de prueba) también se puede finalizar sin estar grabando.
-  function setBoxRecordingButtons(recording, canFinalize = recording) {
+  function setBoxRecordingButtons(recording) {
     if (boxStartRecBtn) {
       boxStartRecBtn.disabled = recording;
       boxStartRecBtn.classList.toggle("hidden", recording);
@@ -2856,11 +2855,10 @@
       boxCutBlockBtn.classList.toggle("hidden", !recording);
     }
     if (boxStopRecBtn) {
-      boxStopRecBtn.disabled = !canFinalize;
-      boxStopRecBtn.classList.toggle("hidden", !canFinalize);
+      boxStopRecBtn.disabled = !recording;
+      boxStopRecBtn.classList.toggle("hidden", !recording);
     }
   }
-  const boxSimulate10hBtn = document.getElementById("box-simulate-10h-btn");
   const boxStatusAlert = document.getElementById("box-alert-banner");
 
   const boxNoteTagSelector = document.getElementById("box-note-tag-selector");
@@ -2876,15 +2874,13 @@
   const boxBlocksHistoryList = document.getElementById("box-blocks-list");
   const boxBlocksLogSummary = document.getElementById("box-blocks-log-summary");
   const boxOpenInPlaygroundBtn = document.getElementById("box-view-full-result-btn");
-  const boxIsMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "") ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  const boxIsIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent || "") ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+
+  const tk = (key) => (I18N[state.lang] || I18N.es)[key] || I18N.es[key];
 
   function setBoxStatusPill(kind) {
     if (!boxStatusPill) return;
     const labels = {
-      ready: t("LISTO", "READY"),
+      ready: tk("box_status_ready"),
       recording: t("GRABANDO", "RECORDING"),
       paused: t("EN PAUSA", "PAUSED"),
       finishing: t("CREANDO RESUMEN", "CREATING SUMMARY"),
@@ -2906,43 +2902,11 @@
       type === "error" ? "#dc2626" : type === "success" ? "#16a34a" : "var(--brand)";
   }
 
-  function formatBoxHms(totalSec) {
-    const s = Math.max(0, Math.floor(Number(totalSec) || 0));
-    const hrs = Math.floor(s / 3600);
-    const mins = Math.floor((s % 3600) / 60);
-    const secs = s % 60;
-    return [hrs, mins, secs].map((n) => String(n).padStart(2, "0")).join(":");
-  }
-
   function formatBoxMmSs(totalSec) {
     const s = Math.max(0, Math.floor(Number(totalSec) || 0));
     const mins = Math.floor(s / 60);
     const secs = s % 60;
     return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-  }
-
-  async function loadBoxOptimalConfig() {
-    try {
-      const res = await fetch("/api/box/optimal-config?target_hours=10");
-      if (!res.ok) return;
-      const cfg = await res.json();
-      const selDur = boxBlockDurationSelect ? Number(boxBlockDurationSelect.value) || 180 : (cfg.optimal_block_seconds || 180);
-      const blockMb = ((48000 / 8) * selDur / (1024 * 1024)).toFixed(2);
-      const totalBlocks10h = Math.ceil((10 * 3600) / selDur);
-      const unblockedMb = cfg.unblocked_ram_10h_mb || 540;
-      if (boxRamBadge) {
-        boxRamBadge.textContent = `~${blockMb} MB RAM constante (${cfg.ram_savings_pct}% ahorro)`;
-      }
-      if (boxRamFormulaText) {
-        boxRamFormulaText.innerHTML =
-          `Cada bloque de <strong>${Math.round(selDur / 60)} min (${selDur}s)</strong> en Opus 48 kbps pesa <strong>~${blockMb} MB</strong>. ` +
-          `Al enviarse a Apex Vox, el bloque se libera de la memoria del navegador/celular (` +
-          `<code>chunks.length = 0</code>), permitiendo grabar <strong>10+ horas continuas (${totalBlocks10h} bloques)</strong> ` +
-          `usando siempre <strong>~${blockMb} MB de RAM</strong> en lugar de ~${unblockedMb} MB.`;
-      }
-    } catch (e) {
-      // Non-fatal
-    }
   }
 
   function setBoxMode(mode) {
@@ -2954,12 +2918,6 @@
     if (boxModeVirtualBtn) {
       boxModeVirtualBtn.classList.toggle("active", boxState.mode === "virtual");
       boxModeVirtualBtn.setAttribute("aria-checked", String(boxState.mode === "virtual"));
-    }
-    if (boxActiveModeBadge) {
-      boxActiveModeBadge.textContent =
-        boxState.mode === "virtual"
-          ? t("Modo: reunión virtual", "Mode: virtual meeting")
-          : t("Modo: presencial", "Mode: in person");
     }
     if (boxPlatformSelect && boxState.mode === "presencial" && boxPlatformSelect.value !== "presencial" && boxPlatformSelect.value !== "mobile_pwa") {
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
@@ -2978,15 +2936,14 @@
       ));
       throw new Error(t("Debes iniciar sesión para grabar.", "You must sign in to record."));
     }
-    const blockSec = boxBlockDurationSelect ? Number(boxBlockDurationSelect.value) || 180 : 180;
-    boxState.blockDurationSec = blockSec;
+    const blockSec = boxState.blockDurationSec;
 
     const payload = {
       title: (boxTitleInput && boxTitleInput.value.trim()) ||
         (boxState.mode === "virtual" ? t("Reunión virtual", "Virtual meeting") : t("Reunión presencial", "In-person meeting")),
       mode: boxState.mode,
       platform: (boxPlatformSelect && boxPlatformSelect.value) || (boxState.mode === "virtual" ? "google_meet" : "presencial"),
-      language: (boxLanguageSelect && boxLanguageSelect.value) || "es",
+      language: "es",
       diarization_engine: (boxEngineSelect && boxEngineSelect.value) || "Mc-Lewis",
       block_duration_sec: blockSec,
       device_type: /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "") ? "mobile_pwa" : "web_app",
@@ -3126,7 +3083,7 @@
 
   function getSupportedBoxMimeType() {
     if (typeof MediaRecorder === "undefined") return "";
-    const candidates = boxIsIOS
+    const candidates = IS_IOS
       ? ["audio/mp4", "audio/webm;codecs=opus", "audio/webm"]
       : ["audio/webm;codecs=opus", "audio/webm", "audio/ogg;codecs=opus", "audio/mp4"];
     for (const mime of candidates) {
@@ -3211,12 +3168,12 @@
     }
     const shownBlockSec = Math.min((Date.now() - boxState.blockStartedAtMs) / 1000, boxState.blockDurationSec);
     if (boxMasterClock) {
-      boxMasterClock.textContent = formatBoxHms(boxElapsedMs() / 1000);
+      boxMasterClock.textContent = formatSecondsHHMMSS(boxElapsedMs() / 1000);
       boxMasterClock.classList.add("recording");
     }
-    if (boxBlockTitle) {
-      boxBlockTitle.removeAttribute("data-i18n");
-      boxBlockTitle.textContent = `${t("BLOQUE", "BLOCK")} ${boxState.nextBlockIndex + 1}`;
+    const blockTitle = `${t("BLOQUE", "BLOCK")} ${boxState.nextBlockIndex + 1}`;
+    if (boxBlockTitle && boxBlockTitle.textContent !== blockTitle) {
+      boxBlockTitle.textContent = blockTitle;
     }
     if (boxBlockClock) {
       boxBlockClock.textContent = `${formatBoxMmSs(shownBlockSec)} / ${formatBoxMmSs(boxState.blockDurationSec)}`;
@@ -3240,11 +3197,17 @@
     }
   }
 
+  function releaseBoxCapture() {
+    [boxState.activeStream, boxState.micStream, boxState.displayStream].forEach((st) => {
+      if (st && st.getTracks) st.getTracks().forEach((tr) => tr.stop());
+    });
+    boxState.activeStream = boxState.micStream = boxState.displayStream = null;
+  }
+
   // El sistema cortó el micrófono (pantalla bloqueada, otra app, llamada…): se guarda lo
   // grabado como un bloque y la grabación queda en pausa para continuar en la misma reunión.
   function pauseBoxRecordingAfterInterruption() {
-    if (boxState.status !== "recording" || boxState.interrupted) return;
-    boxState.interrupted = true;
+    if (boxState.status !== "recording") return;
     boxState.recordedMsBefore = boxElapsedMs();
     boxState.runStartedAtMs = null;
     boxState.status = "paused";
@@ -3259,10 +3222,7 @@
         rec.stop();
       } catch (e) {}
     }
-    [boxState.activeStream, boxState.micStream, boxState.displayStream].forEach((st) => {
-      if (st && st.getTracks) st.getTracks().forEach((tr) => tr.stop());
-    });
-    boxState.activeStream = boxState.micStream = boxState.displayStream = null;
+    releaseBoxCapture();
     boxState.nextBlockIndex += 1;
     if (boxMasterClock) boxMasterClock.classList.remove("recording");
     setBoxStatusPill("paused");
@@ -3304,7 +3264,7 @@
       } else {
         tickBoxRecorder();
       }
-    } else if (boxIsMobile) {
+    } else if ((IS_IOS || IS_ANDROID)) {
       document.title = `● REC ${t("— vuelve a Apex Vox", "— come back to Apex Vox")}`;
     }
   });
@@ -3334,13 +3294,12 @@
         throw new Error(data.detail || t(`No se pudo procesar el bloque ${blockIndex + 1}`, `Could not process block ${blockIndex + 1}`));
       }
 
-      boxState.completedBlocksCount = data.total_blocks_received;
       boxState.blocks.push(data.block);
       if (Array.isArray(data.new_segments) && data.new_segments.length > 0) {
         boxState.segments.push(...data.new_segments);
       }
 
-      renderBoxLiveTelemetry(data);
+      renderBoxLiveTelemetry();
       if (boxState.status === "paused") return; // no tapar el aviso de pausa
       showBoxAlert(
         t(
@@ -3363,8 +3322,8 @@
       boxBlocksLogSummary.removeAttribute("data-i18n");
       const totalSec = boxState.blocks.reduce((acc, b) => acc + (Number(b.duration_sec) || 0), 0);
       boxBlocksLogSummary.textContent = boxState.blocks.length
-        ? t(`${boxState.blocks.length} bloques · ${formatBoxHms(totalSec)} enviados`, `${boxState.blocks.length} blocks · ${formatBoxHms(totalSec)} sent`)
-        : t("Aún no has grabado.", "Nothing recorded yet.");
+        ? t(`${boxState.blocks.length} bloques · ${formatSecondsHHMMSS(totalSec)} enviados`, `${boxState.blocks.length} blocks · ${formatSecondsHHMMSS(totalSec)} sent`)
+        : tk("box_blocks_log_empty");
     }
     if (boxBlocksHistoryList) {
       boxBlocksHistoryList.innerHTML = boxState.blocks
@@ -3447,15 +3406,13 @@
     }
 
     try {
-      const blockSec = boxBlockDurationSelect ? Number(boxBlockDurationSelect.value) || 180 : 180;
-      boxState.blockDurationSec = blockSec;
+      const blockSec = boxState.blockDurationSec;
       const streamPromise = acquireBoxCaptureStream();
       await ensureBoxBackendSession();
       const stream = await streamPromise;
       const wakeOk = await wakeLockPromise;
 
       boxState.activeStream = stream;
-      boxState.interrupted = false;
       boxState.rotating = false;
       boxState.status = "recording";
       boxState.runStartedAtMs = Date.now();
@@ -3473,14 +3430,14 @@
       startBoxWaveformVisualizer(stream);
       setBoxRecordingButtons(true);
       setBoxStatusPill("recording");
-      if (boxStartRecBtn) boxStartRecBtn.textContent = t("● Grabar", "● Record");
+      if (boxStartRecBtn) boxStartRecBtn.textContent = tk("box_btn_start");
 
       const minutes = Math.round(blockSec / 60);
       let msg = t(
         `Grabando. Cada ${minutes} min se envía un bloque y verás la transcripción.`,
         `Recording. Every ${minutes} min a block is sent and you will see the transcript.`
       );
-      if (boxIsMobile) {
+      if ((IS_IOS || IS_ANDROID)) {
         msg += " " + (wakeOk
           ? t(
               "La pantalla se mantendrá encendida. Deja Apex Vox abierto: si bloqueas el celular o cambias de app, el sistema corta el micrófono y la grabación se pausa.",
@@ -3511,10 +3468,6 @@
     boxState.rotating = false;
     setBoxStatusPill("finishing");
 
-    if (boxState.rotationTimer) {
-      clearInterval(boxState.rotationTimer);
-      boxState.rotationTimer = null;
-    }
     if (boxState.clockTimer) {
       clearInterval(boxState.clockTimer);
       boxState.clockTimer = null;
@@ -3539,14 +3492,7 @@
       });
     }
 
-    [boxState.activeStream, boxState.micStream, boxState.displayStream].forEach((st) => {
-      if (st && st.getTracks) {
-        st.getTracks().forEach((t) => t.stop());
-      }
-    });
-    boxState.activeStream = null;
-    boxState.micStream = null;
-    boxState.displayStream = null;
+    releaseBoxCapture();
 
     if (boxState.wakeLock) {
       try {
@@ -3560,7 +3506,7 @@
     boxState.status = "idle";
     boxState.runStartedAtMs = null;
     boxState.recordedMsBefore = 0;
-    if (boxStartRecBtn) boxStartRecBtn.textContent = t("● Grabar", "● Record");
+    if (boxStartRecBtn) boxStartRecBtn.textContent = tk("box_btn_start");
     document.title = document.title.replace(/^(⏸|● REC)[^·]*· /, "");
 
     if (!boxState.boxSessionId) return;
@@ -3598,55 +3544,6 @@
     } catch (err) {
       showBoxAlert(t(`No se pudo crear el resumen: ${err.message}`, `Could not create the summary: ${err.message}`), "error");
       setBoxStatusPill("ready");
-    }
-  }
-
-  // Generate a real synthetic WAV audio block in memory so users/evaluators can test block streaming with 1 click
-  function createSyntheticWavBlob(durationSec = 4, freqHz = 440) {
-    const sampleRate = 16000;
-    const numSamples = Math.floor(sampleRate * durationSec);
-    const buffer = new ArrayBuffer(44 + numSamples * 2);
-    const view = new DataView(buffer);
-
-    function writeStr(offset, str) {
-      for (let i = 0; i < str.length; i++) {
-        view.setUint8(offset + i, str.charCodeAt(i));
-      }
-    }
-
-    writeStr(0, "RIFF");
-    view.setUint32(4, 36 + numSamples * 2, true);
-    writeStr(8, "WAVE");
-    writeStr(12, "fmt ");
-    view.setUint32(16, 16, true);
-    view.setUint16(20, 1, true); // PCM
-    view.setUint16(22, 1, true); // Mono
-    view.setUint32(24, sampleRate, true);
-    view.setUint32(28, sampleRate * 2, true);
-    view.setUint16(32, 2, true);
-    view.setUint16(34, 16, true);
-    writeStr(36, "data");
-    view.setUint32(40, numSamples * 2, true);
-
-    for (let i = 0; i < numSamples; i++) {
-      const t = i / sampleRate;
-      const envelope = Math.sin(Math.PI * (i / numSamples));
-      const sample = Math.sin(2 * Math.PI * freqHz * t) * 0.35 * envelope;
-      view.setInt16(44 + i * 2, Math.max(-1, Math.min(1, sample)) * 32767, true);
-    }
-
-    return new Blob([buffer], { type: "audio/wav" });
-  }
-
-  async function handleSimulateBoxBlock() {
-    try {
-      await ensureBoxBackendSession();
-      const idx = boxState.blocks.length;
-      const wavBlob = createSyntheticWavBlob(4, 440 + (idx % 3) * 110);
-      await uploadAndTranscribeBoxBlock(wavBlob, idx, 180.0, "audio/wav");
-      if (boxState.status !== "recording") setBoxRecordingButtons(false, true);
-    } catch (err) {
-      showBoxAlert(err.message, "error");
     }
   }
 
@@ -3708,7 +3605,7 @@
     }
     if (!boxNotesListEl) return;
     if (boxState.notes.length === 0) {
-      boxNotesListEl.innerHTML = `<li class="track-item track-item--static">${t("Aún no hay notas.", "No notes yet.")}</li>`;
+      boxNotesListEl.innerHTML = `<li class="track-item track-item--static">${tk("box_notes_empty")}</li>`;
       return;
     }
     boxNotesListEl.innerHTML = boxState.notes
@@ -3742,9 +3639,6 @@
   if (boxModeVirtualBtn) {
     boxModeVirtualBtn.addEventListener("click", () => setBoxMode("virtual"));
   }
-  if (boxBlockDurationSelect) {
-    boxBlockDurationSelect.addEventListener("change", loadBoxOptimalConfig);
-  }
   if (boxStartRecBtn) {
     boxStartRecBtn.addEventListener("click", startBoxRecording);
   }
@@ -3760,9 +3654,6 @@
   }
   if (boxStopRecBtn) {
     boxStopRecBtn.addEventListener("click", stopAndFinalizeBoxRecording);
-  }
-  if (boxSimulate10hBtn) {
-    boxSimulate10hBtn.addEventListener("click", handleSimulateBoxBlock);
   }
   if (boxAddNoteBtn) {
     boxAddNoteBtn.addEventListener("click", handleAddBoxNote);
@@ -3787,10 +3678,9 @@
   });
 
   // Dispositivo: en computador se muestra la extensión; en celular, cómo instalar la app
-  const ua = navigator.userAgent || "";
-  const isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-  const isAndroid = /Android/i.test(ua);
-  const isMobile = isIOS || isAndroid || /Mobi/i.test(ua);
+  const isIOS = IS_IOS;
+  const isAndroid = IS_ANDROID;
+  const isMobile = IS_IOS || IS_ANDROID || /Mobi/i.test(navigator.userAgent || "");
   const isStandalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
   document.documentElement.classList.add(isMobile ? "is-mobile" : "is-desktop");
   document.documentElement.classList.toggle("is-ios", isIOS);
@@ -3832,7 +3722,6 @@
   loadClientConfig()
     .then(() => refreshProfile())
     .then(() => handleRedirectParams());
-  loadBoxOptimalConfig();
 
   // Support deep linking via ?view=box (e.g. from Chrome Extension or PWA shortcut)
   const urlParams = new URLSearchParams(window.location.search);

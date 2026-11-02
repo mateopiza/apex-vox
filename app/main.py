@@ -9,6 +9,7 @@ exporting, and the /api/health container healthcheck.
 from __future__ import annotations
 
 import hashlib
+import json
 import logging
 import shutil
 from functools import lru_cache
@@ -34,6 +35,7 @@ from app.api import (
     transcribe_router,
     upload_router,
 )
+from app.api.deps import public_base_url, request_language
 from app.config import settings
 
 # Configure logging
@@ -245,41 +247,6 @@ def _asset_version() -> str:
 
 
 # Países donde el español es el idioma principal (código ISO de CF-IPCountry)
-_SPANISH_COUNTRIES = {
-    "ES", "MX", "CO", "AR", "PE", "VE", "CL", "EC", "GT", "CU", "BO", "DO", "HN",
-    "PY", "SV", "NI", "CR", "PA", "UY", "PR", "GQ",
-}
-
-
-def _default_language(accept_language: str, country: str = "") -> str:
-    """
-    Idioma inicial: el del dispositivo si es español o inglés; si el dispositivo usa otro
-    idioma (o no lo indica), el del país del visitante (cabecera CF-IPCountry de Cloudflare).
-    """
-    device = _preferred_language(accept_language, default="")
-    if device:
-        return device
-    return "es" if (country or "").strip().upper() in _SPANISH_COUNTRIES else "en"
-
-
-def _preferred_language(accept_language: str, default: str = "en") -> str:
-    """'es' o 'en' según la preferencia del navegador; `default` si no pide ninguno de los dos."""
-    best_lang, best_q = default, -1.0
-    for part in accept_language.split(","):
-        piece = part.strip()
-        if not piece:
-            continue
-        tag, _, params = piece.partition(";")
-        q = 1.0
-        if params.strip().startswith("q="):
-            try:
-                q = float(params.strip()[2:])
-            except ValueError:
-                q = 0.0
-        base = tag.strip().lower().split("-")[0]
-        if base in ("es", "en") and q > best_q:
-            best_lang, best_q = base, q
-    return best_lang
 
 
 _SEO = {
@@ -300,10 +267,15 @@ _SEO = {
 }
 
 
+# Título y descripción de ambos idiomas para que la web cambie de idioma sin otra copia de los textos
+_PAGE_META_JSON = json.dumps(
+    {k: {"title": v["title"], "description": v["description"]} for k, v in _SEO.items()}, ensure_ascii=False
+).replace("</", "<\\/")
+
+
 def _fill_seo(html: str, lang: str, base: str) -> str:
     """Título, descripción, Open Graph y JSON-LD según idioma (se escapan para HTML/JSON)."""
     import html as _html
-    import json as _json
 
     seo = _SEO.get(lang, _SEO["es"])
     ld = {
@@ -339,14 +311,15 @@ def _fill_seo(html: str, lang: str, base: str) -> str:
         .replace("{{OG_IMAGE_ALT}}", _html.escape(seo["image_alt"]))
         .replace("{{OG_LOCALE}}", seo["locale"])
         .replace("{{OG_LOCALE_ALT}}", seo["locale_alt"])
-        .replace("{{JSON_LD}}", _json.dumps(ld, ensure_ascii=False).replace("</", "<\\/"))
+        .replace("{{JSON_LD}}", json.dumps(ld, ensure_ascii=False).replace("</", "<\\/"))
+        .replace("{{PAGE_META}}", _PAGE_META_JSON)
     )
 
 
 @app.get("/sitemap.xml", include_in_schema=False)
 async def sitemap(request: Request) -> Response:
     """Páginas públicas con sus versiones por idioma."""
-    base = settings.PUBLIC_BASE_URL or str(request.base_url).rstrip("/")
+    base = public_base_url(request)
     pages = [("/", "1.0"), ("/legal/terminos", "0.3"), ("/legal/habeas-data", "0.3"),
              ("/legal/privacidad", "0.3"), ("/legal/seguridad", "0.2")]
     urls = []
@@ -378,12 +351,9 @@ async def root(request: Request) -> Response:
     html = None if wants_json else _render_index()
 
     if html is not None:
-        forced = request.query_params.get("lang")
-        lang = forced if forced in ("es", "en") else _default_language(
-            request.headers.get("accept-language", ""), request.headers.get("cf-ipcountry", "")
-        )
+        lang = request_language(request)
         html = html.replace('<html lang="es"', f'<html lang="{lang}" data-default-lang="{lang}"', 1)
-        base = settings.PUBLIC_BASE_URL or str(request.base_url).rstrip("/")
+        base = public_base_url(request)
         html = _fill_seo(html, lang, base).replace("{{BASE_URL}}", base).replace("{{OG_LANG}}", lang)
         return HTMLResponse(
             content=html,
@@ -404,24 +374,21 @@ async def root(request: Request) -> Response:
 
 
 @app.get("/legal/{slug}", include_in_schema=False, response_class=HTMLResponse)
-async def legal_page(slug: str, request: Request, lang: str = "") -> HTMLResponse:
+async def legal_page(slug: str, request: Request) -> HTMLResponse:
     """Privacy policy, terms of service and security policy (ES / EN)."""
     from app.services.legal_content import PAGES, render_page
 
     if slug not in PAGES:
         return HTMLResponse("Not Found", status_code=404)
-    chosen = lang if lang in ("es", "en") else _default_language(
-        request.headers.get("accept-language", ""), request.headers.get("cf-ipcountry", "")
-    )
-    return HTMLResponse(render_page(slug, chosen, _asset_version()), headers={"Cache-Control": "public, max-age=3600"})
+    page = render_page(slug, request_language(request), _asset_version(), public_base_url(request))
+    return HTMLResponse(page, headers={"Cache-Control": "public, max-age=3600"})
 
 
 @app.get("/.well-known/security.txt", include_in_schema=False)
 async def security_txt(request: Request) -> Response:
     from app.services.legal_content import security_txt as build
 
-    base = settings.PUBLIC_BASE_URL or str(request.base_url).rstrip("/")
-    return Response(content=build(base), media_type="text/plain")
+    return Response(content=build(public_base_url(request)), media_type="text/plain")
 
 
 @app.get("/favicon.ico", include_in_schema=False)
@@ -436,7 +403,7 @@ async def favicon() -> Response:
 @app.get("/manifest.webmanifest", include_in_schema=False)
 async def web_app_manifest() -> JSONResponse:
     """Manifiesto de la app web instalable (Android, iPhone, escritorio)."""
-    base = settings.PUBLIC_BASE_URL or "https://apex-vox.ialabs.app"
+    base = public_base_url()
     return JSONResponse(
         content={
             "id": "/",
@@ -491,12 +458,12 @@ self.addEventListener('fetch', (event) => {
 
 
 @app.get("/robots.txt", include_in_schema=False)
-async def robots() -> Response:
+async def robots(request: Request) -> Response:
     """Allow the landing page, keep API and job artefacts out of indexes."""
     return Response(
         content=(
             "User-agent: *\nAllow: /$\nAllow: /legal/\nDisallow: /api/\nDisallow: /oauth/\nDisallow: /mcp\n"
-            f"Sitemap: {settings.PUBLIC_BASE_URL or 'https://apex-vox.ialabs.app'}/sitemap.xml\n"
+            f"Sitemap: {public_base_url(request)}/sitemap.xml\n"
         ),
         media_type="text/plain",
     )

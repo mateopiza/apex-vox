@@ -41,3 +41,12 @@ def test_sitemap_and_robots() -> None:
 def test_legal_pages_have_canonical_and_hreflang() -> None:
     html = TestClient(app).get("/legal/terminos?lang=en").text
     assert 'rel="canonical"' in html and 'hreflang="es"' in html and '<meta name="description"' in html
+
+
+def test_page_meta_for_language_switch_comes_from_server() -> None:
+    html = TestClient(app).get("/?lang=es").text
+    m = re.search(r'<script type="application/json" id="page-meta">(.*?)</script>', html, re.S)
+    assert m, "falta page-meta"
+    meta = json.loads(m.group(1))
+    assert meta["en"]["title"] == "Apex Vox — Transcribe and summarize your meetings with AI"
+    assert meta["es"]["description"] in html  # misma descripción que el <meta> del servidor

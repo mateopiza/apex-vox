@@ -258,6 +258,17 @@ class JobManager:
                 self._job_owners[job_id] = session.owner
             return status
 
+    def register_job(
+        self, status: JobStatusResponse, result: Optional[TranscriptionResult], owner: Optional[str]
+    ) -> None:
+        """Registra un trabajo creado fuera de create_job (p. ej. Apex Box) con su dueño."""
+        with self._lock:
+            self._jobs[status.job_id] = status
+            if result is not None:
+                self._results[status.job_id] = result
+            if owner:
+                self._job_owners[status.job_id] = owner
+
     def job_owner(self, job_id: str) -> Optional[str]:
         """Quién creó el trabajo (se guarda al crearlo: la sesión de un invitado se descarta al terminar)."""
         with self._lock:
