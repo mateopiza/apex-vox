@@ -1,7 +1,19 @@
+<p align="center">
+  <a href="https://apex-vox.ialabs.app">
+    <img src="app/static/og/og-es.png" alt="Apex Vox — Cada audio, en orden. Cada voz, con nombre. Cada reunión, con acta." width="100%" />
+  </a>
+</p>
+
 # Apex Vox
 
 [![CI](https://github.com/mateopiza/apex-vox/actions/workflows/ci.yml/badge.svg)](https://github.com/mateopiza/apex-vox/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/mateopiza/apex-vox/actions/workflows/codeql.yml/badge.svg)](https://github.com/mateopiza/apex-vox/actions/workflows/codeql.yml)
+[![Secret scan](https://github.com/mateopiza/apex-vox/actions/workflows/secret-scan.yml/badge.svg)](https://github.com/mateopiza/apex-vox/actions/workflows/secret-scan.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Groq](https://img.shields.io/badge/Powered%20by-Groq-f43e01)](https://groq.com)
+[![Live](https://img.shields.io/badge/demo-apex--vox.ialabs.app-f43e01)](https://apex-vox.ialabs.app)
 
 Apex Vox transcribes meetings. You upload one or more audio files, or record a meeting, and get back a transcript split by speaker with timestamps, plus an AI report (who spoke most, topics, goals, alerts, tasks) and formal meeting minutes. It is a FastAPI app with a plain-JavaScript web UI (Spanish and English), a Chrome extension, a meeting bot, and an MCP connector so ChatGPT and Claude can read your meetings.
 
@@ -53,15 +65,29 @@ Live instance: <https://apex-vox.ialabs.app>
 - Apex Pro costs USD 10 for 30 days, paid through Bold payment links and renewed by hand (there is no automatic charge). Paying within 24 hours of signing up gives a 20% welcome discount, limited to one discount per network every 90 days.
 - Transactional emails and a double opt-in newsletter (Resend), installable PWA, and legal pages (terms, Habeas Data, privacy, security) plus `/.well-known/security.txt`.
 
-## Screenshots
+## Tech stack
 
-> Screenshots are not committed yet. Contributions are welcome: add PNG files under `docs/screenshots/` and link them here.
-
-| View | File |
+| Layer | Technologies |
 | --- | --- |
-| Studio (upload, order, transcribe) | `docs/screenshots/studio.png` (planned) |
-| Transcript and Apex Summa report | `docs/screenshots/summa.png` (planned) |
-| Apex Box recorder (extension) | `docs/screenshots/recorder-tab.png` (planned) |
+| **Backend** | Python 3.11, [FastAPI](https://fastapi.tiangolo.com/) + Uvicorn (single worker), Pydantic v2, Jinja2, python-multipart, aiofiles, httpx / requests, python-dotenv |
+| **Audio** | FFmpeg / ffprobe, pydub, NumPy (silence detection, chunking under 25 MB, local voiceprint clustering) |
+| **Speech & AI** | [Groq](https://groq.com) Whisper (`whisper-large-v3`, `whisper-large-v3-turbo`) for transcription, Llama on Groq for speaker attribution and Apex Summa reports, [Deepgram](https://deepgram.com) (optional) for diarization |
+| **Frontend** | Vanilla JavaScript (no framework), HTML + CSS design tokens, Spanish/English i18n, installable PWA (manifest + service worker), MediaRecorder + Web Audio API, Screen Wake Lock API |
+| **Chrome extension** | Manifest V3 (Chrome 116+), `tabCapture`, AudioWorklet sound meter, pinned recorder tab, `chrome.i18n` (`_locales/es`, `_locales/en`) |
+| **AI assistants** | [Model Context Protocol](https://modelcontextprotocol.io) server (Streamable HTTP, JSON-RPC) with OAuth 2.1 + PKCE and dynamic client registration (RFC 7591 / 8414 / 9728) for ChatGPT and Claude |
+| **Integrations** | [Recall.ai](https://www.recall.ai) meeting bot, [Resend](https://resend.com) email (transactional, newsletter, inbound invitations), [Bold](https://bold.co) payment links, Telegram Bot API, [Supabase](https://supabase.com) OAuth (Google, GitHub) and optional sync |
+| **Storage** | JSON state file on a data volume, S3-compatible object storage (SigV4, presigned URLs) |
+| **Security** | PBKDF2-SHA256 passwords, HMAC-signed tokens and download links, Svix webhook signatures, strict CSP and security headers, per-IP rate limits, Cloudflare (proxy, WAF, Full-strict TLS) |
+| **DevOps** | Docker / Docker Compose, Dokploy + Traefik, GitHub Actions (pytest with FFmpeg, ruff, `node --check`, Docker build), CodeQL, gitleaks, Dependabot |
+| **Tests** | pytest, pytest-asyncio, FFmpeg-generated audio fixtures, mocked external APIs |
+
+## Preview
+
+| Español | English |
+| --- | --- |
+| <img src="app/static/og/og-es.png" alt="Apex Vox OG image (Spanish)" /> | <img src="app/static/og/og-en.png" alt="Apex Vox OG image (English)" /> |
+
+The web app, the extension, the OAuth consent page and the emails are available in Spanish and English. The language follows the device, then the visitor's country, and can be changed in **My account**.
 
 ## Architecture
 
