@@ -129,6 +129,21 @@ Accepted extensions: `.mp3 .ogg .wav .m4a .flac .webm .mp4`.
 | POST | `/api/recall/webhook` | Signed (Svix) | Recall.ai bot status events. `bot.done` starts processing. *Hidden.* |
 | POST | `/api/inbound/resend` | Signed (Svix) | Resend `email.received` events. The email's `.ics` is processed in the background. *Hidden.* |
 
+## Recorded calls (`routes_calls.py`)
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| GET | `/api/phone` | User | `calling_enabled`, `calling_allowed`, `phone_verified`, `phone_masked`, `caller_id`, `allowed_prefixes`. |
+| POST | `/api/phone/verify/start` | Pro | Body `{"phone": "+57..."}`. Sends an SMS code (Twilio Verify). 5/h per account, 10/h per IP. |
+| POST | `/api/phone/verify/check` | Pro | Body `{"phone", "code"}`. Stores the verified phone. 10/h per account. |
+| DELETE | `/api/phone` | User | Remove the verified phone. |
+| GET | `/api/calls` | User | Phone state and the last 20 calls. |
+| POST | `/api/calls` | Pro | Body `{"to", "contact_name", "title"}`. Twilio calls the verified phone first; after the user presses 1 it dials `to` from `TWILIO_CALLER_ID`. One active call at a time, `CALLS_PER_DAY` per day, 10 per 10 min. |
+| GET | `/api/calls/{call_id}` | Owner | Status, notes and `job_id` once processed. |
+| POST | `/api/calls/{call_id}/notes` | Owner | Body `{"text", "tag"}` while the call is active. `409` once processing started. |
+| POST | `/api/calls/{call_id}/hangup` | Owner | Hang up or cancel. |
+| POST | `/api/twilio/voice/{id}`, `/connect/{id}`, `/notice/{id}`, `/dial-done/{id}`, `/status/{id}`, `/recording/{id}` | Signed (`X-Twilio-Signature`) | TwiML and status webhooks. The `CallSid` (or `ParentCallSid`) must be the one created for that call. *Hidden.* |
+
 ## Telegram (`routes_telegram.py`, prefix `/api/telegram`)
 
 | Method | Path | Auth | Purpose |

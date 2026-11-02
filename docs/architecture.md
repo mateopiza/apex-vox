@@ -20,6 +20,7 @@ Apex Vox is a single FastAPI process. The web UI is static HTML and JavaScript s
 | Object storage | `storage_s4.py` | SigV4 client for any S3-compatible provider, plus a local mirror and retention index |
 | Payments | `bold_service.py` | Bold payment links, webhook signature check, period activation |
 | Meeting bot | `recall_service.py` | Recall.ai bots, Svix webhook check, recording download and processing |
+| Calls | `twilio_service.py`, `routes_calls.py` | Phone verification (Twilio Verify), masked-number bridge calls, dual-channel recording, webhook signature check, processing into a meeting |
 | Invitations | `calendar_invites.py` | Resend Inbound email fetch, `.ics` parsing, bot scheduling |
 | MCP | `mcp_oauth.py`, `mcp_server.py`, `routes_mcp.py` | OAuth 2.1 authorization server and JSON-RPC MCP server |
 | Email | `email_service.py` | Resend transactional templates (ES/EN), newsletter contacts |
@@ -81,6 +82,14 @@ Box sessions themselves live in memory (`apex_box_manager`). Only the finalized 
 2. `recall_service.create_bot` asks Recall.ai to join (immediately, or at `join_at` for scheduled invites) and asks for a mixed MP3 recording. The bot record is stored in the state file.
 3. Recall.ai calls `POST /api/recall/webhook` (Svix-signed) with status events. On `bot.done` a background thread downloads the recording, cuts it into 180 s blocks, feeds them through an Apex Box session, finalizes with minutes, and emails the user a link.
 
+### Recorded calls (Twilio)
+
+1. The Apex Pro user verifies their phone once with an SMS code (`/api/phone/verify/*`). Only that number is ever called for them.
+2. `POST /api/calls` asks Twilio to call the verified phone from `TWILIO_CALLER_ID`. When the user answers, `/api/twilio/voice/{id}` asks them to press 1, so a voicemail is never connected to the contact.
+3. `/api/twilio/connect/{id}` returns `<Dial callerId=TWILIO_CALLER_ID record="record-from-answer-dual">`. The contact sees the Twilio number, never the user's. Both sides hear a recording notice (`CALL_RECORDING_NOTICE`).
+4. While the call is live the user adds notes (`/api/calls/{id}/notes`), stamped with the wall-clock time.
+5. `/api/twilio/recording/{id}` (signed) starts a background thread: download the dual-channel MP3, cut it into 180 s blocks through an Apex Box session, label each segment by the louder channel (channel 1 = user, channel 2 = contact), place the notes on the timeline relative to `RecordingStartTime`, finalize with summary and minutes, delete the recording from Twilio, and email the link. The transcription record carries `source: "phone_call"`, the contact and the caller ID, which the MCP tools use.
+
 ### Calendar invitations (Resend Inbound)
 
 1. The user invites `INVITES_ADDRESS` to a meeting, or forwards the invitation to it.
@@ -124,7 +133,7 @@ Details and the list of tools are in [mcp.md](mcp.md).
 
 | Data | Where | Notes |
 | --- | --- | --- |
-| Accounts, session tokens, quotas, payments, promo IP hashes, password-reset and newsletter tokens, OAuth clients/codes/tokens, meeting bots, calendar events, Telegram links, transcription index | `outputs/supabase_cloud_state.json` | One JSON file, read and rewritten under a process-wide lock. **This is the source of truth.** |
+| Accounts (and verified phone), session tokens, quotas, payments, promo IP hashes, password-reset and newsletter tokens, OAuth clients/codes/tokens, meeting bots, phone calls and their notes, calendar events, Telegram links, transcription index | `outputs/supabase_cloud_state.json` | One JSON file, read and rewritten under a process-wide lock. **This is the source of truth.** |
 | Server HMAC secret (if `APP_SECRET_KEY` is unset) | `outputs/.app_secret` (mode 600) | Generated on first use. Losing it invalidates IP hashes, OAuth tokens and one-time codes |
 | Enrolled voice profiles | `outputs/voice_profiles.json` | Embeddings plus owner id |
 | Job results and merged audio | `outputs/{job_id}_result.json`, `outputs/{job_id}_merged.mp3` | Loaded back into memory on demand |
@@ -148,7 +157,7 @@ All loops are daemon threads started in the FastAPI `startup` hook (`app/main.py
 | Billing emails | Every 15 minutes | Sends the promo-ending reminder, the renewal reminder (`RENEWAL_REMINDER_DAYS` before expiry) and the expired notice, once each per user |
 | Transcription workers | Per `POST /api/transcribe` | One thread per job |
 | Guest purge | `GUEST_RESULT_TTL_MINUTES` after a guest job | `threading.Timer` removes the in-memory result and the merged audio |
-| Webhook processing | Per Recall `bot.done`, Resend `email.received`, Telegram update | Heavy work runs off the request thread |
+| Webhook processing | Per Recall `bot.done`, Twilio recording ready, Resend `email.received`, Telegram update | Heavy work runs off the request thread |
 | Email sending | Per email | `email_service.send_async` sends in a thread |
 
 ## Scaling notes

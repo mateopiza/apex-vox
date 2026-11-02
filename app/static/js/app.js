@@ -623,6 +623,31 @@
       "BLOQUE 1": "BLOCK 1",
       "0 notas": "0 notes",
       "Bot para reuniones virtuales": "Bot for virtual meetings",
+      "Llamadas grabadas": "Recorded calls",
+      "Llama desde Apex Vox: tu contacto ve nuestro número, no el tuyo. La llamada se graba con aviso a ambas partes y recibes transcripción, apuntes, resumen y acta.": "Call from Apex Vox: your contact sees our number, not yours. The call is recorded with notice to both sides and you get the transcript, notes, summary and minutes.",
+      "Primero verifica tu celular: te llamaremos a ese número para conectar cada llamada.": "First verify your phone: we'll call that number to connect each call.",
+      "Tu celular, p. ej. +57 300 123 4567": "Your phone, e.g. +1 305 555 1234",
+      "Tu celular": "Your phone",
+      "Enviar código": "Send code",
+      "Código SMS": "SMS code",
+      "Verificar": "Verify",
+      "Cambiar número": "Change number",
+      "Número a llamar, p. ej. +57 310 555 6677": "Number to call, e.g. +1 305 555 6677",
+      "Número a llamar": "Number to call",
+      "Nombre del contacto (opcional)": "Contact name (optional)",
+      "Nombre del contacto": "Contact name",
+      "Llamar": "Call",
+      "Contesta en tu celular y pulsa 1 para conectar.": "Answer on your phone and press 1 to connect.",
+      "Colgar": "Hang up",
+      "Tipo de apunte": "Note type",
+      "Nota": "Note",
+      "Acuerdo": "Agreement",
+      "Tarea": "Task",
+      "Alerta": "Alert",
+      "Idea": "Idea",
+      "Pregunta": "Question",
+      "Apunte durante la llamada": "Note during the call",
+      "Guardar apunte": "Save note",
       "El bot entra a tu Zoom, Meet o Teams, graba y te envía la transcripción con resumen y acta.": "The bot joins your Zoom, Meet or Teams, records and sends you the transcript with summary and minutes.",
       "Enviar bot": "Send bot",
       "También puedes invitar a": "You can also invite",
@@ -804,6 +829,7 @@
       loadUserPortalSummary();
     } else if (viewName === "box") {
       if (typeof loadMeetingBots === "function") loadMeetingBots();
+      if (typeof loadCalls === "function") loadCalls();
     }
   }
 
@@ -1443,6 +1469,171 @@
       list.innerHTML = rows.join("") || `<li class="track-item track-item--static">${t("Aún no has enviado el bot.", "You haven't sent the bot yet.")}</li>`;
     } catch (err) {
       list.innerHTML = "";
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Llamadas grabadas con número enmascarado (Twilio)
+  // ---------------------------------------------------------------------------
+  const CALL_ACTIVE = ["initiating", "calling_you", "connecting", "in_call", "awaiting_recording"];
+  const callStatusLabel = (status) => ({
+    initiating: t("Iniciando…", "Starting…"), calling_you: t("Llamando a tu celular… contesta y pulsa 1", "Calling your phone… answer and press 1"),
+    connecting: t("Marcando al contacto…", "Dialing the contact…"), in_call: t("En llamada · grabando", "On the call · recording"),
+    awaiting_recording: t("Llamada terminada · preparando la grabación", "Call ended · preparing the recording"),
+    processing: t("Procesando transcripción y resumen", "Processing transcript and summary"), done: t("Lista", "Ready"),
+    failed: t("Falló", "Failed"), ended: t("Terminó sin grabación", "Ended without recording"), no_answer: t("No contestaste", "You didn't answer"),
+    busy: t("Tu línea estaba ocupada", "Your line was busy"), cancelled: t("Cancelada", "Cancelled"),
+    contact_no_answer: t("El contacto no contestó", "The contact didn't answer"), contact_busy: t("El contacto estaba ocupado", "The contact was busy"),
+  }[status] || status);
+  const callState = { active: null, timer: null, phone: "" };
+
+  function callAlert(message, ok) {
+    const box = document.getElementById("call-alert");
+    if (!box) return;
+    box.className = `alert-box ${ok ? "alert-success" : "alert-error"}`;
+    box.textContent = message;
+  }
+
+  async function callApi(url, method, body) {
+    const res = await authFetch(url, {
+      method: method || "GET",
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || t("No se pudo completar.", "Could not complete."));
+    return data;
+  }
+
+  function renderActiveCall(call) {
+    const live = document.getElementById("call-live-box");
+    const dial = document.getElementById("call-dial-box");
+    const isActive = call && CALL_ACTIVE.includes(call.status);
+    callState.active = isActive ? call : null;
+    if (live) live.classList.toggle("hidden", !isActive);
+    if (dial && callState.phone) dial.classList.toggle("hidden", !!isActive);
+    if (!isActive) {
+      if (callState.timer) clearInterval(callState.timer);
+      callState.timer = null;
+      return;
+    }
+    const who = call.contact_name || call.to_masked || call.to;
+    document.getElementById("call-live-status").textContent = `${who}: ${callStatusLabel(call.status)}`;
+    document.getElementById("call-notes-list").innerHTML = (call.notes || []).map((n) =>
+      `<li class="track-item track-item--static">${escapeHtml(n.tag.toUpperCase())} · ${escapeHtml(n.text)}</li>`).join("");
+    const hang = document.getElementById("call-hangup-btn");
+    if (hang) hang.classList.toggle("hidden", call.status === "awaiting_recording");
+    if (!callState.timer) callState.timer = setInterval(refreshActiveCall, 3000);
+  }
+
+  async function refreshActiveCall() {
+    if (!callState.active) return;
+    try {
+      const call = await callApi(`/api/calls/${encodeURIComponent(callState.active.call_id)}`);
+      renderActiveCall(call);
+      if (!CALL_ACTIVE.includes(call.status)) loadCalls();
+    } catch (err) {
+      renderActiveCall(null);
+    }
+  }
+
+  async function loadCalls() {
+    const card = document.getElementById("call-card");
+    if (!card || !state.token) return;
+    let data;
+    try {
+      data = await callApi("/api/calls");
+    } catch (err) {
+      return;
+    }
+    const phone = data.phone || {};
+    card.classList.toggle("hidden", !phone.calling_enabled);
+    if (!phone.calling_enabled) return;
+    callState.phone = phone.phone_verified ? phone.phone_masked : "";
+    document.getElementById("call-verify-box").classList.toggle("hidden", phone.phone_verified);
+    document.getElementById("call-dial-box").classList.toggle("hidden", !phone.phone_verified);
+    document.getElementById("call-phone-status").textContent = phone.phone_verified
+      ? t(`Tu celular ${phone.phone_masked} · tus contactos verán ${phone.caller_id}`, `Your phone ${phone.phone_masked} · contacts will see ${phone.caller_id}`)
+      : "";
+    const calls = data.calls || [];
+    const active = calls.find((c) => CALL_ACTIVE.includes(c.status));
+    renderActiveCall(active || null);
+    document.getElementById("call-list").innerHTML = calls.map((c) => {
+      const when = new Date(c.created_at).toLocaleString();
+      const link = c.job_id ? ` · <a class="text-link-strong" href="/?job=${encodeURIComponent(c.job_id)}">${t("Ver resumen", "View summary")}</a>` : "";
+      return `<li class="track-item"><div class="track-meta"><div class="track-name">${escapeHtml(c.title || c.to_masked)}</div>
+        <div class="track-sub"><span>${escapeHtml(when)}</span><span>${escapeHtml(callStatusLabel(c.status))}${link}</span></div></div></li>`;
+    }).join("");
+  }
+
+  async function sendPhoneCode() {
+    if (!requireSession(t("Inicia sesión para hacer llamadas.", "Sign in to make calls."))) return;
+    const phone = document.getElementById("call-phone-input").value.trim();
+    try {
+      await callApi("/api/phone/verify/start", "POST", { phone });
+      document.getElementById("call-code-row").classList.remove("hidden");
+      document.getElementById("call-code-input").focus();
+      callAlert(t("Te enviamos un código por SMS.", "We sent you a code by SMS."), true);
+    } catch (err) {
+      callAlert(err.message, false);
+    }
+  }
+
+  async function checkPhoneCode() {
+    const phone = document.getElementById("call-phone-input").value.trim();
+    const code = document.getElementById("call-code-input").value.trim();
+    try {
+      await callApi("/api/phone/verify/check", "POST", { phone, code });
+      callAlert(t("Celular verificado. Ya puedes llamar.", "Phone verified. You can call now."), true);
+      loadCalls();
+    } catch (err) {
+      callAlert(err.message, false);
+    }
+  }
+
+  async function removePhone() {
+    try {
+      await callApi("/api/phone", "DELETE");
+      loadCalls();
+    } catch (err) {
+      callAlert(err.message, false);
+    }
+  }
+
+  async function startCall() {
+    if (!requireSession(t("Inicia sesión para hacer llamadas.", "Sign in to make calls."))) return;
+    const to = document.getElementById("call-to-input").value.trim();
+    const contact = document.getElementById("call-contact-input").value.trim();
+    try {
+      const call = await callApi("/api/calls", "POST", { to, contact_name: contact || null });
+      callAlert(t("Te estamos llamando. Contesta y pulsa 1.", "We're calling you. Answer and press 1."), true);
+      renderActiveCall(call);
+      loadCalls();
+    } catch (err) {
+      callAlert(err.message, false);
+    }
+  }
+
+  async function addCallNote() {
+    const input = document.getElementById("call-note-input");
+    const tag = document.getElementById("call-note-tag").value;
+    if (!callState.active || !input.value.trim()) return;
+    try {
+      await callApi(`/api/calls/${encodeURIComponent(callState.active.call_id)}/notes`, "POST", { text: input.value.trim(), tag });
+      input.value = "";
+      refreshActiveCall();
+    } catch (err) {
+      callAlert(err.message, false);
+    }
+  }
+
+  async function hangupCall() {
+    if (!callState.active) return;
+    try {
+      renderActiveCall(await callApi(`/api/calls/${encodeURIComponent(callState.active.call_id)}/hangup`, "POST"));
+      loadCalls();
+    } catch (err) {
+      callAlert(err.message, false);
     }
   }
 
@@ -2672,6 +2863,15 @@
   const navBoxForBots = document.getElementById("nav-box-btn");
   if (navBoxForBots) navBoxForBots.addEventListener("click", loadMeetingBots);
   if (new URLSearchParams(location.search).get("view") === "box") setTimeout(loadMeetingBots, 300);
+  [["call-send-code-btn", sendPhoneCode], ["call-check-code-btn", checkPhoneCode], ["call-remove-phone-btn", removePhone],
+    ["call-start-btn", startCall], ["call-note-btn", addCallNote], ["call-hangup-btn", hangupCall]].forEach(([id, fn]) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("click", fn);
+  });
+  const callNoteInput = document.getElementById("call-note-input");
+  if (callNoteInput) callNoteInput.addEventListener("keydown", (e) => { if (e.key === "Enter") addCallNote(); });
+  if (navBoxForBots) navBoxForBots.addEventListener("click", loadCalls);
+  if (new URLSearchParams(location.search).get("view") === "box") setTimeout(loadCalls, 300);
   const mcpCopyBtn = document.getElementById("mcp-copy-btn");
   if (mcpCopyBtn) {
     mcpCopyBtn.addEventListener("click", async () => {

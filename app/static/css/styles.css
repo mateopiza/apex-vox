@@ -3423,3 +3423,9 @@ html:not(.is-desktop):not(.is-mobile) .device-mobile { display: none; }
 html:not(.is-ios) .install-ios { display: none; }
 html.is-ios .install-android { display: none; }
 html.is-desktop .install-android { display: none; }
+
+/* Llamadas grabadas (Twilio) */
+#call-card .mcp-url-row { flex-wrap: wrap; margin-top: 8px; }
+#call-card .mcp-url-row input { font-family: inherit; min-width: 160px; }
+#call-card .mcp-url-row select { flex: 0 0 auto; width: auto; }
+.btn-link { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; }

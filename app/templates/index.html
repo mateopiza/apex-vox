@@ -870,6 +870,57 @@
           <div id="bot-alert" class="alert-box hidden" role="status"></div>
         </div>
 
+        <!-- Llamadas grabadas con número enmascarado (Twilio) -->
+        <div class="card hidden" id="call-card">
+          <div class="card-header">
+            <h2 class="card-title"><span class="step-badge">TEL</span> <span>Llamadas grabadas</span></h2>
+            <span class="badge-pill info">APEX PRO</span>
+          </div>
+          <p class="card-lead">Llama desde Apex Vox: tu contacto ve nuestro número, no el tuyo. La llamada se graba con aviso a ambas partes y recibes transcripción, apuntes, resumen y acta.</p>
+
+          <div id="call-verify-box">
+            <p class="field-hint">Primero verifica tu celular: te llamaremos a ese número para conectar cada llamada.</p>
+            <div class="mcp-url-row">
+              <input type="tel" class="form-control" id="call-phone-input" placeholder="Tu celular, p. ej. +57 300 123 4567" aria-label="Tu celular" autocomplete="tel" />
+              <button type="button" class="btn-secondary" id="call-send-code-btn">Enviar código</button>
+            </div>
+            <div class="mcp-url-row hidden" id="call-code-row">
+              <input type="text" class="form-control" id="call-code-input" placeholder="Código SMS" aria-label="Código SMS" inputmode="numeric" autocomplete="one-time-code" maxlength="10" />
+              <button type="button" class="btn-primary" id="call-check-code-btn">Verificar</button>
+            </div>
+          </div>
+
+          <div id="call-dial-box" class="hidden">
+            <p class="field-hint"><span id="call-phone-status"></span> · <button type="button" class="text-link-strong btn-link" id="call-remove-phone-btn">Cambiar número</button></p>
+            <div class="mcp-url-row">
+              <input type="tel" class="form-control" id="call-to-input" placeholder="Número a llamar, p. ej. +57 310 555 6677" aria-label="Número a llamar" />
+              <input type="text" class="form-control" id="call-contact-input" placeholder="Nombre del contacto (opcional)" aria-label="Nombre del contacto" maxlength="80" />
+              <button type="button" class="btn-primary" id="call-start-btn">Llamar</button>
+            </div>
+            <p class="field-hint">Contesta en tu celular y pulsa 1 para conectar.</p>
+          </div>
+
+          <div id="call-live-box" class="hidden" aria-live="polite">
+            <p class="field-hint"><strong id="call-live-status"></strong> <button type="button" class="btn-secondary" id="call-hangup-btn">Colgar</button></p>
+            <div class="mcp-url-row">
+              <select class="form-control" id="call-note-tag" aria-label="Tipo de apunte">
+                <option value="nota">Nota</option>
+                <option value="acuerdo">Acuerdo</option>
+                <option value="tarea">Tarea</option>
+                <option value="alerta">Alerta</option>
+                <option value="idea">Idea</option>
+                <option value="pregunta">Pregunta</option>
+              </select>
+              <input type="text" class="form-control" id="call-note-input" placeholder="Apunte durante la llamada" aria-label="Apunte durante la llamada" maxlength="2000" />
+              <button type="button" class="btn-secondary" id="call-note-btn">Guardar apunte</button>
+            </div>
+            <ul class="track-list" id="call-notes-list"></ul>
+          </div>
+
+          <ul class="track-list" id="call-list" aria-live="polite"></ul>
+          <div id="call-alert" class="alert-box hidden" role="status"></div>
+        </div>
+
         <!-- En computador: extensión de Chrome -->
         <div class="card device-desktop" id="ext-card">
           <div class="card-header">

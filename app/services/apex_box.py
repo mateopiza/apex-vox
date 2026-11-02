@@ -39,7 +39,7 @@ import uuid
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from app.config import (
     BASE_DIR,
@@ -638,6 +638,7 @@ class ApexBoxManager:
         self,
         box_session_id: str,
         req: Optional[BoxFinalizeRequest] = None,
+        record_extra: Optional[Dict[str, Any]] = None,
     ) -> BoxFinalizeResponse:
         """
         Consolidate all uploaded blocks and live timestamped notes into a unified
@@ -842,6 +843,11 @@ class ApexBoxManager:
                 "file_order": result.file_order,
                 "dominant_speaker": summa_report.dominant_speaker,
                 "created_at": summa_report.generated_at,
+                "source": "box",
+                "platform": session.platform,
+                "speakers": unique_speakers,
+                "notes_count": len(session.notes),
+                **(record_extra or {}),
             }
         )
 

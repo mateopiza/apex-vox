@@ -10,6 +10,10 @@ Preparation of the public open-source release.
 
 ### Added
 
+- **Recorded calls with a masked number (Twilio, Apex Pro).** Phone verification by SMS code (Twilio Verify); bridge calls that ring the verified phone first, ask to press 1 and dial the contact from `TWILIO_CALLER_ID`, so the contact never sees the user's number; recording notice to both parties; dual-channel recording with speakers labelled by channel; live notes during the call placed on the timeline; summary, minutes and email when ready; recordings deleted from Twilio after processing. Web card in "Record", `/api/phone*`, `/api/calls*` and signed `/api/twilio/*` webhooks.
+- **MCP connector:** `find_meeting` identifies a meeting from a natural-language description (relative dates in Spanish and English, participants, contact number, source, topics); `list_meetings` filters by date, source, speaker and title; new `get_meeting_details`, `get_meeting_notes` (with transcript context), `get_meeting_minutes`, `list_upcoming_meetings` and `list_phone_calls`; `search_meetings` ignores accents, matches all words and searches live notes; transcript filters by speaker and time range; `meeting_id` accepts `latest`.
+- Transcription records carry their source (`upload`, `box`, `meeting_bot`, `phone_call`) and speakers.
+
 - MIT license, README, contributing guide, code of conduct, security policy, support guide and this changelog.
 - Documentation under `docs/`: architecture, configuration, HTTP API, deployment, MCP connector, Chrome extension and security.
 - CI workflow (tests with FFmpeg, ruff syntax check, `node --check`, Docker build), weekly CodeQL, gitleaks secret scanning, Dependabot, issue and PR templates, CODEOWNERS, `.editorconfig` and `.gitattributes`.
@@ -22,6 +26,8 @@ Preparation of the public open-source release.
 
 ### Fixed
 
+- Supabase sync of `transcriptions` sends only the columns in `supabase/schema.sql` (PostgREST rejected the extra `title` field).
+- Deleting an account also removes its meeting bots, calendar events and phone calls.
 - Web recorder ("Record"): the block timer, progress bar, counters, live transcript, block list, notes and alerts were wired to element ids that no longer existed after the redesign. They now update while recording.
 - Web recorder on phones: blocks are recorded one after another with a single `MediaRecorder` (iPhone does not allow two on the same microphone). Block rotation follows the real clock, so a block still closes after the phone froze timers. The screen wake lock and the audio context are requested on the tap itself. When the system cuts off the microphone (screen locked, another app, a call), the recorded audio is saved as a block and recording pauses, with a warning and a "Continue recording" button that resumes the same meeting. On iPhone, MP4 audio is preferred.
 

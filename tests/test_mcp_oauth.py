@@ -115,7 +115,8 @@ def test_full_oauth_flow_and_tools_for_pro_user() -> None:
     assert client.post("/mcp", json={"jsonrpc": "2.0", "method": "notifications/initialized"},
                        headers={"Authorization": f"Bearer {at}"}).status_code == 202
     names = {t["name"] for t in _rpc(client, at, "tools/list").json()["result"]["tools"]}
-    assert names == {"list_meetings", "search_meetings", "get_meeting_transcript", "get_meeting_summary", "get_action_items"}
+    assert {"list_meetings", "search_meetings", "get_meeting_transcript", "get_meeting_summary", "get_action_items",
+            "find_meeting", "get_meeting_details", "get_meeting_notes", "get_meeting_minutes"} <= names
 
     listed = _rpc(client, at, "tools/call", {"name": "list_meetings", "arguments": {}}).json()["result"]
     assert "Comité de presupuesto" in listed["content"][0]["text"]

@@ -121,6 +121,24 @@ These are commented out in `.env.example`. Uncomment them to override the defaul
 | `RECALL_WEBHOOK_SECRET` | empty | Yes, for the bot | Svix signing secret (`whsec_...`) of the Recall webhook endpoint. When empty, `/api/recall/webhook` rejects every request and bots never finish processing. |
 | `BOT_NAME` | `Apex Vox · notas` | No | Display name of the bot in the meeting (up to 100 characters). |
 
+## Recorded calls with a masked number (Twilio)
+
+Apex Pro only. Calling is on when `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_VERIFY_SERVICE_SID` and a valid `TWILIO_CALLER_ID` are set. Webhooks are built from `PUBLIC_BASE_URL`, which must be the public `https://` origin Twilio reaches.
+
+| Variable | Default | Required | Description |
+| --- | --- | --- | --- |
+| `TWILIO_ACCOUNT_SID` | empty | Yes, for calls | Account SID (`AC...`). |
+| `TWILIO_AUTH_TOKEN` | empty | Yes, for calls | Auth token. Always used to validate `X-Twilio-Signature` on webhooks, and for the REST API unless an API key is set. |
+| `TWILIO_API_KEY_SID` / `TWILIO_API_KEY_SECRET` | empty | No | API key (`SK...`) used for the REST API instead of the auth token. |
+| `TWILIO_VERIFY_SERVICE_SID` | empty | Yes, for calls | Verify service (`VA...`) that sends the SMS code to verify the user's phone. |
+| `TWILIO_CALLER_ID` | empty | Yes, for calls | Twilio number in E.164 (`+1...`) that contacts see. The user's own number is never shown to the contact. |
+| `CALL_ALLOWED_PREFIXES` | `+57,+1,+52` | No | Country prefixes allowed for the user's phone and for destinations. Also restrict Geo Permissions in the Twilio console to avoid toll fraud. |
+| `CALL_MAX_MINUTES` | `90` | No | Maximum length of a call. |
+| `CALLS_PER_DAY` | `30` | No | Calls per account in 24 hours. |
+| `CALL_RECORDING_NOTICE` | `true` | No | Both parties hear that the call is recorded. Keep it on unless you have legal advice for your jurisdiction. |
+| `TWILIO_DELETE_RECORDINGS` | `true` | No | Delete the recording from Twilio once Apex Vox has copied and processed it. |
+| `APP_TIMEZONE` | `America/Bogota` | No | Time zone used by the MCP tools to show dates and understand "yesterday", "on Monday"... |
+
 ## Telegram bot
 
 | Variable | Default | Required | Description |
