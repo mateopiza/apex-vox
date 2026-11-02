@@ -1,0 +1,50 @@
+name: Bug report
+description: Something is not working as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! **Do not report security vulnerabilities here** — see [SECURITY.md](../../SECURITY.md).
+        Never paste API keys, tokens, passwords or personal data.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Go to …
+        2. Click …
+        3. See …
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Studio (transcription)
+        - Record (Apex Box)
+        - Chrome extension
+        - Meeting bot
+        - MCP connector (ChatGPT / Claude)
+        - Accounts / billing
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: env
+    attributes:
+      label: Browser / OS / version
+      placeholder: Chrome 131 on Windows 11, self-hosted commit abc123
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or screenshots
+      description: Redact anything sensitive.

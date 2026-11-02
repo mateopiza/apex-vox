@@ -1,0 +1,8 @@
+# Default reviewers for every change
+* @mateopiza
+
+# Security-sensitive areas
+/app/api/deps.py            @mateopiza
+/app/services/mcp_oauth.py  @mateopiza
+/app/services/bold_service.py @mateopiza
+/.github/                   @mateopiza

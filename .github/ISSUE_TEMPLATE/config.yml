@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Report a security vulnerability
+    url: https://github.com/mateopiza/apex-vox/security/advisories/new
+    about: Please report vulnerabilities privately, never in public issues.
+  - name: Questions and support
+    url: https://github.com/mateopiza/apex-vox/discussions
+    about: Ask questions and share ideas in Discussions.
