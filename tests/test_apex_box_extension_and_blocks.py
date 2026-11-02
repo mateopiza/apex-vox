@@ -213,11 +213,11 @@ def test_chrome_extension_mv3_package_icons_and_official_groq_badge() -> None:
     """
     Verify:
     - `/api/box/extension.zip` returns a valid MV3 Chrome Extension zip archive.
-    - `extension/manifest.json` follows Manifest V3 best practices (`sidePanel`, `offscreen`,
-      `tabCapture`, `desktopCapture`, `storage`, `alarms`).
+    - `extension/manifest.json` is a minimal MV3 manifest (`storage`, `tabs`, `tabCapture`) whose
+      action opens a pinned recorder tab (`recorder/recorder.html`).
     - Icons (`16x16`, `48x48`, `128x128`) have exact matching pixel dimensions in their PNG IHDR headers.
     - Official Groq badge (`https://console.groq.com/powered-by-groq-light.svg`) is embedded in both
-      the Web Application (`index.html`) and the Chrome Extension Side Panel (`sidepanel.html`).
+      the Web Application (`index.html`) and the extension recorder tab (`recorder.html`).
     - Mobile Web App manifest (`/manifest.webmanifest`) is served properly.
     """
     client = TestClient(app)
@@ -249,30 +249,29 @@ def test_chrome_extension_mv3_package_icons_and_official_groq_badge() -> None:
         expected_files = {
             "manifest.json",
             "service-worker.js",
-            "offscreen/offscreen.html",
-            "offscreen/offscreen.js",
-            "sidepanel/sidepanel.html",
-            "sidepanel/sidepanel.css",
-            "sidepanel/sidepanel.js",
-            "content/meeting-detector.js",
-            "content/meeting-detector.css",
+            "recorder/recorder.html",
+            "recorder/recorder.css",
+            "recorder/recorder.js",
             "icons/icon-16.png",
             "icons/icon-48.png",
             "icons/icon-128.png",
         }
         assert expected_files.issubset(names)
+        # Simplified design: no side panel, offscreen document or injected content scripts
+        assert not any(n.startswith(("sidepanel/", "offscreen/", "content/")) for n in names)
 
         manifest = json.loads(zf.read("manifest.json").decode("utf-8"))
         assert manifest["manifest_version"] == 3
-        assert "sidePanel" in manifest["permissions"]
-        assert "offscreen" in manifest["permissions"]
-        assert "tabCapture" in manifest["permissions"]
-        assert "desktopCapture" in manifest["permissions"]
-        assert "storage" in manifest["permissions"]
+        assert set(manifest["permissions"]) == {"storage", "tabs", "tabCapture"}
+        assert "side_panel" not in manifest
+        assert "content_scripts" not in manifest
+        assert "default_popup" not in manifest["action"]
 
-        sidepanel_html = zf.read("sidepanel/sidepanel.html").decode("utf-8")
-        assert "https://console.groq.com/powered-by-groq-light.svg" in sidepanel_html
-        assert "Powered by Groq for fast inference." in sidepanel_html
+        recorder_html = zf.read("recorder/recorder.html").decode("utf-8")
+        for field_id in ('id="meeting-type"', 'id="title"', 'name="mode"', 'id="engine"', 'id="rec-btn"'):
+            assert field_id in recorder_html
+        assert "https://console.groq.com/powered-by-groq-light.svg" in recorder_html
+        assert "Powered by Groq for fast inference." in recorder_html
 
         # Verify PNG icon dimensions match declared sizes (16x16, 48x48, 128x128)
         for size in (16, 48, 128):
@@ -286,5 +285,4 @@ def test_chrome_extension_mv3_package_icons_and_official_groq_badge() -> None:
     assert cws_path.exists()
     cws_text = cws_path.read_text(encoding="utf-8")
     assert "tabCapture" in cws_text
-    assert "offscreen" in cws_text
     assert "Privacy Policy" in cws_text

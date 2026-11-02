@@ -1,68 +1,24 @@
 {
   "manifest_version": 3,
-  "name": "Apex Box — Grabador Ilimitado por Bloques y Notas IA",
-  "version": "2.0.0",
-  "description": "Graba reuniones presenciales y virtuales (Zoom, Meet, Teams) por bloques sin llenar RAM, con transcripción continua y notas.",
+  "name": "Apex Box — Grabador de Reuniones",
+  "version": "3.0.0",
+  "description": "Graba reuniones presenciales o virtuales (Zoom, Meet, Teams) desde una pestaña fija y recibe un enlace con notas, resumen y acta.",
   "icons": {
     "16": "icons/icon-16.png",
     "48": "icons/icon-48.png",
     "128": "icons/icon-128.png"
   },
   "action": {
-    "default_title": "Abrir Apex Box — Grabador Ilimitado por Bloques",
+    "default_title": "Apex Box · Abrir grabador",
     "default_icon": {
       "16": "icons/icon-16.png",
       "48": "icons/icon-48.png",
       "128": "icons/icon-128.png"
     }
   },
-  "side_panel": {
-    "default_path": "sidepanel/sidepanel.html"
-  },
   "background": {
     "service_worker": "service-worker.js"
   },
-  "permissions": [
-    "sidePanel",
-    "storage",
-    "tabs",
-    "tabCapture",
-    "desktopCapture",
-    "offscreen",
-    "alarms",
-    "notifications",
-    "contextMenus"
-  ],
-  "host_permissions": [
-    "http://localhost:8000/*",
-    "http://127.0.0.1:8000/*",
-    "https://meet.google.com/*",
-    "https://*.zoom.us/*",
-    "https://teams.microsoft.com/*",
-    "https://teams.live.com/*",
-    "https://*.webex.com/*"
-  ],
-  "content_scripts": [
-    {
-      "matches": [
-        "https://meet.google.com/*",
-        "https://*.zoom.us/*",
-        "https://teams.microsoft.com/*",
-        "https://teams.live.com/*",
-        "https://*.webex.com/*"
-      ],
-      "js": ["content/meeting-detector.js"],
-      "css": ["content/meeting-detector.css"],
-      "run_at": "document_idle"
-    }
-  ],
-  "commands": {
-    "open-side-panel": {
-      "suggested_key": {
-        "default": "Ctrl+Shift+Y",
-        "mac": "Command+Shift+Y"
-      },
-      "description": "Abrir panel lateral de grabación ilimitada Apex Box"
-    }
-  }
+  "permissions": ["storage", "tabs", "tabCapture"],
+  "host_permissions": ["http://localhost:8000/*", "http://127.0.0.1:8000/*"]
 }

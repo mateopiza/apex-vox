@@ -2702,4 +2702,11 @@
   if (initialViewParam && ["landing", "playground", "box", "portal"].includes(initialViewParam)) {
     switchView(initialViewParam);
   }
+
+  // Deep link ?job=<job_id> (enlace final del grabador de la extensión): abre notas, resumen y acta
+  const initialJobParam = urlParams.get("job");
+  if (initialJobParam && /^[\w-]{1,64}$/.test(initialJobParam)) {
+    switchView("playground");
+    loadJobResult(initialJobParam);
+  }
 })();
