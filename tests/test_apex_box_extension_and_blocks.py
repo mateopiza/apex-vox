@@ -286,3 +286,35 @@ def test_chrome_extension_mv3_package_icons_and_official_groq_badge() -> None:
     cws_text = cws_path.read_text(encoding="utf-8")
     assert "tabCapture" in cws_text
     assert "Privacy Policy" in cws_text
+
+
+def test_extension_download_link_falls_back_to_local_zip_without_s4(monkeypatch) -> None:
+    """Sin MEGA S4 configurado, /api/box/extension/download redirige al ZIP servido por la app."""
+    from app.services.storage_s4 import mega_s4_storage
+
+    monkeypatch.setattr(type(mega_s4_storage), "is_cloud_configured", property(lambda self: False))
+    client = TestClient(app)
+    res = client.get("/api/box/extension/download", follow_redirects=False)
+    assert res.status_code == 302
+    assert res.headers["location"] == "/api/box/extension.zip"
+    assert res.headers["cache-control"] == "no-store"
+
+    html = client.get("/").text
+    assert 'href="/api/box/extension/download"' in html
+
+
+def test_s4_presigned_url_uses_region_from_endpoint(monkeypatch) -> None:
+    """La URL firmada usa el host y la región del endpoint regional (aunque falte https://)."""
+    from app.config import settings
+    from app.services.storage_s4 import mega_s4_storage
+
+    monkeypatch.setattr(settings, "MEGA_S4_ENDPOINT_URL", "s3.eu-amsterdam-1.megas4.com")
+    monkeypatch.setattr(settings, "MEGA_S4_REGION", "eu-luxembourg-1")
+    monkeypatch.setattr(settings, "MEGA_S4_ACCESS_KEY_ID", "AKTEST")
+    monkeypatch.setattr(settings, "MEGA_S4_SECRET_ACCESS_KEY", "secret")
+    assert mega_s4_storage.endpoint_url == "https://s3.eu-amsterdam-1.megas4.com"
+    assert mega_s4_storage.region == "eu-amsterdam-1"
+    url = mega_s4_storage.presigned_get_url("public/extension/x.zip", 600, "x.zip")
+    assert url.startswith("https://s3.eu-amsterdam-1.megas4.com/")
+    assert "eu-amsterdam-1%2Fs3%2Faws4_request" in url
+    assert "X-Amz-Expires=600" in url and "X-Amz-Signature=" in url

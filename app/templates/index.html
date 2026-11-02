@@ -729,40 +729,40 @@
 
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label" for="box-title-input" data-i18n="box_lbl_title">Título de la Reunión / Sesión</label>
+              <label class="form-label" for="box-title-input" data-i18n="box_lbl_title">Título de la reunión</label>
               <input type="text" id="box-title-input" class="form-control" value="Sesión Continua — Apex Box" placeholder="Ej. Junta Directiva / Llamada Google Meet..." maxlength="140" />
             </div>
 
             <div class="form-group">
-              <label class="form-label" for="box-platform-select" data-i18n="box_lbl_platform">Plataforma / Entorno</label>
+              <label class="form-label" for="box-platform-select" data-i18n="box_lbl_platform">Plataforma</label>
               <select id="box-platform-select" class="form-control">
-                <option value="in_person" selected>Sala Presencial / App Web en Celular</option>
-                <option value="google_meet">Google Meet (meet.google.com)</option>
-                <option value="zoom">Zoom (zoom.us)</option>
-                <option value="microsoft_teams">Microsoft Teams (teams.microsoft.com)</option>
-                <option value="webex">Cisco Webex</option>
+                <option value="in_person" selected>Presencial / Celular</option>
+                <option value="google_meet">Google Meet</option>
+                <option value="zoom">Zoom</option>
+                <option value="microsoft_teams">Microsoft Teams</option>
+                <option value="webex">Webex</option>
               </select>
             </div>
           </div>
 
           <div class="form-row">
             <div class="form-group">
-              <label class="form-label" for="box-block-duration-select" data-i18n="box_lbl_block_dur">Duración Óptima por Bloque (Anti-Colapso RAM)</label>
+              <label class="form-label" for="box-block-duration-select" data-i18n="box_lbl_block_dur">Duración por bloque</label>
               <select id="box-block-duration-select" class="form-control">
-                <option value="180" selected>3 min (180s) — Óptimo Recomendado (~1.03 MB RAM · 200 bloques en 10h)</option>
-                <option value="60">1 min (60s) — Transcripción Ultra-Rápida (~0.35 MB RAM · 600 bloques en 10h)</option>
-                <option value="300">5 min (300s) — Bloques Extendidos (~1.72 MB RAM · 120 bloques en 10h)</option>
-                <option value="15">15 seg — Modo Demo / Prueba Instantánea (~90 KB RAM)</option>
+                <option value="180" selected>3 min · recomendado</option>
+                <option value="60">1 min · transcripción más rápida</option>
+                <option value="300">5 min · bloques largos</option>
+                <option value="15">15 s · prueba</option>
               </select>
             </div>
 
             <div class="form-group">
-              <label class="form-label" for="box-engine-select" data-i18n="box_lbl_engine">Motor Serie Mc (Potenciado por Groq)</label>
+              <label class="form-label" for="box-engine-select" data-i18n="box_lbl_engine">Modelo</label>
               <select id="box-engine-select" class="form-control">
-                <option value="Mc-Lewis" selected>Mc-Lewis (Modo Híbrido · Recomendado)</option>
-                <option value="Mc-Ayrton">Mc-Ayrton (El Mejor · Máxima Precisión)</option>
-                <option value="Mc-Norris">Mc-Norris (Timbre y Huella Vocal)</option>
-                <option value="Mc-Piastri">Mc-Piastri (Velocidad Contextual)</option>
+                <option value="Mc-Lewis" selected>Mc-Lewis · Híbrido</option>
+                <option value="Mc-Ayrton">Mc-Ayrton · Máxima precisión</option>
+                <option value="Mc-Norris">Mc-Norris · Huella vocal</option>
+                <option value="Mc-Piastri">Mc-Piastri · Ultra rápido</option>
               </select>
             </div>
           </div>
@@ -885,30 +885,31 @@
           <div class="card-header">
             <h2 class="card-title">
               <span class="step-badge">EXT</span>
-              <span data-i18n="box_ext_card_title">Extensión Chrome (Manifest V3) &amp; Modo App Web en Celular</span>
+              <span data-i18n="box_ext_card_title">Extensión de Chrome y App en el celular</span>
             </h2>
-            <span class="badge-pill info">MV3 + PWA MÓVIL</span>
+            <span class="badge-pill info">CHROME · CELULAR</span>
           </div>
 
           <p class="card-lead" data-i18n="box_ext_card_desc">
-            Usa <strong>Apex Box</strong> directamente aquí en tu navegador de escritorio o en tu <strong>celular como App Web (PWA)</strong>, o instala la <strong>Extensión de Chrome con Panel Lateral (Side Panel) y barra flotante automática dentro de Google Meet, Zoom, Microsoft Teams y Webex</strong>.
+            Graba desde esta página, desde tu <strong>celular como App Web</strong> o con la <strong>extensión de Chrome</strong>: abre una pestaña fija de grabación, muestra <strong>REC y el tiempo</strong> en el icono, las <strong>ondas de sonido</strong> en vivo y avisa si no entra audio. Funciona en reuniones presenciales y en <strong>Google Meet, Zoom, Microsoft Teams y Webex</strong>; al terminar te entrega el enlace con notas, resumen y acta.
           </p>
 
           <div class="button-row">
-            <a href="/api/box/extension.zip" download="apex-box-chrome-extension-mv3.zip" class="btn-primary" id="download-extension-zip-btn" data-i18n="box_btn_download_ext">
-              Descargar Extensión Chrome MV3 (.ZIP)
+            <a href="/api/box/extension/download" class="btn-primary" id="download-extension-zip-btn" rel="nofollow" data-i18n="box_btn_download_ext">
+              Descargar extensión (.zip)
             </a>
             <button type="button" class="btn-secondary" id="box-simulate-10h-btn" data-i18n="box_btn_test_block">
               Simular Bloque de Prueba Instantáneo
             </button>
           </div>
 
-          <div class="box-ext-steps">
-            <span class="meta-tag">1. Descarga o usa la carpeta <code>extension/</code></span>
-            <span class="meta-tag">2. Abre <code>chrome://extensions</code> (Modo desarrollador)</span>
-            <span class="meta-tag">3. Clic en &laquo;Cargar descomprimida&raquo;</span>
-            <span class="meta-tag timeline">En Celular: Abre esta página y pulsa &laquo;Agregar a pantalla de inicio&raquo;</span>
-          </div>
+          <ol class="box-ext-steps">
+            <li>Descarga el <strong>.zip</strong> y descomprímelo en una carpeta.</li>
+            <li>Abre <code>chrome://extensions</code> y activa el <strong>Modo de desarrollador</strong>.</li>
+            <li>Pulsa <strong>Cargar descomprimida</strong> y elige la carpeta.</li>
+            <li>Haz clic en el icono de Apex Box (en reuniones virtuales, desde la pestaña de la reunión).</li>
+          </ol>
+          <p class="box-ext-mobile"><strong>En el celular:</strong> abre esta página y pulsa &laquo;Agregar a pantalla de inicio&raquo;.</p>
         </div>
 
         <!-- Continuous Live Transcript & Sent Blocks Log -->

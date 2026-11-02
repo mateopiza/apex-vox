@@ -20,7 +20,8 @@ import logging
 from typing import List, Optional
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
-from fastapi.responses import Response
+from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import RedirectResponse, Response
 
 from app.models.schemas import (
     BoxBlockUploadResponse,
@@ -38,7 +39,10 @@ from app.services.apex_box import (
     apex_box_manager,
     build_extension_zip_bytes,
     calculate_optimal_block_config,
+    ensure_extension_published_to_s4,
+    extension_download_name,
 )
+from app.services.storage_s4 import mega_s4_storage
 
 logger = logging.getLogger("app.api.routes_box")
 router = APIRouter(prefix="/api/box", tags=["Apex Box — Grabación Ilimitada por Bloques & Notas"])
@@ -192,6 +196,26 @@ async def finalize_box_recording_session(
     except Exception as exc:
         logger.exception("Error finalizing Apex Box session %s", box_session_id)
         raise HTTPException(status_code=500, detail=f"Error al finalizar la sesión: {exc}") from exc
+
+
+@router.get("/extension/download")
+async def download_chrome_extension_from_s4() -> RedirectResponse:
+    """
+    Enlace estable de descarga de la extensión: redirige a una URL firmada de MEGA S4
+    (caduca en 10 minutos; el bucket sigue privado). Sin MEGA S4 configurado, o si
+    falla, sirve el ZIP directamente desde el servidor.
+    """
+    headers = {"Cache-Control": "no-store"}
+    if mega_s4_storage.is_cloud_configured:
+        try:
+            key = await run_in_threadpool(ensure_extension_published_to_s4)
+            url = mega_s4_storage.presigned_get_url(
+                key, expires_sec=600, download_name=extension_download_name()
+            )
+            return RedirectResponse(url, status_code=302, headers=headers)
+        except Exception:
+            logger.exception("Descarga de la extensión desde MEGA S4 no disponible; se usa el ZIP local")
+    return RedirectResponse("/api/box/extension.zip", status_code=302, headers=headers)
 
 
 @router.get("/extension.zip")

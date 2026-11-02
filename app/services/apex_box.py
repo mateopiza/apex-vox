@@ -947,4 +947,36 @@ def build_extension_zip_bytes() -> bytes:
     return buf.getvalue()
 
 
+EXTENSION_S4_PREFIX = "public/extension"
+_published_extension_keys: set = set()
+
+
+def extension_version() -> str:
+    manifest = BASE_DIR / "extension" / "manifest.json"
+    return str(json.loads(manifest.read_text(encoding="utf-8")).get("version", "0.0.0"))
+
+
+def extension_download_name() -> str:
+    return f"apex-box-chrome-extension-v{extension_version()}.zip"
+
+
+def ensure_extension_published_to_s4() -> str:
+    """
+    Garantiza que el ZIP de la versión actual de la extensión esté en MEGA S4
+    (`public/extension/apex-box-chrome-extension-v<versión>.zip`) y devuelve su clave.
+    Se sube una sola vez por versión; las siguientes llamadas solo consultan la caché.
+    """
+    from app.services.storage_s4 import mega_s4_storage
+
+    key = f"{EXTENSION_S4_PREFIX}/{extension_download_name()}"
+    if key in _published_extension_keys:
+        return key
+    if not mega_s4_storage.object_exists(key):
+        if not mega_s4_storage.put_bytes(key, build_extension_zip_bytes(), "application/zip"):
+            raise RuntimeError("No se pudo subir la extensión a MEGA S4.")
+        logger.info("Extensión publicada en MEGA S4: %s", key)
+    _published_extension_keys.add(key)
+    return key
+
+
 apex_box_manager = ApexBoxManager()

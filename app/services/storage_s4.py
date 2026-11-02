@@ -21,6 +21,7 @@ import hashlib
 import hmac
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote, urlparse
@@ -61,10 +62,18 @@ class MegaS4StorageService:
 
     @property
     def endpoint_url(self) -> str:
-        return (settings.MEGA_S4_ENDPOINT_URL or "https://s3.g.s4.mega.io").rstrip("/")
+        url = (settings.MEGA_S4_ENDPOINT_URL or "https://s3.g.s4.mega.io").strip().rstrip("/")
+        # Admite endpoints sin esquema (p. ej. "s3.eu-amsterdam-1.megas4.com").
+        return url if re.match(r"^https?://", url, re.I) else f"https://{url}"
 
     @property
     def region(self) -> str:
+        # La firma SigV4 solo es válida si la región coincide con el endpoint regional;
+        # se deduce del host (s3.<region>.megas4.com / s3.<region>.s4.mega.io).
+        host = urlparse(self.endpoint_url).netloc.lower()
+        m = re.match(r"^s3\.([a-z0-9-]+)\.(?:megas4\.com|s4\.mega\.io)$", host)
+        if m and m.group(1) != "g":
+            return m.group(1)
         return settings.MEGA_S4_REGION or "eu-central-1"
 
     @property
@@ -190,6 +199,64 @@ class MegaS4StorageService:
             )
         except Exception as exc:
             logger.warning("Could not write MEGA S4 local index: %s", exc)
+
+    def _object_url(self, object_key: str) -> str:
+        return f"{self.endpoint_url}/{self.bucket}/{quote(object_key.lstrip('/'), safe='/-_.~')}"
+
+    def presigned_get_url(
+        self,
+        object_key: str,
+        expires_sec: int = 600,
+        download_name: Optional[str] = None,
+    ) -> str:
+        """URL GET firmada (SigV4 por query string) que caduca en `expires_sec` segundos."""
+        now = dt.datetime.now(dt.timezone.utc)
+        amz_date = now.strftime("%Y%m%dT%H%M%SZ")
+        date_stamp = now.strftime("%Y%m%d")
+        host = urlparse(self.endpoint_url).netloc
+        canonical_uri = "/" + self.bucket.strip("/") + "/" + quote(object_key.lstrip("/"), safe="/-_.~")
+        credential_scope = f"{date_stamp}/{self.region}/s3/aws4_request"
+
+        params: Dict[str, str] = {
+            "X-Amz-Algorithm": "AWS4-HMAC-SHA256",
+            "X-Amz-Credential": f"{settings.MEGA_S4_ACCESS_KEY_ID}/{credential_scope}",
+            "X-Amz-Date": amz_date,
+            "X-Amz-Expires": str(max(1, min(int(expires_sec), 604800))),
+            "X-Amz-SignedHeaders": "host",
+        }
+        if download_name:
+            params["response-content-disposition"] = f'attachment; filename="{download_name}"'
+        canonical_query = "&".join(
+            f"{quote(k, safe='-_.~')}={quote(v, safe='-_.~')}" for k, v in sorted(params.items())
+        )
+        canonical_request = "\n".join(
+            ["GET", canonical_uri, canonical_query, f"host:{host}\n", "host", "UNSIGNED-PAYLOAD"]
+        )
+        string_to_sign = "\n".join(
+            ["AWS4-HMAC-SHA256", amz_date, credential_scope, _sha256_hex(canonical_request.encode("utf-8"))]
+        )
+        signing_key = _get_signing_key(settings.MEGA_S4_SECRET_ACCESS_KEY, date_stamp, self.region, "s3")
+        signature = hmac.new(signing_key, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
+        return f"{self.endpoint_url}{canonical_uri}?{canonical_query}&X-Amz-Signature={signature}"
+
+    def object_exists(self, object_key: str) -> bool:
+        """HEAD firmado contra MEGA S4."""
+        headers = self.build_s3v4_headers(method="HEAD", object_key=object_key, content_type="")
+        with httpx.Client(timeout=15.0) as client:
+            resp = client.head(self._object_url(object_key), headers=headers)
+        return resp.status_code == 200
+
+    def put_bytes(self, object_key: str, data: bytes, content_type: str = "application/octet-stream") -> bool:
+        """PUT directo a MEGA S4 (sin espejo local ni índice de retención)."""
+        headers = self.build_s3v4_headers(
+            method="PUT", object_key=object_key, payload=data, content_type=content_type
+        )
+        with httpx.Client(timeout=60.0) as client:
+            resp = client.put(self._object_url(object_key), content=data, headers=headers)
+        if resp.status_code not in (200, 201, 204):
+            logger.warning("MEGA S4 PUT %s -> HTTP %s", object_key, resp.status_code)
+            return False
+        return True
 
     def upload_object(
         self,
