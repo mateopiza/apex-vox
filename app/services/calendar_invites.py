@@ -109,7 +109,7 @@ def meeting_url_of(ev: Dict[str, Any]) -> Optional[str]:
 def _fetch_received(email_id: str) -> Dict[str, Any]:
     with httpx.Client(timeout=30.0) as client:
         r = client.get(f"{RESEND_API}/emails/receiving/{email_id}",
-                       headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}"})
+                       headers={"Authorization": f"Bearer {settings.RESEND_INBOUND_API_KEY or settings.RESEND_API_KEY}"})
         r.raise_for_status()
         return r.json()
 

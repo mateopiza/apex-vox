@@ -277,6 +277,8 @@ class Settings:
     RECALL_WEBHOOK_SECRET: str = field(default_factory=lambda: os.getenv("RECALL_WEBHOOK_SECRET", "").strip())
     BOT_NAME: str = field(default_factory=lambda: os.getenv("BOT_NAME", "Apex Vox · notas").strip())
     INVITES_ADDRESS: str = field(default_factory=lambda: os.getenv("INVITES_ADDRESS", "agenda@apexbox.ialabs.app").strip())
+    # Clave de Resend con permiso de lectura para el correo entrante (la de envío es restringida)
+    RESEND_INBOUND_API_KEY: str = field(default_factory=lambda: os.getenv("RESEND_INBOUND_API_KEY", "").strip())
     RESEND_INBOUND_WEBHOOK_SECRET: str = field(
         default_factory=lambda: os.getenv("RESEND_INBOUND_WEBHOOK_SECRET", "").strip()
     )
