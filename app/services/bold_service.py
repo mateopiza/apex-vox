@@ -12,7 +12,10 @@ Integrates Bold API (bold.co) for Apex Vox Pro subscriptions:
 from __future__ import annotations
 
 import hashlib
+import hmac
+import base64
 import logging
+import re
 import uuid
 from typing import Any, Dict, Optional
 
@@ -53,7 +56,7 @@ def create_bold_checkout_session(
 
     amount = settings.PRO_PRICE_COP if curr == "COP" else int(settings.PRO_PRICE_USD)
     amount_display = "$30.000 COP / mes" if curr == "COP" else "$10 USD / month"
-    order_id = f"APEXVOX-{uuid.uuid4().hex[:10].upper()}"
+    order_id = build_order_reference(user_id)
 
     signature = compute_bold_integrity_signature(
         order_id=order_id,
@@ -92,38 +95,85 @@ def create_bold_checkout_session(
     )
 
 
+ORDER_PREFIX = "APEXVOX"
+_PAID_EVENTS = {"SALE_APPROVED"}
+
+
+def build_order_reference(user_id: Optional[str]) -> str:
+    """Order reference sent to Bold; embeds our user id so the webhook can map it back."""
+    suffix = uuid.uuid4().hex[:8].upper()
+    uid = (user_id or "").strip()
+    if not uid or uid == "guest_default" or not re.fullmatch(r"[A-Za-z0-9-]{1,64}", uid):
+        return f"{ORDER_PREFIX}-{suffix}"
+    return f"{ORDER_PREFIX}-{uid}-{suffix}"
+
+
+def user_id_from_order_reference(reference: Optional[str]) -> Optional[str]:
+    """Inverse of build_order_reference(); returns None for anonymous references."""
+    ref = (reference or "").strip()
+    if not ref.startswith(f"{ORDER_PREFIX}-"):
+        return None
+    body = ref[len(ORDER_PREFIX) + 1 :]
+    if "-" not in body:
+        return None
+    uid = body.rsplit("-", 1)[0]
+    return uid or None
+
+
+def _webhook_secret() -> Optional[str]:
+    """Key Bold uses to sign notifications. Empty string = Bold sandbox mode."""
+    secret = settings.BOLD_WEBHOOK_SECRET or settings.BOLD_SECRET_KEY
+    if secret:
+        return secret
+    # Without a key every payload would be accepted with the sandbox (empty) key:
+    # never allow that in production.
+    return None if settings.is_production else ""
+
+
+def verify_bold_webhook_signature(raw_body: bytes, signature: Optional[str]) -> bool:
+    """
+    Bold signs webhooks as hex(HMAC-SHA256(secret, base64(raw_body))) in the
+    `x-bold-signature` header.
+    """
+    secret = _webhook_secret()
+    if secret is None or not signature:
+        return False
+    encoded = base64.b64encode(raw_body)
+    expected = hmac.new(secret.encode("utf-8"), encoded, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature.strip().lower())
+
+
 def process_bold_webhook_event(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Process incoming Bold API webhook events (e.g., SALE_APPROVED, SUBSCRIPTION_CREATED)
-    and upgrade the corresponding user in Supabase Cloud.
+    Process a verified Bold webhook (CloudEvents format) and upgrade the user
+    referenced by `data.metadata.reference` to Apex Pro.
     """
     from app.services.supabase_service import supabase_service
 
-    event_type = str(payload.get("type") or payload.get("event") or "SALE_APPROVED").upper()
-    data = payload.get("data") or payload
-    order_id = str(data.get("order_id") or data.get("reference") or f"BOLD-{uuid.uuid4().hex[:8]}")
-    user_id = str(data.get("user_id") or data.get("customer_id") or "guest_default")
-    currency = str(data.get("currency") or "COP").upper()
+    event_type = str(payload.get("type") or "").upper()
+    data = payload.get("data") or {}
+    metadata = data.get("metadata") or {}
+    reference = metadata.get("reference") or data.get("order_id") or data.get("reference")
+    amount = data.get("amount") or {}
+    currency = str((amount.get("currency") if isinstance(amount, dict) else None) or data.get("currency") or "COP").upper()
+    user_id = user_id_from_order_reference(reference)
 
-    if event_type in ("SALE_APPROVED", "SUBSCRIPTION_CREATED", "TRIAL_STARTED", "PAYMENT_SUCCEEDED"):
-        profile = supabase_service.upgrade_user_to_pro(
-            user_id=user_id,
-            start_trial=(event_type == "TRIAL_STARTED"),
-            currency=currency,
-            order_id=order_id,
-            auto_billing=True,
-        )
-        return {
-            "status": "processed",
-            "event_type": event_type,
-            "order_id": order_id,
-            "user_id": user_id,
-            "upgraded_plan": profile.plan,
-            "auto_billing": True,
-        }
+    if event_type not in _PAID_EVENTS or not user_id:
+        logger.info("Bold webhook ignored: type=%s reference=%s", event_type or "-", reference)
+        return {"status": "ignored", "event_type": event_type or None, "order_id": reference}
 
+    profile = supabase_service.upgrade_user_to_pro(
+        user_id=user_id,
+        start_trial=False,
+        currency=currency,
+        order_id=str(reference),
+        auto_billing=True,
+    )
     return {
-        "status": "ignored",
+        "status": "processed",
         "event_type": event_type,
-        "order_id": order_id,
+        "order_id": reference,
+        "user_id": user_id,
+        "upgraded_plan": profile.plan,
+        "auto_billing": True,
     }

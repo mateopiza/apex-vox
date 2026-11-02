@@ -9,9 +9,11 @@ Handles subscription checkout and recurring billing via Bold API:
 
 from __future__ import annotations
 
+import json
+
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Header, Request
+from fastapi import APIRouter, HTTPException, Header, Request
 
 from app.models.schemas import (
     BoldCheckoutRequest,
@@ -22,6 +24,7 @@ from app.models.schemas import (
 from app.services.bold_service import (
     create_bold_checkout_session,
     process_bold_webhook_event,
+    verify_bold_webhook_signature,
 )
 from app.services.supabase_service import supabase_service
 
@@ -74,9 +77,12 @@ async def activate_pro_subscription(
 
 @router.post("/bold/webhook")
 async def bold_webhook_receiver(request: Request) -> Dict[str, Any]:
-    """Webhook endpoint for Bold API asynchronous payment and subscription events."""
+    """Webhook endpoint for Bold payment events. Rejects unsigned or tampered payloads."""
+    raw = await request.body()
+    if not verify_bold_webhook_signature(raw, request.headers.get("x-bold-signature")):
+        raise HTTPException(status_code=401, detail="Invalid Bold signature")
     try:
-        body = await request.json()
-    except Exception:
-        body = {}
+        body = json.loads(raw or b"{}")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
     return process_bold_webhook_event(body)

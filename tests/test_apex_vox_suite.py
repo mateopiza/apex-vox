@@ -169,16 +169,30 @@ def test_bold_api_checkout_3day_trial_and_unlimited_pro_plan() -> None:
     assert sub_data["quota"]["retention_hours"] is None
     assert sub_data["quota"]["auto_billing_enabled"] is True
 
-    # 4. Verify Bold Webhook processing
-    wh_res = client.post(
-        "/api/billing/bold/webhook",
-        json={
-            "type": "SALE_APPROVED",
-            "data": {"order_id": cop_data["order_id"], "user_id": uid, "currency": "COP"},
-        },
-    )
+    # 4. Bold webhook: unsigned payloads are rejected, signed ones upgrade the user
+    import base64, hashlib, hmac, json as _json
+    from app.config import settings as _settings
+    payload = _json.dumps({
+        "type": "SALE_APPROVED",
+        "data": {"metadata": {"reference": cop_data["order_id"]}, "amount": {"currency": "COP", "total": 30000}},
+    }).encode()
+    unsigned = client.post("/api/billing/bold/webhook", content=payload,
+                           headers={"Content-Type": "application/json"})
+    assert unsigned.status_code == 401
+    original_secret = _settings.BOLD_WEBHOOK_SECRET
+    _settings.BOLD_WEBHOOK_SECRET = "test_webhook_secret"
+    try:
+        sig = hmac.new(b"test_webhook_secret", base64.b64encode(payload), hashlib.sha256).hexdigest()
+        wh_res = client.post("/api/billing/bold/webhook", content=payload,
+                             headers={"Content-Type": "application/json", "x-bold-signature": sig})
+        tampered = client.post("/api/billing/bold/webhook", content=payload.replace(b"30000", b"1"),
+                               headers={"Content-Type": "application/json", "x-bold-signature": sig})
+        assert tampered.status_code == 401
+    finally:
+        _settings.BOLD_WEBHOOK_SECRET = original_secret
     assert wh_res.status_code == 200
     assert wh_res.json()["status"] == "processed"
+    assert wh_res.json()["user_id"] == uid
     assert wh_res.json()["upgraded_plan"] == "pro"
 
 
