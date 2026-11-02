@@ -1,0 +1,319 @@
+"""
+MEGA S4 Object Storage Service (app/services/storage_s4.py)
+-----------------------------------------------------------
+Provides S3-compatible cloud object storage backed by MEGA S4
+(https://s3.g.s4.mega.io / s3.<region>.s4.mega.io).
+
+Features:
+- Pure Python AWS Signature V4 (HMAC-SHA256) + httpx client for zero-dependency
+  compatibility with MEGA S4 S3 endpoints (plus optional boto3 support).
+- Plan-aware retention policies:
+  * Free Plan: 24-hour storage retention (expires_at = created_at + 24 hours).
+  * Paid Plan (Apex Pro / Trial): Unlimited storage retention (expires_at = None).
+- Automatic local mirror fallback when MEGA S4 credentials are not configured,
+  ensuring seamless execution in local development and automated test suites.
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import hashlib
+import hmac
+import json
+import logging
+from pathlib import Path
+from typing import Any, Dict, List, Optional
+from urllib.parse import quote, urlparse
+
+import httpx
+
+from app.config import settings
+
+logger = logging.getLogger("app.services.storage_s4")
+
+
+def _sha256_hex(data: bytes) -> str:
+    return hashlib.sha256(data).hexdigest()
+
+
+def _hmac_sha256(key: bytes, msg: str) -> bytes:
+    return hmac.new(key, msg.encode("utf-8"), hashlib.sha256).digest()
+
+
+def _get_signing_key(secret_key: str, date_stamp: str, region: str, service: str = "s3") -> bytes:
+    k_date = _hmac_sha256(("AWS4" + secret_key).encode("utf-8"), date_stamp)
+    k_region = _hmac_sha256(k_date, region)
+    k_service = _hmac_sha256(k_region, service)
+    k_signing = _hmac_sha256(k_service, "aws4_request")
+    return k_signing
+
+
+class MegaS4StorageService:
+    """
+    S3-compatible storage engine targeting MEGA S4 (s4.mega.io) with
+    24-hour Free tier TTL enforcement and Unlimited Pro tier retention.
+    """
+
+    def __init__(self) -> None:
+        self.mirror_dir = settings.OUTPUT_DIR / "mega_s4_bucket"
+        self.mirror_dir.mkdir(parents=True, exist_ok=True)
+        self.index_path = self.mirror_dir / "_s4_objects_index.json"
+
+    @property
+    def endpoint_url(self) -> str:
+        return (settings.MEGA_S4_ENDPOINT_URL or "https://s3.g.s4.mega.io").rstrip("/")
+
+    @property
+    def region(self) -> str:
+        return settings.MEGA_S4_REGION or "eu-central-1"
+
+    @property
+    def bucket(self) -> str:
+        return settings.MEGA_S4_BUCKET_NAME or "apex-vox-storage"
+
+    @property
+    def is_cloud_configured(self) -> bool:
+        return settings.is_mega_s4_configured
+
+    def compute_expiration_iso(self, plan: str) -> Optional[str]:
+        """
+        Return ISO-8601 expiration timestamp based on user plan:
+        - 'free': +24 hours from now (settings.FREE_RETENTION_HOURS)
+        - 'trial' / 'pro': None (unlimited storage)
+        """
+        norm_plan = (plan or "free").strip().lower()
+        if norm_plan in ("pro", "trial", "unlimited", "paid"):
+            return None
+        now = dt.datetime.now(dt.timezone.utc)
+        expires = now + dt.timedelta(hours=settings.FREE_RETENTION_HOURS)
+        return expires.isoformat()
+
+    def build_s3v4_headers(
+        self,
+        method: str,
+        object_key: str,
+        payload: bytes = b"",
+        content_type: str = "application/octet-stream",
+        extra_amz_headers: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, str]:
+        """
+        Construct AWS Signature Version 4 headers for MEGA S4 REST API calls.
+        """
+        now = dt.datetime.now(dt.timezone.utc)
+        amz_date = now.strftime("%Y%m%dT%H%M%SZ")
+        date_stamp = now.strftime("%Y%m%d")
+
+        parsed = urlparse(self.endpoint_url)
+        host = parsed.netloc or "s3.g.s4.mega.io"
+        canonical_uri = "/" + self.bucket.strip("/") + "/" + quote(object_key.lstrip("/"), safe="/-_.~")
+        payload_hash = _sha256_hex(payload)
+
+        headers_to_sign: Dict[str, str] = {
+            "content-type": content_type,
+            "host": host,
+            "x-amz-content-sha256": payload_hash,
+            "x-amz-date": amz_date,
+        }
+        if extra_amz_headers:
+            for k, v in extra_amz_headers.items():
+                headers_to_sign[k.lower().strip()] = str(v).strip()
+
+        sorted_keys = sorted(headers_to_sign.keys())
+        canonical_headers = "".join(f"{k}:{headers_to_sign[k]}\n" for k in sorted_keys)
+        signed_headers = ";".join(sorted_keys)
+
+        canonical_request = "\n".join(
+            [
+                method.upper(),
+                canonical_uri,
+                "",  # query string
+                canonical_headers,
+                signed_headers,
+                payload_hash,
+            ]
+        )
+
+        algorithm = "AWS4-HMAC-SHA256"
+        credential_scope = f"{date_stamp}/{self.region}/s3/aws4_request"
+        string_to_sign = "\n".join(
+            [
+                algorithm,
+                amz_date,
+                credential_scope,
+                _sha256_hex(canonical_request.encode("utf-8")),
+            ]
+        )
+
+        signing_key = _get_signing_key(
+            settings.MEGA_S4_SECRET_ACCESS_KEY or "local_s4_secret",
+            date_stamp,
+            self.region,
+            "s3",
+        )
+        signature = hmac.new(
+            signing_key, string_to_sign.encode("utf-8"), hashlib.sha256
+        ).hexdigest()
+
+        access_key = settings.MEGA_S4_ACCESS_KEY_ID or "local_s4_key"
+        authorization_header = (
+            f"{algorithm} "
+            f"Credential={access_key}/{credential_scope}, "
+            f"SignedHeaders={signed_headers}, "
+            f"Signature={signature}"
+        )
+
+        out_headers = {
+            "Host": host,
+            "Content-Type": content_type,
+            "x-amz-date": amz_date,
+            "x-amz-content-sha256": payload_hash,
+            "Authorization": authorization_header,
+        }
+        if extra_amz_headers:
+            out_headers.update(extra_amz_headers)
+        return out_headers
+
+    def _load_index(self) -> Dict[str, Any]:
+        if not self.index_path.exists():
+            return {}
+        try:
+            return json.loads(self.index_path.read_text(encoding="utf-8"))
+        except Exception:
+            return {}
+
+    def _save_index(self, index_data: Dict[str, Any]) -> None:
+        try:
+            self.index_path.parent.mkdir(parents=True, exist_ok=True)
+            self.index_path.write_text(
+                json.dumps(index_data, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception as exc:
+            logger.warning("Could not write MEGA S4 local index: %s", exc)
+
+    def upload_object(
+        self,
+        object_key: str,
+        data: bytes,
+        content_type: str = "application/octet-stream",
+        plan: str = "free",
+        user_id: Optional[str] = None,
+        job_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Store an object in MEGA S4 (s4.mega.io) with plan-based retention metadata.
+        Also writes to local S4 mirror directory for instant streaming & offline resilience.
+        """
+        clean_key = object_key.lstrip("/")
+        expires_at = self.compute_expiration_iso(plan)
+        retention_tag = "unlimited" if expires_at is None else f"{settings.FREE_RETENTION_HOURS}h"
+        now_iso = dt.datetime.now(dt.timezone.utc).isoformat()
+
+        # 1. Persist in local S4 mirror bucket
+        local_dest = self.mirror_dir / clean_key
+        local_dest.parent.mkdir(parents=True, exist_ok=True)
+        local_dest.write_bytes(data)
+
+        cloud_synced = False
+        s4_url = f"{self.endpoint_url}/{self.bucket}/{clean_key}"
+
+        # 2. If MEGA S4 credentials are set, execute PUT against MEGA S4 endpoint
+        if self.is_cloud_configured:
+            try:
+                amz_meta = {
+                    "x-amz-meta-plan": plan,
+                    "x-amz-meta-retention": retention_tag,
+                }
+                if expires_at:
+                    amz_meta["x-amz-meta-expires-at"] = expires_at
+                headers = self.build_s3v4_headers(
+                    method="PUT",
+                    object_key=clean_key,
+                    payload=data,
+                    content_type=content_type,
+                    extra_amz_headers=amz_meta,
+                )
+                with httpx.Client(timeout=30.0) as client:
+                    resp = client.put(s4_url, content=data, headers=headers)
+                    if resp.status_code in (200, 201, 204):
+                        cloud_synced = True
+                    else:
+                        logger.warning(
+                            "MEGA S4 PUT returned HTTP %s for %s", resp.status_code, clean_key
+                        )
+            except Exception as exc:
+                logger.warning("MEGA S4 remote upload fallback to mirror (%s): %s", clean_key, exc)
+
+        meta_record = {
+            "object_key": clean_key,
+            "bucket": self.bucket,
+            "endpoint": self.endpoint_url,
+            "s4_url": s4_url,
+            "size_bytes": len(data),
+            "content_type": content_type,
+            "plan": plan,
+            "user_id": user_id,
+            "job_id": job_id,
+            "retention": retention_tag,
+            "created_at": now_iso,
+            "expires_at": expires_at,
+            "cloud_synced": cloud_synced,
+        }
+
+        idx = self._load_index()
+        idx[clean_key] = meta_record
+        self._save_index(idx)
+        return meta_record
+
+    def get_object_metadata(self, object_key: str) -> Optional[Dict[str, Any]]:
+        clean_key = object_key.lstrip("/")
+        idx = self._load_index()
+        return idx.get(clean_key)
+
+    def list_user_objects(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """List stored objects in MEGA S4, automatically filtering out expired 24h free objects."""
+        self.cleanup_expired_objects()
+        idx = self._load_index()
+        items = list(idx.values())
+        if user_id:
+            items = [i for i in items if i.get("user_id") == user_id]
+        items.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+        return items
+
+    def cleanup_expired_objects(self) -> int:
+        """
+        Enforce the 24-hour storage retention limit for Free plan objects.
+        Paid ('pro' / 'trial') objects have expires_at = None and are never deleted.
+        """
+        idx = self._load_index()
+        if not idx:
+            return 0
+
+        now = dt.datetime.now(dt.timezone.utc)
+        removed_count = 0
+        remaining: Dict[str, Any] = {}
+
+        for key, meta in idx.items():
+            expires_at_str = meta.get("expires_at")
+            if not expires_at_str:
+                remaining[key] = meta
+                continue
+            try:
+                exp_dt = dt.datetime.fromisoformat(expires_at_str)
+                if exp_dt.tzinfo is None:
+                    exp_dt = exp_dt.replace(tzinfo=dt.timezone.utc)
+                if now >= exp_dt:
+                    local_file = self.mirror_dir / key
+                    local_file.unlink(missing_ok=True)
+                    removed_count += 1
+                    continue
+            except Exception:
+                pass
+            remaining[key] = meta
+
+        if removed_count > 0:
+            self._save_index(remaining)
+        return removed_count
+
+
+mega_s4_storage = MegaS4StorageService()

@@ -1,0 +1,673 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Apex Vox — Audio Studio · Potenciado por Groq | Apex Summa &amp; Apex Box</title>
+  <meta name="description" content="Apex Vox: transcripción multi-audio, identificación de oradores y resúmenes ejecutivos con Apex Summa. Potenciado por Groq." />
+  <meta name="theme-color" content="#f3f3ee" />
+  <meta name="color-scheme" content="light" />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Apex Vox — Audio Studio" />
+  <meta property="og:description" content="Transcripción multi-audio, separación de voces y analítica ejecutiva. Potenciado por Groq." />
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&amp;family=Share+Tech+Mono&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" />
+  <link rel="stylesheet" href="/static/css/tokens.css?v={{ASSET_VERSION}}" />
+  <link rel="stylesheet" href="/static/css/styles.css?v={{ASSET_VERSION}}" />
+  <script src="/static/js/app.js?v={{ASSET_VERSION}}" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Saltar al contenido</a>
+
+  <!-- NavBar -->
+  <header class="app-header">
+    <div class="header-inner">
+      <button type="button" class="brand-title" id="brand-home-trigger" aria-label="Apex Vox — Inicio">
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 0h8v8H8zM0 8h8v8H0zM16 8h8v8h-8zM0 16h24v8H0z"/></svg>
+        <span class="brand-wordmark"><span data-i18n="brand_title">Apex Vox</span></span>
+        <span class="powered-badge" data-i18n="powered_by_groq">Potenciado por Groq</span>
+      </button>
+
+      <nav class="main-nav" aria-label="Navegación principal">
+        <button type="button" class="nav-tab" data-view="landing" id="nav-landing-btn" data-i18n="nav_landing">Inicio &amp; Planes</button>
+        <button type="button" class="nav-tab active" data-view="playground" id="nav-playground-btn" data-i18n="nav_playground">Playground (Apex Vox)</button>
+        <button type="button" class="nav-tab" data-view="portal" id="nav-portal-btn" data-i18n="nav_portal">Portal de Usuario</button>
+      </nav>
+
+      <div class="status-pills">
+        <div class="lang-switch" role="group" aria-label="Selector de idioma">
+          <button type="button" class="lang-btn active" id="lang-es-btn" data-lang="es">ES</button>
+          <button type="button" class="lang-btn" id="lang-en-btn" data-lang="en">EN</button>
+        </div>
+
+        <span class="status-pill" id="plan-status-pill" title="Plan activo y cuota diaria">
+          <span class="status-dot" id="plan-dot"></span>
+          <span id="plan-pill-text">Plan Gratis (2h/día)</span>
+        </span>
+
+        <span class="status-pill" id="health-pill">
+          <span class="status-dot" id="health-dot"></span>
+          <span id="health-text">Potenciado por Groq</span>
+        </span>
+
+        <button type="button" class="btn-header-auth" id="open-auth-btn" data-i18n="btn_register_login">Registrarse / Entrar</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- AnnouncementBanner -->
+  <div class="announce-banner">
+    <p class="brand-subtitle" data-i18n="brand_subtitle">Audio Studio · Transcripción Multi-Audio, Identificación de Oradores y Resumen IA Apex Summa</p>
+    <button type="button" class="announce-link" data-goto-view="landing"><span data-i18n="nav_landing">Inicio &amp; Planes</span> &gt;</button>
+  </div>
+
+  <div id="main-content" tabindex="-1"></div>
+
+  <!-- ======================================================================
+       VIEW 1: LANDING
+       ====================================================================== -->
+  <section id="view-landing" class="view-section hidden" aria-label="Apex Vox — Inicio y planes">
+    <div class="landing-container">
+      <div class="hero-card">
+        <svg class="pixel-field hero-pixels" viewBox="0 0 620 440" width="620" height="440" aria-hidden="true" focusable="false"><rect x="200" y="0" width="20" height="20" class="px-soft"/><rect x="260" y="0" width="20" height="20"/><rect x="380" y="0" width="20" height="20"/><rect x="400" y="0" width="20" height="20" class="px-soft"/><rect x="420" y="0" width="20" height="20"/><rect x="460" y="0" width="20" height="20"/><rect x="480" y="0" width="20" height="20"/><rect x="500" y="0" width="20" height="20" class="px-soft"/><rect x="520" y="0" width="20" height="20"/><rect x="540" y="0" width="20" height="20"/><rect x="560" y="0" width="20" height="20"/><rect x="580" y="0" width="20" height="20"/><rect x="600" y="0" width="20" height="20"/><rect x="240" y="20" width="20" height="20"/><rect x="460" y="20" width="20" height="20"/><rect x="480" y="20" width="20" height="20"/><rect x="500" y="20" width="20" height="20"/><rect x="540" y="20" width="20" height="20"/><rect x="560" y="20" width="20" height="20" class="px-soft"/><rect x="580" y="20" width="20" height="20" class="px-soft"/><rect x="600" y="20" width="20" height="20" class="px-soft"/><rect x="320" y="40" width="20" height="20" class="px-soft"/><rect x="340" y="40" width="20" height="20"/><rect x="400" y="40" width="20" height="20" class="px-soft"/><rect x="420" y="40" width="20" height="20"/><rect x="500" y="40" width="20" height="20"/><rect x="520" y="40" width="20" height="20" class="px-soft"/><rect x="560" y="40" width="20" height="20"/><rect x="580" y="40" width="20" height="20"/><rect x="600" y="40" width="20" height="20" class="px-soft"/><rect x="220" y="60" width="20" height="20"/><rect x="340" y="60" width="20" height="20"/><rect x="420" y="60" width="20" height="20" class="px-soft"/><rect x="440" y="60" width="20" height="20"/><rect x="480" y="60" width="20" height="20" class="px-soft"/><rect x="520" y="60" width="20" height="20" class="px-soft"/><rect x="540" y="60" width="20" height="20" class="px-soft"/><rect x="560" y="60" width="20" height="20"/><rect x="580" y="60" width="20" height="20"/><rect x="600" y="60" width="20" height="20"/><rect x="300" y="80" width="20" height="20" class="px-soft"/><rect x="480" y="80" width="20" height="20"/><rect x="500" y="80" width="20" height="20"/><rect x="520" y="80" width="20" height="20"/><rect x="580" y="80" width="20" height="20"/><rect x="600" y="80" width="20" height="20" class="px-soft"/><rect x="300" y="100" width="20" height="20" class="px-soft"/><rect x="360" y="100" width="20" height="20"/><rect x="460" y="100" width="20" height="20" class="px-soft"/><rect x="520" y="100" width="20" height="20"/><rect x="540" y="100" width="20" height="20"/><rect x="580" y="100" width="20" height="20"/><rect x="600" y="100" width="20" height="20"/><rect x="280" y="120" width="20" height="20"/><rect x="320" y="120" width="20" height="20"/><rect x="500" y="120" width="20" height="20"/><rect x="520" y="120" width="20" height="20"/><rect x="560" y="120" width="20" height="20"/><rect x="340" y="140" width="20" height="20"/><rect x="360" y="140" width="20" height="20"/><rect x="380" y="140" width="20" height="20"/><rect x="440" y="140" width="20" height="20"/><rect x="480" y="140" width="20" height="20"/><rect x="520" y="140" width="20" height="20"/><rect x="540" y="140" width="20" height="20"/><rect x="600" y="140" width="20" height="20"/><rect x="320" y="160" width="20" height="20"/><rect x="340" y="160" width="20" height="20"/><rect x="380" y="160" width="20" height="20"/><rect x="460" y="160" width="20" height="20"/><rect x="520" y="160" width="20" height="20" class="px-soft"/><rect x="560" y="160" width="20" height="20" class="px-soft"/><rect x="300" y="180" width="20" height="20"/><rect x="420" y="180" width="20" height="20"/><rect x="440" y="180" width="20" height="20"/><rect x="460" y="180" width="20" height="20"/><rect x="500" y="180" width="20" height="20"/><rect x="540" y="180" width="20" height="20"/><rect x="480" y="200" width="20" height="20"/><rect x="580" y="200" width="20" height="20"/><rect x="600" y="200" width="20" height="20"/><rect x="460" y="220" width="20" height="20"/><rect x="500" y="220" width="20" height="20"/><rect x="600" y="220" width="20" height="20"/><rect x="380" y="240" width="20" height="20"/><rect x="480" y="240" width="20" height="20"/><rect x="520" y="240" width="20" height="20"/><rect x="560" y="240" width="20" height="20"/><rect x="540" y="260" width="20" height="20"/><rect x="340" y="280" width="20" height="20"/><rect x="480" y="280" width="20" height="20"/><rect x="500" y="300" width="20" height="20"/><rect x="600" y="300" width="20" height="20"/><rect x="500" y="340" width="20" height="20"/></svg>
+        <div class="hero-badge" data-i18n="hero_badge">POTENCIADO POR GROQ · ALMACENAMIENTO MEGA S4 · SUPABASE CLOUD</div>
+        <h2 class="hero-title" data-i18n="hero_title">Apex Vox: Transcripción Inteligente, Separación de Voces y Analítica Ejecutiva</h2>
+        <p class="hero-description" data-i18n="hero_desc">
+          Regístrate hoy y obtén <strong>2 horas gratis al día</strong> en 1 o varios audios con almacenamiento por 24 horas, o activa <strong>Apex Pro</strong> con 3 días de prueba gratis, transcripciones y almacenamiento ilimitados en Mega S4 y resúmenes ejecutivos con <strong>Apex Summa</strong>.
+        </p>
+        <div class="hero-actions">
+          <button type="button" class="btn-primary hero-btn" id="hero-go-playground-btn" data-i18n="hero_cta_playground">Abrir Playground Ahora</button>
+          <button type="button" class="btn-secondary hero-btn-sec" id="hero-register-btn" data-i18n="hero_cta_register">Regístrate: 2 Horas Gratis / Día</button>
+          <button type="button" class="btn-secondary hero-btn-sec" id="hero-trial-btn" data-i18n="hero_cta_trial">Probar 3 Días Gratis (Plan Pro · Bold)</button>
+        </div>
+      </div>
+
+      <!-- Product ecosystem -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title" data-i18n="suite_heading">Ecosistema del Producto Apex</h3>
+          <span class="meta-tag timeline" data-i18n="powered_by_groq">Potenciado por Groq</span>
+        </div>
+
+        <div class="suite-grid">
+          <div class="suite-card ready">
+            <div class="suite-status-badge ready" data-i18n="suite_vox_status">Producto Listo</div>
+            <h4>Apex Vox</h4>
+            <p class="suite-part" data-i18n="suite_vox_part">Transcripción (el núcleo)</p>
+            <p class="suite-desc" data-i18n="suite_vox_desc">Subida multi-audio en orden, corte inteligente, reconocimiento de voz con los motores Mc-Ayrton, Mc-Lewis, Mc-Norris y Mc-Piastri (Potenciado por Groq) y perfiles acústicos.</p>
+          </div>
+
+          <div class="suite-card active-dev">
+            <div class="suite-status-badge active-dev" data-i18n="suite_summa_status">Activo en Plan Pro</div>
+            <h4>Apex Summa</h4>
+            <p class="suite-part" data-i18n="suite_summa_part">Notas y resúmenes IA</p>
+            <p class="suite-desc" data-i18n="suite_summa_desc">Al terminar la transcripción identifica: 1. Quién habló más, 2. De qué se habló, 3. Objetivos, 4. Llamados de atención, 5. Próximas tareas en calendario, 6. Gráficas y 7. Creación de Actas (Consejo, Comité, Asamblea).</p>
+          </div>
+
+          <div class="suite-card coming-soon">
+            <div class="suite-status-badge coming-soon" data-i18n="suite_box_status">Próximamente</div>
+            <h4>Apex Box</h4>
+            <p class="suite-part" data-i18n="suite_box_part">Bot de reuniones / llamadas / estático de grabación</p>
+            <p class="suite-desc" data-i18n="suite_box_desc">Agente autónomo para captura directa en llamadas, salas de juntas y grabación estática sincronizada automáticamente con Mega S4 y Apex Vox.</p>
+          </div>
+        </div>
+
+        <div class="table-responsive table-spaced">
+          <table class="ecosystem-table">
+            <thead>
+              <tr>
+                <th data-i18n="tbl_col_part">Parte del Producto</th>
+                <th data-i18n="tbl_col_name">Nombre</th>
+                <th data-i18n="tbl_col_state">Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td data-i18n="suite_vox_part">Transcripción (el núcleo)</td>
+                <td><strong>Apex Vox</strong></td>
+                <td><span class="badge-pill success" data-i18n="suite_vox_status">Producto listo</span></td>
+              </tr>
+              <tr>
+                <td data-i18n="suite_summa_part">Notas y resúmenes</td>
+                <td><strong>Apex Summa</strong></td>
+                <td><span class="badge-pill info" data-i18n="suite_summa_status">Activo en Plan Pro</span></td>
+              </tr>
+              <tr>
+                <td data-i18n="suite_box_part">Bot de reuniones/llamadas/estático de grabación</td>
+                <td><strong>Apex Box</strong></td>
+                <td><span class="badge-pill warn" data-i18n="suite_box_status">Próximamente</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Mc-Series lineup -->
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title" data-i18n="mc_models_heading">Motores de Voz Serie Mc — Potenciado por Groq</h3>
+        </div>
+        <div class="mc-grid">
+          <div class="mc-card gold">
+            <div class="mc-tag" data-i18n="mc_ayrton_tag">EL MEJOR</div>
+            <h4>Mc-Ayrton</h4>
+            <p data-i18n="mc_ayrton_desc">Máxima fidelidad acústica, separación milimétrica de múltiples voces y precisión superior.</p>
+          </div>
+          <div class="mc-card emerald">
+            <div class="mc-tag" data-i18n="mc_lewis_tag">MODO HÍBRIDO</div>
+            <h4>Mc-Lewis</h4>
+            <p data-i18n="mc_lewis_desc">Modo híbrido balanceado que combina velocidad extrema con alineación acústica de hablantes.</p>
+          </div>
+          <div class="mc-card blue">
+            <div class="mc-tag" data-i18n="mc_norris_tag">HUELLA VOCAL</div>
+            <h4>Mc-Norris</h4>
+            <p data-i18n="mc_norris_desc">Especializado en timbre vocal y reconocimiento de perfiles de oradores registrados.</p>
+          </div>
+          <div class="mc-card purple">
+            <div class="mc-tag" data-i18n="mc_piastri_tag">ULTRA RÁPIDO</div>
+            <h4>Mc-Piastri</h4>
+            <p data-i18n="mc_piastri_desc">Procesamiento instantáneo optimizado para despachos rápidos y atribución contextual.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Pricing -->
+      <div class="pricing-grid">
+        <div class="pricing-card">
+          <div class="pricing-header">
+            <span class="pricing-badge" data-i18n="plan_free_badge">REGISTRO GRATUITO</span>
+            <h3 data-i18n="plan_free_title">Plan Gratis</h3>
+            <div class="pricing-price">$0 <span class="pricing-period" data-i18n="plan_free_period">/ siempre</span></div>
+          </div>
+          <ul class="pricing-features">
+            <li data-i18n="plan_free_f1"><strong>2 horas gratis al día</strong> en 1 o varios audios al día</li>
+            <li data-i18n="plan_free_f2"><strong>Almacenamiento de 24 horas</strong> en nube Mega S4</li>
+            <li data-i18n="plan_free_f3">Acceso a motores <strong>Mc-Ayrton, Mc-Lewis, Mc-Norris y Mc-Piastri</strong> (Potenciado por Groq)</li>
+            <li data-i18n="plan_free_f4">Exportación TXT, SRT, VTT, JSON, CSV y Markdown</li>
+          </ul>
+          <button type="button" class="btn-secondary" id="pricing-free-btn" data-i18n="plan_free_cta">Registrarse Gratis (2h / día)</button>
+        </div>
+
+        <div class="pricing-card featured">
+          <div class="pricing-header">
+            <span class="pricing-badge pro" data-i18n="plan_pro_badge">3 DÍAS DE PRUEBA GRATIS + COBRO AUTOMÁTICO</span>
+            <h3 data-i18n="plan_pro_title">Plan Apex Pro</h3>
+            <div class="pricing-price">$30.000 COP <span class="pricing-period">/ $10 USD <span data-i18n="per_month">mes</span></span></div>
+          </div>
+          <ul class="pricing-features">
+            <li data-i18n="plan_pro_f1"><strong>Prueba gratis de 3 días</strong> con cobro automático mensual vía <strong>Bold API</strong></li>
+            <li data-i18n="plan_pro_f2"><strong>Transcripciones ilimitadas</strong> (sin límite diario de horas ni archivos)</li>
+            <li data-i18n="plan_pro_f3"><strong>Almacenamiento ilimitado permanente</strong> en <strong>Mega S4</strong> y <strong>Supabase Cloud</strong></li>
+            <li data-i18n="plan_pro_f4"><strong>Resumen IA Apex Summa completo:</strong> Quién habló más, De qué se habló, Objetivos, Llamados de atención, Calendario de tareas y Gráficas</li>
+            <li data-i18n="plan_pro_f5"><strong>Generador de Actas Corporativas:</strong> Actas de Consejo, Junta Directiva, Comité y Asamblea</li>
+          </ul>
+          <button type="button" class="btn-primary" id="pricing-pro-btn" data-i18n="plan_pro_cta">Activar 3 Días Gratis con Bold API ($30.000 COP / $10 USD)</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================================
+       VIEW 2: USER PORTAL
+       ====================================================================== -->
+  <section id="view-portal" class="view-section hidden" aria-label="Portal de Usuario Apex Vox">
+    <div class="portal-container">
+      <div class="portal-grid">
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title" data-i18n="portal_profile_title">Perfil de Usuario y Cuota Diaria</h2>
+            <span class="badge-pill success" id="portal-plan-badge">Plan Gratis</span>
+          </div>
+          <div class="portal-user-details">
+            <p><strong data-i18n="lbl_name">Nombre:</strong> <span id="portal-user-name">Usuario Invitado</span></p>
+            <p><strong data-i18n="lbl_email">Correo:</strong> <span id="portal-user-email">invitado@apexvox.ai</span></p>
+            <p><strong data-i18n="lbl_storage_retention">Retención de Almacenamiento (Mega S4):</strong> <span id="portal-retention-label">24 horas (Plan Gratis)</span></p>
+          </div>
+
+          <div class="quota-meter-box">
+            <div class="quota-head">
+              <span data-i18n="portal_quota_label">Consumo de Audio Hoy (1 o varios audios):</span>
+              <span id="portal-quota-numbers">00:00:00 / 02:00:00</span>
+            </div>
+            <div class="progress-bar-outer" role="presentation">
+              <div id="portal-quota-bar" class="progress-bar-inner" style="width: 2%;"></div>
+            </div>
+            <p id="portal-quota-hint" class="field-hint" data-i18n="portal_quota_hint">Tienes 2 horas gratis cada día. Tus archivos en el plan gratuito se almacenan por 24 horas en Mega S4.</p>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title" data-i18n="portal_billing_title">Suscripción Apex Pro — Bold API</h2>
+            <span class="meta-tag timeline">$30.000 COP / $10 USD</span>
+          </div>
+          <p class="card-lead" data-i18n="portal_billing_desc">Obtén <strong>3 días de prueba gratis</strong> con cobro automático mensual ($30.000 COP o $10 USD). Desbloquea transcripciones ilimitadas, almacenamiento ilimitado en Mega S4 y todo el poder de <strong>Apex Summa</strong>.</p>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="bold-currency-select" data-i18n="lbl_currency">Moneda de Cobro (Bold)</label>
+              <select id="bold-currency-select" class="form-control">
+                <option value="COP" selected>Pesos colombianos — $30.000 COP / mes</option>
+                <option value="USD">Dólares — $10 USD / month</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="bold-mode-input" data-i18n="lbl_billing_mode">Modalidad</label>
+              <input type="text" id="bold-mode-input" class="form-control" value="3 Días Gratis + Cobro Automático" readonly />
+            </div>
+          </div>
+
+          <div class="button-row">
+            <button type="button" class="btn-primary" id="portal-activate-pro-btn" data-i18n="btn_start_trial_bold">Iniciar Prueba Gratis 3 Días (Bold API)</button>
+            <button type="button" class="btn-secondary" id="portal-generate-bold-link-btn" data-i18n="btn_generate_bold_link">Ver Firma y Checkout Bold</button>
+          </div>
+
+          <div id="bold-checkout-preview" class="bold-checkout-preview hidden" aria-live="polite"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title" data-i18n="portal_cloud_history_title">Almacenamiento MEGA S4 &amp; Historial en Supabase Cloud</h2>
+          <button type="button" class="btn-secondary btn-small" id="refresh-portal-btn" data-i18n="btn_refresh">Actualizar</button>
+        </div>
+
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <div class="kpi-label">Object Storage</div>
+            <div class="kpi-value kpi-value--sm">MEGA S4 (S3)</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Backend DB &amp; Auth</div>
+            <div class="kpi-value kpi-value--sm">Supabase Cloud</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label" data-i18n="kpi_retention_policy">Política de Retención</div>
+            <div class="kpi-value kpi-value--sm" id="portal-kpi-retention">24 Horas</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label" data-i18n="kpi_stored_jobs">Transcripciones Guardadas</div>
+            <div class="kpi-value" id="portal-kpi-jobs-count">0</div>
+          </div>
+        </div>
+
+        <ul id="portal-history-list" class="track-list"></ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================================
+       VIEW 3: PLAYGROUND
+       ====================================================================== -->
+  <main class="main-container view-section" id="view-playground">
+    <section aria-label="Configuración y cola de audios">
+      <!-- 1. Upload & ordering -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">
+            <span class="step-badge">1</span>
+            <span data-i18n="step1_title">Subir y Ordenar Archivos de Audio</span>
+          </h2>
+          <button type="button" class="btn-secondary btn-small hidden" id="clear-queue-btn" title="Limpiar lista" data-i18n="btn_clear_queue">Limpiar cola</button>
+        </div>
+
+        <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Subir archivos de audio">
+          <div class="dropzone-icon"><svg class="pixel-field" viewBox="0 0 51 36" aria-hidden="true" focusable="false"><rect x="0" y="12" width="6" height="6"/><rect x="0" y="18" width="6" height="6"/><rect x="9" y="6" width="6" height="6"/><rect x="9" y="12" width="6" height="6"/><rect x="9" y="18" width="6" height="6"/><rect x="9" y="24" width="6" height="6"/><rect x="18" y="0" width="6" height="6"/><rect x="18" y="6" width="6" height="6"/><rect x="18" y="12" width="6" height="6"/><rect x="18" y="18" width="6" height="6"/><rect x="18" y="24" width="6" height="6"/><rect x="18" y="30" width="6" height="6"/><rect x="27" y="6" width="6" height="6"/><rect x="27" y="12" width="6" height="6"/><rect x="27" y="18" width="6" height="6"/><rect x="36" y="0" width="6" height="6"/><rect x="36" y="6" width="6" height="6"/><rect x="36" y="12" width="6" height="6"/><rect x="36" y="18" width="6" height="6"/><rect x="36" y="24" width="6" height="6"/><rect x="45" y="12" width="6" height="6"/><rect x="45" y="18" width="6" height="6"/></svg></div>
+          <p class="dropzone-title" data-i18n="dropzone_title">Arrastra tus archivos de audio aquí o haz clic para seleccionarlos</p>
+          <p class="dropzone-hint" data-i18n="dropzone_hint">Soporta MP3, OGG, WAV, M4A, FLAC, WEBM · 1 o varios audios · Almacenamiento en Mega S4</p>
+          <input type="file" id="file-input" multiple accept=".mp3,.ogg,.wav,.m4a,.flac,.webm,.mp4,audio/*" class="hidden" />
+        </div>
+
+        <div id="queue-summary" class="queue-summary hidden">
+          <span id="queue-count-label">0 archivos en orden</span>
+          <div class="row">
+            <span id="queue-duration-label" class="queue-duration">Duración total: 00:00:00</span>
+            <button type="button" class="btn-secondary btn-small" id="play-sequence-btn" data-i18n="btn_play_sequence">Escuchar en orden</button>
+          </div>
+        </div>
+
+        <ul class="track-list" id="track-list" aria-label="Secuencia ordenada de pistas de audio"></ul>
+
+        <p id="reorder-hint" class="field-hint hidden" data-i18n="reorder_hint">Arrastra cualquier tarjeta desde el ícono <strong>⠿</strong> (o usa <strong>↑ / ↓</strong>) para cambiar su posición y presiona <strong>Escuchar</strong> en cada pista para verificar el audio antes de transcribir.</p>
+      </div>
+
+      <!-- 2. Engine -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">
+            <span class="step-badge">2</span>
+            <span data-i18n="step2_title">Motor Apex Vox (Potenciado por Groq)</span>
+          </h2>
+          <span class="meta-tag timeline" data-i18n="powered_by_groq">Potenciado por Groq</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="engine-select" data-i18n="lbl_engine_select">Selecciona el Modelo (Potenciado por Groq)</label>
+          <select id="engine-select" class="form-control">
+            <option value="Mc-Ayrton">Mc-Ayrton (El Mejor · Máxima Precisión)</option>
+            <option value="Mc-Lewis" selected>Mc-Lewis (Modo Híbrido · Recomendado)</option>
+            <option value="Mc-Norris">Mc-Norris (Timbre y Huella Vocal)</option>
+            <option value="Mc-Piastri">Mc-Piastri (Velocidad Contextual)</option>
+          </select>
+        </div>
+
+        <!-- Synchronized model select kept for legacy compatibility -->
+        <select id="model-select" class="form-control hidden" aria-hidden="true" tabindex="-1">
+          <option value="Mc-Ayrton">Mc-Ayrton</option>
+          <option value="Mc-Lewis" selected>Mc-Lewis</option>
+          <option value="Mc-Norris">Mc-Norris</option>
+          <option value="Mc-Piastri">Mc-Piastri</option>
+          <option value="whisper-large-v3">whisper-large-v3</option>
+        </select>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="speakers-select" data-i18n="lbl_speakers_count">Número de Oradores</label>
+            <select id="speakers-select" class="form-control">
+              <option value="auto" data-i18n="spk_auto">Automático (1, 2 o varios oradores)</option>
+              <option value="1">1 Orador (Monólogo / Dictado)</option>
+              <option value="2">2 Oradores (Entrevista / Diálogo)</option>
+              <option value="3">3 Oradores (Conversación grupal)</option>
+              <option value="4">4 Oradores (Panel / Reunión)</option>
+              <option value="5">5+ Oradores (Múltiples participantes)</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="language-select" data-i18n="lbl_audio_lang">Idioma del Audio</label>
+            <select id="language-select" class="form-control">
+              <option value="auto">Detección Automática</option>
+              <option value="es" selected>Español (es)</option>
+              <option value="en">English (en)</option>
+              <option value="pt">Português (pt)</option>
+              <option value="fr">Français (fr)</option>
+              <option value="de">Deutsch (de)</option>
+              <option value="it">Italiano (it)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="prompt-hint-input" data-i18n="lbl_context_hint">Contexto / Vocabulario (Opcional)</label>
+            <input type="text" id="prompt-hint-input" class="form-control" placeholder="Ej: Reunión de Consejo entre Carlos y Ana..." maxlength="500" />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="playground-plan-select" data-i18n="lbl_active_plan_mode">Plan Activo (Simulador / Cuenta)</label>
+            <select id="playground-plan-select" class="form-control">
+              <option value="pro" selected>Plan Apex Pro / Prueba 3 Días (Ilimitado + Apex Summa IA)</option>
+              <option value="free">Plan Gratis (2h/día · 24h Mega S4)</option>
+            </select>
+          </div>
+        </div>
+
+        <details class="advanced-settings">
+          <summary data-i18n="lbl_api_override">Configuración Avanzada de Clave Groq (Opcional — ya configurada en servidor)</summary>
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="api-key-input">Groq API Key</label>
+              <input type="password" id="api-key-input" class="form-control" placeholder="gsk_... (usa .env)" autocomplete="off" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="deepgram-key-input">Clave Acústica Auxiliar (Opcional)</label>
+              <input type="password" id="deepgram-key-input" class="form-control" placeholder="Opcional (usa .env)" autocomplete="off" />
+            </div>
+          </div>
+        </details>
+
+        <button type="button" id="transcribe-btn" class="btn-primary" disabled>
+          <span data-i18n="btn_transcribe_now">Procesar, Unir y Transcribir con Apex Vox</span>
+        </button>
+
+        <div id="progress-box" class="progress-box hidden" aria-live="polite">
+          <div class="progress-head">
+            <span id="progress-step">Preparando pipeline...</span>
+            <span id="progress-pct">0%</span>
+          </div>
+          <div class="progress-bar-outer">
+            <div id="progress-bar-fill" class="progress-bar-inner" style="width: 0%;"></div>
+          </div>
+          <div id="progress-subtext" class="progress-sub">Potenciado por Groq · Sincronizando con Mega S4 y Supabase Cloud...</div>
+        </div>
+
+        <div id="alert-box" class="alert-box hidden" role="alert"></div>
+      </div>
+
+      <!-- Voice profiles -->
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">
+            <span class="step-badge">VP</span>
+            <span data-i18n="step3_vp_title">Perfiles de Voz (Identificación de Oradores Conocidos)</span>
+          </h2>
+        </div>
+        <p class="card-lead" data-i18n="vp_desc">Registra una muestra corta de voz (5–30s) de una persona para que Apex Vox reconozca automáticamente su timbre de voz y le asigne su nombre real.</p>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label" for="vp-name-input" data-i18n="lbl_vp_name">Nombre</label>
+            <input type="text" id="vp-name-input" class="form-control" placeholder="Nombre (ej. Carlos, Dra. Ana)" maxlength="80" />
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="vp-file-input" data-i18n="lbl_vp_sample">Muestra de voz</label>
+            <input type="file" id="vp-file-input" class="form-control" accept=".mp3,.ogg,.wav,.m4a,.flac,.webm,audio/*" />
+          </div>
+        </div>
+        <button type="button" id="enroll-vp-btn" class="btn-secondary btn-block" data-i18n="btn_enroll_vp">Registrar Huella de Voz</button>
+        <ul id="voice-profiles-list" class="track-list"></ul>
+      </div>
+    </section>
+
+    <!-- Results + Apex Summa -->
+    <section aria-label="Resultados de transcripción y resumen IA Apex Summa">
+      <div class="card">
+        <div class="card-header">
+          <h2 class="card-title">
+            <span class="step-badge">3</span>
+            <span data-i18n="result_card_title">Transcripción Ordenada con Marcas de Tiempo y Oradores</span>
+          </h2>
+          <div class="row">
+            <button type="button" id="rename-speakers-btn" class="btn-secondary btn-small hidden" data-i18n="btn_rename_speakers">Renombrar Oradores</button>
+          </div>
+        </div>
+
+        <div id="empty-result-state" class="empty-state">
+          <div class="empty-state-icon"><svg class="pixel-field" viewBox="0 0 224 88" aria-hidden="true" focusable="false"><rect x="0" y="32" width="8" height="8"/><rect x="0" y="40" width="8" height="8"/><rect x="12" y="24" width="8" height="8"/><rect x="12" y="32" width="8" height="8"/><rect x="12" y="40" width="8" height="8"/><rect x="12" y="48" width="8" height="8"/><rect x="24" y="16" width="8" height="8"/><rect x="24" y="24" width="8" height="8"/><rect x="24" y="32" width="8" height="8"/><rect x="24" y="40" width="8" height="8"/><rect x="24" y="48" width="8" height="8"/><rect x="24" y="56" width="8" height="8"/><rect x="24" y="64" width="8" height="8"/><rect x="36" y="24" width="8" height="8"/><rect x="36" y="32" width="8" height="8"/><rect x="36" y="40" width="8" height="8"/><rect x="36" y="48" width="8" height="8"/><rect x="36" y="56" width="8" height="8"/><rect x="48" y="8" width="8" height="8"/><rect x="48" y="16" width="8" height="8"/><rect x="48" y="24" width="8" height="8"/><rect x="48" y="32" width="8" height="8"/><rect x="48" y="40" width="8" height="8"/><rect x="48" y="48" width="8" height="8"/><rect x="48" y="56" width="8" height="8"/><rect x="48" y="64" width="8" height="8"/><rect x="48" y="72" width="8" height="8"/><rect x="60" y="0" width="8" height="8"/><rect x="60" y="8" width="8" height="8"/><rect x="60" y="16" width="8" height="8"/><rect x="60" y="24" width="8" height="8"/><rect x="60" y="32" width="8" height="8"/><rect x="60" y="40" width="8" height="8"/><rect x="60" y="48" width="8" height="8"/><rect x="60" y="56" width="8" height="8"/><rect x="60" y="64" width="8" height="8"/><rect x="60" y="72" width="8" height="8"/><rect x="60" y="80" width="8" height="8"/><rect x="72" y="8" width="8" height="8"/><rect x="72" y="16" width="8" height="8"/><rect x="72" y="24" width="8" height="8"/><rect x="72" y="32" width="8" height="8"/><rect x="72" y="40" width="8" height="8"/><rect x="72" y="48" width="8" height="8"/><rect x="72" y="56" width="8" height="8"/><rect x="72" y="64" width="8" height="8"/><rect x="84" y="24" width="8" height="8"/><rect x="84" y="32" width="8" height="8"/><rect x="84" y="40" width="8" height="8"/><rect x="84" y="48" width="8" height="8"/><rect x="84" y="56" width="8" height="8"/><rect x="96" y="32" width="8" height="8"/><rect x="96" y="40" width="8" height="8"/><rect x="96" y="48" width="8" height="8"/><rect x="108" y="16" width="8" height="8"/><rect x="108" y="24" width="8" height="8"/><rect x="108" y="32" width="8" height="8"/><rect x="108" y="40" width="8" height="8"/><rect x="108" y="48" width="8" height="8"/><rect x="108" y="56" width="8" height="8"/><rect x="120" y="0" width="8" height="8"/><rect x="120" y="8" width="8" height="8"/><rect x="120" y="16" width="8" height="8"/><rect x="120" y="24" width="8" height="8"/><rect x="120" y="32" width="8" height="8"/><rect x="120" y="40" width="8" height="8"/><rect x="120" y="48" width="8" height="8"/><rect x="120" y="56" width="8" height="8"/><rect x="120" y="64" width="8" height="8"/><rect x="120" y="72" width="8" height="8"/><rect x="132" y="16" width="8" height="8"/><rect x="132" y="24" width="8" height="8"/><rect x="132" y="32" width="8" height="8"/><rect x="132" y="40" width="8" height="8"/><rect x="132" y="48" width="8" height="8"/><rect x="132" y="56" width="8" height="8"/><rect x="132" y="64" width="8" height="8"/><rect x="144" y="24" width="8" height="8"/><rect x="144" y="32" width="8" height="8"/><rect x="144" y="40" width="8" height="8"/><rect x="144" y="48" width="8" height="8"/><rect x="156" y="32" width="8" height="8"/><rect x="156" y="40" width="8" height="8"/><rect x="168" y="24" width="8" height="8"/><rect x="168" y="32" width="8" height="8"/><rect x="168" y="40" width="8" height="8"/><rect x="168" y="48" width="8" height="8"/><rect x="168" y="56" width="8" height="8"/><rect x="180" y="8" width="8" height="8"/><rect x="180" y="16" width="8" height="8"/><rect x="180" y="24" width="8" height="8"/><rect x="180" y="32" width="8" height="8"/><rect x="180" y="40" width="8" height="8"/><rect x="180" y="48" width="8" height="8"/><rect x="180" y="56" width="8" height="8"/><rect x="180" y="64" width="8" height="8"/><rect x="192" y="16" width="8" height="8"/><rect x="192" y="24" width="8" height="8"/><rect x="192" y="32" width="8" height="8"/><rect x="192" y="40" width="8" height="8"/><rect x="192" y="48" width="8" height="8"/><rect x="192" y="56" width="8" height="8"/><rect x="204" y="32" width="8" height="8"/><rect x="204" y="40" width="8" height="8"/><rect x="204" y="48" width="8" height="8"/><rect x="216" y="32" width="8" height="8"/><rect x="216" y="40" width="8" height="8"/></svg></div>
+          <h3 class="empty-state-title" data-i18n="empty_state_heading">Apex Vox — Listo para transcribir e identificar voces en orden</h3>
+          <p class="empty-state-desc" data-i18n="empty_state_desc">Sube uno o varios archivos MP3, OGG o WAV en el panel izquierdo, elige tu modelo <strong>Mc-Ayrton, Mc-Lewis, Mc-Norris o Mc-Piastri</strong> (Potenciado por Groq) y obtén tu transcripción junto con el análisis ejecutivo de <strong>Apex Summa</strong>.</p>
+        </div>
+
+        <div id="result-container" class="hidden">
+          <div class="kpi-grid">
+            <div class="kpi-card">
+              <div class="kpi-label" data-i18n="kpi_duration_lbl">Duración Global</div>
+              <div class="kpi-value" id="kpi-duration">00:00:00</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label" data-i18n="kpi_speakers_lbl">Oradores Detectados</div>
+              <div class="kpi-value" id="kpi-speakers">1</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label" data-i18n="kpi_engine_lbl">Modelo Serie Mc</div>
+              <div class="kpi-value kpi-value--sm" id="kpi-engine">Mc-Lewis</div>
+            </div>
+            <div class="kpi-card">
+              <div class="kpi-label" data-i18n="kpi_storage_lbl">Almacenamiento Mega S4</div>
+              <div class="kpi-value kpi-value--sm" id="kpi-files">Ilimitado</div>
+            </div>
+          </div>
+
+          <div id="merged-player-box" class="player-box">
+            <div class="player-caption" data-i18n="player_caption">Reproductor Continuo Sincronizado (Haz clic en cualquier marca de tiempo para saltar al instante exacto)</div>
+            <audio id="merged-audio-player" controls preload="metadata"></audio>
+          </div>
+
+          <div id="rename-panel" class="rename-panel hidden">
+            <div class="rename-panel-title" data-i18n="rename_panel_title">Asignar nombres personalizados a los oradores identificados:</div>
+            <div id="rename-inputs-container" class="form-row"></div>
+            <div class="button-row">
+              <button type="button" id="apply-rename-btn" class="btn-primary btn-small" data-i18n="btn_save_names">Guardar Nombres</button>
+              <button type="button" id="cancel-rename-btn" class="btn-secondary btn-small" data-i18n="btn_cancel">Cancelar</button>
+            </div>
+          </div>
+
+          <div class="export-bar" aria-label="Descargar transcripción">
+            <a id="export-txt" class="export-btn" href="#" target="_blank" rel="noopener">TXT</a>
+            <a id="export-srt" class="export-btn green" href="#" target="_blank" rel="noopener">Subtítulos SRT</a>
+            <a id="export-vtt" class="export-btn green" href="#" target="_blank" rel="noopener">Subtítulos VTT</a>
+            <a id="export-json" class="export-btn" href="#" target="_blank" rel="noopener">JSON</a>
+            <a id="export-csv" class="export-btn" href="#" target="_blank" rel="noopener">CSV</a>
+            <a id="export-md" class="export-btn" href="#" target="_blank" rel="noopener">Markdown</a>
+            <button type="button" id="copy-transcript-btn" class="export-btn green">Copiar texto</button>
+          </div>
+
+          <!-- APEX SUMMA -->
+          <div id="apex-summa-container" class="summa-wrapper">
+            <div class="summa-banner">
+              <svg class="pixel-field" viewBox="0 0 220 90" width="220" height="90" aria-hidden="true" focusable="false"><rect x="60" y="0" width="10" height="10"/><rect x="140" y="0" width="10" height="10"/><rect x="160" y="0" width="10" height="10"/><rect x="170" y="0" width="10" height="10"/><rect x="180" y="0" width="10" height="10"/><rect x="190" y="0" width="10" height="10"/><rect x="200" y="0" width="10" height="10"/><rect x="210" y="0" width="10" height="10"/><rect x="130" y="10" width="10" height="10"/><rect x="150" y="10" width="10" height="10"/><rect x="110" y="20" width="10" height="10"/><rect x="130" y="20" width="10" height="10"/><rect x="150" y="20" width="10" height="10"/><rect x="180" y="20" width="10" height="10"/><rect x="190" y="20" width="10" height="10"/><rect x="200" y="20" width="10" height="10"/><rect x="100" y="30" width="10" height="10"/><rect x="80" y="40" width="10" height="10"/><rect x="100" y="40" width="10" height="10"/><rect x="120" y="40" width="10" height="10"/><rect x="180" y="40" width="10" height="10"/><rect x="210" y="40" width="10" height="10"/><rect x="190" y="50" width="10" height="10"/></svg>
+              <div>
+                <span class="summa-pill">Apex Summa IA · Potenciado por Groq</span>
+                <h3 class="summa-title" data-i18n="summa_main_title">Resumen Inteligente, Gráficas, Calendario de Tareas y Generador de Actas</h3>
+              </div>
+              <button type="button" id="unlock-summa-pro-btn" class="btn-primary hidden">Desbloquear con Prueba Pro 3 Días</button>
+            </div>
+
+            <div id="summa-locked-banner" class="summa-locked-notice hidden">
+              <p data-i18n="summa_locked_msg">El Resumen IA completo de Apex Summa, las Gráficas y el Generador de Actas están incluidos en el Plan Apex Pro ($30.000 COP / $10 USD mes · 3 días de prueba gratis).</p>
+              <button type="button" id="summa-activate-trial-btn" class="btn-primary">Activar Prueba Gratis de 3 Días</button>
+            </div>
+
+            <div id="summa-content-body">
+              <div class="summa-grid-2">
+                <div class="summa-box">
+                  <h4 class="summa-sec-title" data-i18n="summa_sec1_who">1. ¿Quién Habló Más?</h4>
+                  <div id="summa-dominant-speaker-card" class="dominant-speaker-highlight"></div>
+                  <div id="summa-speaker-bars" class="speaker-bars-list"></div>
+                </div>
+
+                <div class="summa-box">
+                  <h4 class="summa-sec-title" data-i18n="summa_sec6_charts">6. Gráficas de la Transcripción</h4>
+                  <div id="summa-donut-chart-wrap" class="chart-flex-box"></div>
+                  <div class="chart-caption" data-i18n="summa_timeline_chart_lbl">Densidad de Palabras por Tramo de Tiempo:</div>
+                  <div id="summa-timeline-chart" class="timeline-bars-chart"></div>
+                </div>
+              </div>
+
+              <div class="summa-grid-2">
+                <div class="summa-box">
+                  <h4 class="summa-sec-title" data-i18n="summa_sec2_what">2. ¿De Qué se Habló?</h4>
+                  <p id="summa-exec-summary" class="summa-paragraph"></p>
+                  <div id="summa-topics-list" class="topics-list"></div>
+                </div>
+
+                <div class="summa-box">
+                  <h4 class="summa-sec-title" data-i18n="summa_sec3_objectives">3. Objetivos Identificados</h4>
+                  <ul id="summa-objectives-list" class="summa-checklist"></ul>
+
+                  <h4 class="summa-sec-title summa-sec-title--spaced" data-i18n="summa_sec4_callouts">4. Llamados de Atención y Alertas</h4>
+                  <div id="summa-callouts-list" class="callouts-list"></div>
+                </div>
+              </div>
+
+              <div class="summa-box">
+                <div class="summa-calendar-head">
+                  <h4 class="summa-sec-title" data-i18n="summa_sec5_calendar">5. Próximas Tareas en Forma de Calendario</h4>
+                  <a id="summa-download-ics-btn" href="#" target="_blank" rel="noopener" class="export-btn green" data-i18n="btn_download_ics">Exportar a Calendario (.ICS)</a>
+                </div>
+                <div id="summa-calendar-grid" class="calendar-grid"></div>
+              </div>
+
+              <div class="summa-box minutes-generator-box">
+                <h4 class="summa-sec-title" data-i18n="summa_sec7_minutes">7. Crear Actas Oficiales (Consejo, Junta Directiva, Comité, Asamblea)</h4>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label class="form-label" for="minutes-template-select" data-i18n="lbl_minutes_type">Tipo de Acta a Generar</label>
+                    <select id="minutes-template-select" class="form-control">
+                      <option value="consejo" selected>Acta de Reunión de Consejo / Junta Directiva</option>
+                      <option value="comite">Acta de Comité Ejecutivo y Operativo</option>
+                      <option value="asamblea">Acta de Asamblea General de Socios</option>
+                      <option value="seguimiento">Acta de Seguimiento de Proyecto</option>
+                      <option value="ejecutiva">Minuta Ejecutiva de Decisiones</option>
+                    </select>
+                  </div>
+                  <div class="form-group">
+                    <label class="form-label" for="minutes-org-input" data-i18n="lbl_minutes_org">Nombre de la Organización / Entidad</label>
+                    <input type="text" id="minutes-org-input" class="form-control" value="Consejo Directivo · Apex Vox" maxlength="160" />
+                  </div>
+                </div>
+                <div class="minutes-actions">
+                  <button type="button" id="generate-minutes-btn" class="btn-primary" data-i18n="btn_generate_minutes">Generar Acta Oficial Ahora</button>
+                  <button type="button" id="download-minutes-md-btn" class="btn-secondary hidden" data-i18n="btn_download_minutes_md">Descargar Acta (.MD)</button>
+                  <button type="button" id="print-minutes-btn" class="btn-secondary hidden" data-i18n="btn_print_minutes">Imprimir / Guardar PDF</button>
+                </div>
+                <div id="minutes-preview-container" class="minutes-preview hidden"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="filter-bar">
+            <label class="visually-hidden" for="search-input">Buscar en la transcripción</label>
+            <input type="search" id="search-input" class="form-control" placeholder="Buscar palabra o frase..." />
+            <div id="speaker-tabs" class="speaker-tabs"></div>
+          </div>
+
+          <div id="segments-list" class="segments-container" aria-live="polite"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Footer -->
+  <footer class="app-footer">
+    <div class="footer-inner">
+      <div class="footer-top">
+        <p class="footer-statement" data-i18n="footer_statement">Cada audio, en orden. Cada voz, con nombre. Cada reunión, con acta.</p>
+        <ul class="footer-links">
+          <li><button type="button" data-goto-view="playground" data-i18n="nav_playground">Playground (Apex Vox)</button></li>
+          <li><button type="button" data-goto-view="landing" data-i18n="nav_landing">Inicio &amp; Planes</button></li>
+          <li><button type="button" data-goto-view="portal" data-i18n="nav_portal">Portal de Usuario</button></li>
+          <li><a href="/api/health" target="_blank" rel="noopener" data-i18n="footer_status">Estado del servicio</a></li>
+        </ul>
+      </div>
+      <p class="footer-display" aria-hidden="true">Apex Vox</p>
+      <div class="footer-legal">
+        <span>&copy; <span id="footer-year">2026</span> Apex Vox · Apex Summa · Apex Box</span>
+        <span data-i18n="powered_by_groq">Potenciado por Groq</span>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Auth dialog -->
+  <dialog id="auth-dialog" closedby="any" aria-labelledby="auth-dialog-title" class="apex-dialog">
+    <form class="dialog-inner" method="dialog" novalidate>
+      <div class="dialog-header">
+        <h3 id="auth-dialog-title" data-i18n="auth_modal_title">Regístrate en Apex Vox — 2 Horas Gratis al Día</h3>
+        <button type="button" class="icon-btn" id="close-auth-dialog-btn" aria-label="Cerrar">×</button>
+      </div>
+      <p class="dialog-lead" data-i18n="auth_modal_subtitle">Al registrarte obtienes <strong>2 horas gratis cada día</strong> (en 1 o varios audios) con <strong>almacenamiento de 24 horas en Mega S4</strong>. O inicia tu prueba gratis de 3 días en <strong>Apex Pro</strong>.</p>
+
+      <div class="form-group">
+        <label class="form-label" for="auth-name-input" data-i18n="lbl_full_name">Nombre Completo</label>
+        <input type="text" id="auth-name-input" class="form-control" placeholder="Ej. Carlos Mendoza" autocomplete="name" maxlength="120" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="auth-email-input" data-i18n="lbl_email">Correo Electrónico</label>
+        <input type="email" id="auth-email-input" class="form-control" placeholder="tu@correo.com" autocomplete="email" maxlength="254" />
+      </div>
+      <div class="form-group">
+        <label class="form-label" for="auth-password-input" data-i18n="lbl_password">Contraseña</label>
+        <input type="password" id="auth-password-input" class="form-control" placeholder="••••••••" autocomplete="current-password" />
+      </div>
+
+      <div id="auth-feedback-box" class="alert-box hidden" role="alert"></div>
+
+      <div class="dialog-actions">
+        <button type="button" id="submit-register-btn" class="btn-primary" data-i18n="btn_create_free_account">Crear Cuenta (2h Gratis / Día)</button>
+        <button type="button" id="submit-login-btn" class="btn-secondary" data-i18n="btn_login_existing">Entrar</button>
+      </div>
+    </form>
+  </dialog>
+</body>
+</html>

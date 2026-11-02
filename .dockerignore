@@ -1,0 +1,64 @@
+# ==============================================================================
+# .dockerignore: Exclude non-essential files from Docker build context
+# ==============================================================================
+
+# Git & Version Control
+.git
+.gitignore
+.gitattributes
+
+# Teamwork & Agent Metadata
+.agents/
+.claude/
+.backup-pre-groq-web/
+.gemini/
+.system_generated/
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Local Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+
+# Environment Secrets & Local Configurations
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Runtime Uploads & Outputs (handled via volume mounts)
+uploads/
+outputs/
+temp/
+*.mp3
+*.ogg
+*.wav
+*.m4a
+*.flac
+*.aac
+
+# IDE & Editor Artifacts
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+
+# Docker Artifacts
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+README.md

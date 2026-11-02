@@ -1,0 +1,683 @@
+"""
+Session & Job Manager Service (app/services/job_manager.py)
+-----------------------------------------------------------
+Manages multi-audio upload sessions, interactive sequence ordering,
+background transcription/diarization pipeline execution, merged audio preview
+generation, and persistent result storage.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+import shutil
+import subprocess
+import threading
+import uuid
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Dict, List, Optional
+
+from app.config import (
+    get_public_engine_label,
+    resolve_engine_code,
+    resolve_model_code,
+    settings,
+)
+from app.models.schemas import (
+    DiarizedSegment,
+    JobStatusResponse,
+    TranscribeRequest,
+    TranscriptionResult,
+)
+from app.services.acoustic_diarizer import cluster_segments_acoustically
+from app.services.apex_summa import generate_apex_summa_report
+from app.services.audio_engine import (
+    ProbedAudio,
+    format_timestamp_hhmmss,
+    probe_audio,
+    process_audio_sequence,
+)
+from app.services.deepgram_service import (
+    align_groq_segments_with_deepgram_diarization,
+    transcribe_and_diarize_chunks_deepgram,
+)
+from app.services.diarization import diarize_segments
+from app.services.groq_service import transcribe_chunks_sequence
+from app.services.storage_s4 import mega_s4_storage
+from app.services.supabase_service import supabase_service
+from app.services.transcript_cleaner import filter_hallucinated_segments
+
+logger = logging.getLogger("app.services.job_manager")
+
+
+@dataclass
+class UploadedTrack:
+    """Internal representation of an uploaded audio file within a session."""
+    file_id: str
+    filename: str
+    file_path: Path
+    probed: ProbedAudio
+
+
+@dataclass
+class UploadSession:
+    """Holds uploaded tracks and user-defined sequence order."""
+    session_id: str
+    session_dir: Path
+    tracks: Dict[str, UploadedTrack] = field(default_factory=dict)
+    ordered_ids: List[str] = field(default_factory=list)
+
+
+class JobManager:
+    """Thread-safe manager for upload sessions and transcription jobs."""
+
+    def __init__(self) -> None:
+        self._lock = threading.RLock()
+        self._sessions: Dict[str, UploadSession] = {}
+        self._jobs: Dict[str, JobStatusResponse] = {}
+        self._results: Dict[str, TranscriptionResult] = {}
+
+    # -------------------------------------------------------------------------
+    # Session Management
+    # -------------------------------------------------------------------------
+
+    def create_or_get_session(self, session_id: Optional[str] = None) -> UploadSession:
+        with self._lock:
+            if session_id and session_id in self._sessions:
+                return self._sessions[session_id]
+
+            sid = session_id or uuid.uuid4().hex[:12]
+            session_dir = settings.UPLOAD_DIR / sid
+            session_dir.mkdir(parents=True, exist_ok=True)
+            session = UploadSession(session_id=sid, session_dir=session_dir)
+            self._sessions[sid] = session
+            return session
+
+    def get_session(self, session_id: str) -> Optional[UploadSession]:
+        with self._lock:
+            return self._sessions.get(session_id)
+
+    def add_file_to_session(
+        self,
+        session_id: str,
+        filename: str,
+        content: bytes,
+    ) -> ProbedAudio:
+        """Save uploaded bytes, probe with ffprobe, and register in session."""
+        if not content:
+            raise ValueError(f"El archivo '{filename}' está vacío (0 bytes).")
+
+        ext = Path(filename).suffix.lower()
+        if ext not in settings.ALLOWED_EXTENSIONS:
+            raise ValueError(
+                f"Formato no soportado '{ext}' en '{filename}'. "
+                f"Formatos permitidos: {', '.join(sorted(settings.ALLOWED_EXTENSIONS))}"
+            )
+
+        session = self.create_or_get_session(session_id)
+        file_id = f"track_{uuid.uuid4().hex[:8]}"
+        safe_name = Path(filename).name
+        dest_path = session.session_dir / f"{file_id}_{safe_name}"
+        dest_path.write_bytes(content)
+
+        try:
+            meta = probe_audio(dest_path)
+        except Exception as exc:
+            dest_path.unlink(missing_ok=True)
+            raise ValueError(f"Archivo de audio inválido o corrupto '{safe_name}': {exc}") from exc
+
+        probed = meta.to_probed_audio(file_id=file_id)
+        # Preserve original user-facing filename
+        probed.filename = safe_name
+
+        with self._lock:
+            track = UploadedTrack(
+                file_id=file_id,
+                filename=safe_name,
+                file_path=dest_path,
+                probed=probed,
+            )
+            session.tracks[file_id] = track
+            session.ordered_ids.append(file_id)
+
+        return probed
+
+    def get_session_files(self, session_id: str) -> List[ProbedAudio]:
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if not session:
+                raise KeyError(f"Sesión '{session_id}' no encontrada.")
+            return [
+                session.tracks[fid].probed
+                for fid in session.ordered_ids
+                if fid in session.tracks
+            ]
+
+    def reorder_session_files(
+        self, session_id: str, file_order: List[str]
+    ) -> List[ProbedAudio]:
+        """Update the sequence order of files in a session (by file_id or filename)."""
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if not session:
+                raise KeyError(f"Sesión '{session_id}' no encontrada.")
+
+            resolved_ids: List[str] = []
+            remaining_ids = list(session.ordered_ids)
+
+            for identifier in file_order:
+                if identifier in session.tracks and identifier not in resolved_ids:
+                    resolved_ids.append(identifier)
+                    if identifier in remaining_ids:
+                        remaining_ids.remove(identifier)
+                else:
+                    # Fallback match by filename
+                    matched_id = next(
+                        (
+                            fid
+                            for fid in remaining_ids
+                            if session.tracks[fid].filename == identifier
+                        ),
+                        None,
+                    )
+                    if matched_id:
+                        resolved_ids.append(matched_id)
+                        remaining_ids.remove(matched_id)
+
+            # Append any remaining tracks not explicitly mentioned so nothing is lost
+            resolved_ids.extend(remaining_ids)
+            session.ordered_ids = resolved_ids
+
+            return [session.tracks[fid].probed for fid in session.ordered_ids]
+
+    def remove_file_from_session(self, session_id: str, file_id: str) -> List[ProbedAudio]:
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if not session:
+                raise KeyError(f"Sesión '{session_id}' no encontrada.")
+            track = session.tracks.pop(file_id, None)
+            if track:
+                track.file_path.unlink(missing_ok=True)
+            if file_id in session.ordered_ids:
+                session.ordered_ids.remove(file_id)
+            return [session.tracks[fid].probed for fid in session.ordered_ids]
+
+    # -------------------------------------------------------------------------
+    # Job Execution Pipeline
+    # -------------------------------------------------------------------------
+
+    def create_job(self, req: TranscribeRequest) -> JobStatusResponse:
+        with self._lock:
+            session = self._sessions.get(req.session_id)
+            if not session or not session.tracks:
+                raise KeyError(
+                    f"La sesión '{req.session_id}' no existe o no contiene archivos de audio."
+                )
+
+            if req.file_order:
+                self.reorder_session_files(req.session_id, req.file_order)
+
+            job_id = f"job_{uuid.uuid4().hex[:10]}"
+            status = JobStatusResponse(
+                job_id=job_id,
+                session_id=req.session_id,
+                status="queued",
+                progress=0,
+                current_step="En cola para procesamiento...",
+            )
+            self._jobs[job_id] = status
+            return status
+
+    def _update_job(
+        self,
+        job_id: str,
+        *,
+        status: Optional[str] = None,
+        progress: Optional[int] = None,
+        current_step: Optional[str] = None,
+        error: Optional[str] = None,
+        total_chunks: Optional[int] = None,
+        completed_chunks: Optional[int] = None,
+    ) -> None:
+        with self._lock:
+            job = self._jobs.get(job_id)
+            if not job:
+                return
+            if status is not None:
+                job.status = status
+            if progress is not None:
+                job.progress = max(0, min(100, progress))
+            if current_step is not None:
+                job.current_step = current_step
+            if error is not None:
+                job.error = error
+            if total_chunks is not None:
+                job.total_chunks = total_chunks
+            if completed_chunks is not None:
+                job.completed_chunks = completed_chunks
+
+    def _build_merged_preview_audio(
+        self, chunk_paths: List[Path], output_path: Path
+    ) -> Optional[Path]:
+        """Concatenate extracted 16kHz mono MP3 chunks into a single playable timeline file."""
+        if not chunk_paths:
+            return None
+        try:
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            if len(chunk_paths) == 1:
+                shutil.copyfile(chunk_paths[0], output_path)
+                return output_path
+
+            concat_list_file = output_path.parent / f"{output_path.stem}_concat.txt"
+            lines = [f"file '{str(p.resolve())}'" for p in chunk_paths]
+            concat_list_file.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+            cmd = [
+                "ffmpeg",
+                "-y",
+                "-v",
+                "error",
+                "-f",
+                "concat",
+                "-safe",
+                "0",
+                "-i",
+                str(concat_list_file),
+                "-c",
+                "copy",
+                str(output_path),
+            ]
+            subprocess.run(cmd, check=True, timeout=120.0)
+            concat_list_file.unlink(missing_ok=True)
+            return output_path
+        except Exception as exc:
+            logger.warning("Failed to build merged preview audio: %s", exc)
+            return None
+
+    def execute_job(self, job_id: str, req: TranscribeRequest) -> TranscriptionResult:
+        """
+        Execute the full end-to-end audio processing, Groq transcription, and
+        speaker diarization pipeline for a job.
+        """
+        job_temp_dir = settings.TEMP_DIR / job_id
+        job_temp_dir.mkdir(parents=True, exist_ok=True)
+
+        try:
+            self._update_job(
+                job_id,
+                status="processing",
+                progress=5,
+                current_step="Ordenando archivos y analizando silencios con FFmpeg...",
+            )
+
+            session = self.get_session(req.session_id)
+            if not session:
+                raise RuntimeError(f"Sesión '{req.session_id}' no encontrada.")
+
+            ordered_tracks = [
+                session.tracks[fid]
+                for fid in session.ordered_ids
+                if fid in session.tracks
+            ]
+            if not ordered_tracks:
+                raise RuntimeError("No hay archivos de audio en la sesión para procesar.")
+
+            ordered_paths = [t.file_path for t in ordered_tracks]
+            ordered_filenames = [t.filename for t in ordered_tracks]
+
+            # 1. Audio Slicing, Chunking (<25MB) & Global Timeline Offset Calculation
+            probed_list, chunks = process_audio_sequence(
+                file_paths=ordered_paths,
+                output_dir=job_temp_dir,
+            )
+
+            # Map original user-facing filenames onto chunks
+            for chunk in chunks:
+                seq_idx = chunk.file_sequence_index
+                if 0 <= seq_idx < len(ordered_filenames):
+                    chunk.source_file_name = ordered_filenames[seq_idx]
+
+            total_duration = round(sum(p.duration_sec for p in probed_list), 3)
+
+            # Enforce daily quota (2h/day on free plan vs unlimited on pro/trial)
+            effective_user = supabase_service.get_user_by_token_or_id(req.user_id)
+            resolved_uid = (
+                effective_user["user_id"]
+                if effective_user
+                else (req.user_id or None)
+            )
+            effective_plan = (
+                req.plan_override
+                or (effective_user.get("plan") if effective_user else None)
+                or "free"
+            ).lower()
+
+            if resolved_uid or req.plan_override:
+                quota_state = supabase_service.check_and_consume_quota(
+                    user_id=resolved_uid,
+                    duration_seconds=total_duration,
+                    audios_count=len(ordered_tracks),
+                    plan_override=req.plan_override,
+                )
+                effective_plan = quota_state.plan
+
+            engine_brand = get_public_engine_label(req.diarization_engine)
+            engine = resolve_engine_code(req.diarization_engine)
+            resolved_model = resolve_model_code(req.model or req.diarization_engine)
+
+            self._update_job(
+                job_id,
+                progress=20,
+                total_chunks=len(chunks),
+                completed_chunks=0,
+                current_step=f"Audio preparado en {len(chunks)} fragmento(s) (<25 MB). Procesando con {engine_brand} (Potenciado por Groq)...",
+            )
+
+            # Build merged audio file for continuous web player playback & acoustic voiceprint
+            merged_audio_path = settings.OUTPUT_DIR / f"{job_id}_merged.mp3"
+            self._build_merged_preview_audio([c.file_path for c in chunks], merged_audio_path)
+
+            has_dg_key = bool((req.deepgram_api_key or settings.DEEPGRAM_API_KEY or "").strip())
+
+            def on_chunk_progress(idx: int, total: int, msg: str) -> None:
+                pct = 20 + int(((idx + 0.5) / max(1, total)) * 45)
+                self._update_job(
+                    job_id,
+                    progress=pct,
+                    completed_chunks=idx,
+                    current_step=msg,
+                )
+
+            if engine == "deepgram" and has_dg_key:
+                whisper_segments = transcribe_and_diarize_chunks_deepgram(
+                    chunks=chunks,
+                    language=req.language,
+                    num_speakers=req.num_speakers,
+                    deepgram_api_key=req.deepgram_api_key,
+                    progress_callback=on_chunk_progress,
+                )
+                trust_acoustic = True
+            else:
+                # Step 2A: Transcribe chunks sequentially via Groq
+                whisper_segments = transcribe_chunks_sequence(
+                    chunks=chunks,
+                    model=resolved_model,
+                    language=req.language,
+                    prompt_hint=req.prompt_hint,
+                    api_key=req.api_key,
+                    progress_callback=on_chunk_progress,
+                )
+                trust_acoustic = False
+
+                # Step 2B: Enrich segments with acoustic voice separation
+                if engine in ("hybrid_deepgram_groq", "deepgram") and has_dg_key and whisper_segments:
+                    self._update_job(
+                        job_id,
+                        progress=70,
+                        completed_chunks=len(chunks),
+                        current_step=f"Ejecutando separación acústica de voz ({engine_brand})...",
+                    )
+                    whisper_segments = align_groq_segments_with_deepgram_diarization(
+                        chunks=chunks,
+                        groq_segments=whisper_segments,
+                        language=req.language,
+                        num_speakers=req.num_speakers,
+                        deepgram_api_key=req.deepgram_api_key,
+                    )
+                    trust_acoustic = any(bool(s.acoustic_speaker) for s in whisper_segments)
+
+                # If acoustic_local selected (or acoustic tags not yet populated), run local voiceprint clustering
+                if (
+                    (engine in ("acoustic_local", "deepgram") or not any(bool(s.acoustic_speaker) for s in whisper_segments))
+                    and merged_audio_path.exists()
+                    and whisper_segments
+                ):
+                    self._update_job(
+                        job_id,
+                        progress=74,
+                        completed_chunks=len(chunks),
+                        current_step=f"Analizando huella vocal acústica ({engine_brand})...",
+                    )
+                    whisper_segments = cluster_segments_acoustically(
+                        audio_path=merged_audio_path,
+                        segments=whisper_segments,
+                        num_speakers=req.num_speakers,
+                    )
+                    if engine in ("acoustic_local", "deepgram"):
+                        trust_acoustic = True
+
+            # Step 2.5: Clean silence hallucinations & noise before diarization
+            self._update_job(
+                job_id,
+                progress=78,
+                completed_chunks=len(chunks),
+                current_step="Control de calidad: limpiando alucinaciones en tramos de silencio...",
+            )
+            whisper_segments = filter_hallucinated_segments(
+                whisper_segments,
+                audio_path=merged_audio_path if merged_audio_path.exists() else None,
+            )
+
+            self._update_job(
+                job_id,
+                progress=84,
+                completed_chunks=len(chunks),
+                current_step="Identificando oradores y perfiles de voz registrados...",
+            )
+
+            # 3. Speaker Diarization & Enrolled Voice Profile Matching
+            diarized_segs, speaker_count, speaker_roles = diarize_segments(
+                segments=whisper_segments,
+                num_speakers=req.num_speakers,
+                api_key=req.api_key,
+                merged_audio_path=merged_audio_path if merged_audio_path.exists() else None,
+                trust_acoustic_labels=trust_acoustic,
+            )
+
+            # Final pass of format & silence hallucination cleaning
+            diarized_segs = filter_hallucinated_segments(
+                diarized_segs,
+                audio_path=merged_audio_path if merged_audio_path.exists() else None,
+            )
+            unique_final_speakers = list(dict.fromkeys(s.speaker for s in diarized_segs))
+            if unique_final_speakers:
+                speaker_count = len(unique_final_speakers)
+
+            full_text = "\n".join(
+                f"[{s.start_formatted} - {s.end_formatted}] {s.speaker}: {s.text}"
+                for s in diarized_segs
+            )
+
+            # 4. Store in MEGA S4 with plan-based retention (24h for free, unlimited for pro/trial)
+            expires_at = mega_s4_storage.compute_expiration_iso(effective_plan)
+            s4_result_key = f"users/{resolved_uid or 'public'}/jobs/{job_id}/result.json"
+            s4_audio_key = f"users/{resolved_uid or 'public'}/jobs/{job_id}/merged.mp3"
+
+            result = TranscriptionResult(
+                job_id=job_id,
+                session_id=req.session_id,
+                user_id=resolved_uid,
+                plan=effective_plan,
+                status="completed",
+                detected_speakers_count=speaker_count,
+                speaker_roles=speaker_roles,
+                total_duration_sec=total_duration,
+                total_duration_formatted=format_timestamp_hhmmss(total_duration),
+                model_used=resolved_model,
+                diarization_engine_used=engine,
+                engine_brand=engine_brand,
+                language=req.language,
+                file_order=ordered_filenames,
+                segments=diarized_segs,
+                full_text=full_text,
+                storage_provider="mega_s4",
+                s4_object_key=s4_result_key,
+                expires_at=expires_at,
+            )
+
+            # 5. Generate Apex Summa AI Intelligence Report
+            self._update_job(
+                job_id,
+                progress=93,
+                completed_chunks=len(chunks),
+                current_step="Generando resumen inteligente Apex Summa, gráficas y calendario...",
+            )
+            summa_report = generate_apex_summa_report(
+                result=result,
+                language=req.language or "es",
+                api_key=req.api_key,
+                is_locked=(effective_plan == "free"),
+            )
+            result.summa_report = summa_report
+
+            result_json_bytes = json.dumps(
+                result.model_dump(mode="json"), ensure_ascii=False, indent=2
+            ).encode("utf-8")
+
+            # Persist result to local outputs directory & MEGA S4 bucket
+            result_file = settings.OUTPUT_DIR / f"{job_id}_result.json"
+            result_file.write_bytes(result_json_bytes)
+
+            mega_s4_storage.upload_object(
+                object_key=s4_result_key,
+                data=result_json_bytes,
+                content_type="application/json",
+                plan=effective_plan,
+                user_id=resolved_uid,
+                job_id=job_id,
+            )
+            if merged_audio_path.exists():
+                mega_s4_storage.upload_object(
+                    object_key=s4_audio_key,
+                    data=merged_audio_path.read_bytes(),
+                    content_type="audio/mpeg",
+                    plan=effective_plan,
+                    user_id=resolved_uid,
+                    job_id=job_id,
+                )
+
+            # Persist metadata in Supabase Cloud
+            supabase_service.save_transcription_record(
+                {
+                    "job_id": job_id,
+                    "user_id": resolved_uid,
+                    "session_id": req.session_id,
+                    "engine_brand": engine_brand,
+                    "total_duration_sec": total_duration,
+                    "total_duration_formatted": result.total_duration_formatted,
+                    "detected_speakers_count": speaker_count,
+                    "storage_provider": "mega_s4",
+                    "s4_audio_key": s4_audio_key,
+                    "s4_result_key": s4_result_key,
+                    "retention_policy": "unlimited" if expires_at is None else "24h",
+                    "expires_at": expires_at,
+                    "plan": effective_plan,
+                    "file_order": ordered_filenames,
+                    "dominant_speaker": summa_report.dominant_speaker,
+                    "created_at": summa_report.generated_at,
+                }
+            )
+
+            with self._lock:
+                self._results[job_id] = result
+
+            self._update_job(
+                job_id,
+                status="completed",
+                progress=100,
+                current_step="Transcripción Apex Vox y análisis Apex Summa completados con éxito.",
+            )
+            return result
+
+        except Exception as exc:
+            logger.exception("Job %s failed: %s", job_id, exc)
+            self._update_job(
+                job_id,
+                status="failed",
+                error=str(exc),
+                current_step=f"Error: {exc}",
+            )
+            raise
+        finally:
+            if settings.CLEANUP_TEMP_FILES:
+                shutil.rmtree(job_temp_dir, ignore_errors=True)
+
+    def get_job_status(self, job_id: str) -> Optional[JobStatusResponse]:
+        with self._lock:
+            return self._jobs.get(job_id)
+
+    def get_job_result(self, job_id: str) -> Optional[TranscriptionResult]:
+        with self._lock:
+            if job_id in self._results:
+                return self._results[job_id]
+
+        # Check disk persistence
+        result_file = settings.OUTPUT_DIR / f"{job_id}_result.json"
+        if result_file.exists():
+            try:
+                data = json.loads(result_file.read_text(encoding="utf-8"))
+                res = TranscriptionResult(**data)
+                with self._lock:
+                    self._results[job_id] = res
+                return res
+            except Exception as exc:
+                logger.warning("Failed to load persisted result for %s: %s", job_id, exc)
+        return None
+
+    def rename_speakers(
+        self, job_id: str, speaker_map: Dict[str, str]
+    ) -> TranscriptionResult:
+        """Rename speaker labels across all segments of a completed job."""
+        result = self.get_job_result(job_id)
+        if not result:
+            raise KeyError(f"Resultado del trabajo '{job_id}' no encontrado.")
+
+        clean_map = {
+            k.strip(): v.strip()
+            for k, v in speaker_map.items()
+            if k.strip() and v.strip()
+        }
+
+        updated_segments: List[DiarizedSegment] = []
+        for seg in result.segments:
+            new_spk = clean_map.get(seg.speaker, seg.speaker)
+            updated_segments.append(seg.model_copy(update={"speaker": new_spk}))
+
+        new_roles: Dict[str, str] = {}
+        for spk, role in result.speaker_roles.items():
+            new_roles[clean_map.get(spk, spk)] = role
+
+        unique_speakers = list(dict.fromkeys(s.speaker for s in updated_segments))
+        full_text = "\n".join(
+            f"[{s.start_formatted} - {s.end_formatted}] {s.speaker}: {s.text}"
+            for s in updated_segments
+        )
+
+        updated_result = result.model_copy(
+            update={
+                "segments": updated_segments,
+                "speaker_roles": new_roles,
+                "detected_speakers_count": len(unique_speakers),
+                "full_text": full_text,
+            }
+        )
+        updated_result.summa_report = generate_apex_summa_report(
+            result=updated_result,
+            language=updated_result.language or "es",
+            is_locked=(updated_result.plan == "free"),
+        )
+
+        with self._lock:
+            self._results[job_id] = updated_result
+
+        result_file = settings.OUTPUT_DIR / f"{job_id}_result.json"
+        result_file.write_text(
+            json.dumps(updated_result.model_dump(mode="json"), ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+        return updated_result
+
+
+# Singleton job manager instance
+job_manager = JobManager()

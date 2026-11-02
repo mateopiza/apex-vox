@@ -1,0 +1,77 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        APP_UID: ${APP_UID:-1000}
+        APP_GID: ${APP_GID:-1000}
+        INSTALL_DEV_DEPS: ${INSTALL_DEV_DEPS:-false}
+    image: audio-transcription-app:latest
+    container_name: audio-transcription-app
+    restart: unless-stopped
+    user: "${APP_UID:-1000}:${APP_GID:-1000}"
+
+    ports:
+      - "${HOST_PORT:-8000}:8000"
+
+    env_file:
+      - path: .env
+        required: false
+
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - DEEPGRAM_API_KEY=${DEEPGRAM_API_KEY:-}
+      - DEFAULT_DIARIZATION_ENGINE=${DEFAULT_DIARIZATION_ENGINE:-hybrid_deepgram_groq}
+      - DEFAULT_MODEL=${DEFAULT_MODEL:-whisper-large-v3}
+      - DEFAULT_LLM_MODEL=${DEFAULT_LLM_MODEL:-llama-3.3-70b-versatile}
+      - MAX_FILE_SIZE_MB=${MAX_FILE_SIZE_MB:-100}
+      - CHUNK_DURATION_MINUTES=${CHUNK_DURATION_MINUTES:-10}
+      - CHUNK_MAX_BYTES=${CHUNK_MAX_BYTES:-25000000}
+      - SILENCE_THRESHOLD_DB=${SILENCE_THRESHOLD_DB:--30}
+      - SILENCE_MIN_DURATION_SEC=${SILENCE_MIN_DURATION_SEC:-0.5}
+      - ENVIRONMENT=${ENVIRONMENT:-production}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - ALLOWED_HOSTS=${ALLOWED_HOSTS:-*}
+      - ENABLE_DOCS=${ENABLE_DOCS:-}
+      - ENABLE_HSTS=${ENABLE_HSTS:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - MEGA_S4_ENDPOINT_URL=${MEGA_S4_ENDPOINT_URL:-https://s3.g.s4.mega.io}
+      - MEGA_S4_REGION=${MEGA_S4_REGION:-eu-central-1}
+      - MEGA_S4_BUCKET_NAME=${MEGA_S4_BUCKET_NAME:-apex-vox-storage}
+      - MEGA_S4_ACCESS_KEY_ID=${MEGA_S4_ACCESS_KEY_ID:-}
+      - MEGA_S4_SECRET_ACCESS_KEY=${MEGA_S4_SECRET_ACCESS_KEY:-}
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY:-}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+      - BOLD_API_KEY=${BOLD_API_KEY:-}
+      - BOLD_SECRET_KEY=${BOLD_SECRET_KEY:-}
+      - BOLD_WEBHOOK_SECRET=${BOLD_WEBHOOK_SECRET:-}
+
+    volumes:
+      - ./uploads:/app/uploads:rw
+      - ./outputs:/app/outputs:rw
+
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+    networks:
+      - transcription-network
+
+networks:
+  transcription-network:
+    name: transcription-network
+    driver: bridge

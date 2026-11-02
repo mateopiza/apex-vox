@@ -1,0 +1,218 @@
+/* ==========================================================================
+   Apex Vox — Design tokens
+   Source: "Groq Web" design system (tokens.json v1). Unofficial reference of
+   the groq.com visual language; no Groq logo or font files are shipped.
+   Every token is a CSS custom property named after the token.
+   ========================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* ---------- Palette (theme-independent) ---------- */
+  --orange: #f43e01;
+  --orange-deep: #e93b01;
+  --orange-dark: #c23101;
+  --orange-middle: #fe9e20;
+  --orange-light: #ffd1a3;
+  --white: #ffffff;
+  --black: #000000;
+  --black-20: rgba(0, 0, 0, 0.2);
+  --white-20: rgba(255, 255, 255, 0.2);
+  --white-60: rgba(255, 255, 255, 0.6);
+  --ink-80: rgba(48, 43, 40, 0.8);
+  --ink-inverse-80: rgba(243, 243, 238, 0.8);
+  --grey: #d9d9d9;
+
+  --utility-98-yellow: #fafaf8;
+  --utility-95-yellow: #f3f3ee;
+  --utility-91-yellow: #e8e8de;
+  --utility-81-yellow: #cecebf;
+  --utility-61-yellow: #9c9c90;
+  --utility-41-yellow: #69695d;
+  --utility-20-yellow: #34342e;
+  --utility-16-yellow: #2a2a25;
+  --homev2-ink: #302b28;
+  --utility-41-blue: #3e4c69;
+  --utility-29-blue: #2c364a;
+  --utility-20-blue: #2d2f33;
+  --utility-16-blue: #26292e;
+
+  --fluorescent-blue: #5fc0ff;
+  --fluorescent-blue-light: #bfe4fc;
+  --fluorescent-green: #10e68d;
+  --fluorescent-green-light: #a9ffdb;
+  --fluorescent-pink: #f392dd;
+  --fluorescent-pink-light: #fad8ff;
+  --fluorescent-purple: #d377fd;
+  --fluorescent-purple-light: #e3dcf8;
+  --fluorescent-yellow: #fdeb20;
+  --fluorescent-yellow-light: #f4fd90;
+  --olive: #475c05;
+  --green: #39c5c0;
+  --yellow: #f6ab45;
+  --error: #f80a3e;
+
+  --blogart-company-bg: #f3dde1;
+  --blogart-company-accent: #f0a7c0;
+  --blogart-company-block: #a2003f;
+  --blogart-fundraising-bg: #dcf2e7;
+  --blogart-fundraising-accent: #a4eed7;
+  --blogart-fundraising-block: #225c05;
+  --blogart-partnership-bg: #f3e5ec;
+  --blogart-partnership-accent: #efc0e5;
+  --blogart-partnership-block: #53003f;
+  --blogart-platform-bg: #f7e5cf;
+  --blogart-platform-accent: #ffc185;
+  --blogart-platform-block: #f43e01;
+  --blogart-research-bg: #ede4f3;
+  --blogart-research-accent: #dbbeff;
+  --blogart-research-block: #4646dd;
+  --blogart-neutral-bg: #e8e8de;
+  --blogart-neutral-accent: #cecebf;
+  --blogart-neutral-block: #69695d;
+  --blogart-pill-text: #fafaf8;
+
+  --vibes-orange-bg: #fff0ec;
+  --vibes-orange-3: #e23800;
+  --vibes-indigo-bg: #f0f3ff;
+  --vibes-indigo-3: #606bfa;
+  --vibes-green-bg: #eef7eb;
+  --vibes-green-3: #49952b;
+  --vibes-gold-bg: #f9f3e6;
+  --vibes-gold-3: #a27900;
+  --vibes-ocean-bg: #e6f7fa;
+  --vibes-ocean-3: #0090a2;
+  --vibes-berry-bg: #ffeff1;
+  --vibes-berry-3: #d44567;
+
+  /* ---------- Semantic (light theme) ---------- */
+  --bg: #f3f3ee;
+  --bg-section: #ffffff;
+  --bg-section-98: #fafaf8;
+  --bg-section-91: #e8e8de;
+  --text-primary: #2d2f33;
+  --ink: #302b28;
+  --body: var(--ink-80);
+  --text-secondary: #69695d;
+  --ink-60: rgba(48, 43, 40, 0.6);
+  --line: #cecebf;
+  --bd: var(--black-20);
+  --reveal-muted: #cecebf;
+  --brand: var(--orange);
+  --text-accent: var(--orange);
+  --text-link-hover: #c23101;
+  --overline: var(--orange);
+  --icon: var(--orange);
+  --focus-outline: var(--orange);
+  --btn-primary-bg: var(--orange);
+  --btn-primary-text: #ffffff;
+  --btn-secondary-text: #2d2f33;
+  --btn-secondary-text-hover: #f3f3ee;
+  --btn-tertiary-bg: #ffffff;
+  --btn-tertiary-text: #2d2f33;
+  --card-solid-bg: #ffffff;
+  --code-bg: #2d2f33;
+  --code-text: #ffffff;
+  --code-comment: #9c9c90;
+  --code-highlight: #d377fd;
+  --selection-bg: #f4fd90;
+  --selection-text: #2d2f33;
+
+  /* ---------- Type families ---------- */
+  --font-sans: esBuild, "Outfit", system-ui, "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-label: komuna, "Share Tech Mono", ui-monospace, Menlo, monospace;
+  --font-mono: aether, "IBM Plex Mono", ui-monospace, "Cascadia Code", "Source Code Pro", Menlo, Consolas, monospace;
+
+  /* ---------- Fluid type scale (min @ 320px → max @ 1440px) ---------- */
+  --fs-0: clamp(14px, 13.43px + 0.18vw, 16px);
+  --fs-1: clamp(16.8px, 15.53px + 0.4vw, 21.294px);
+  --fs-2: clamp(20.16px, 17.8px + 0.74vw, 28.406px);
+  --fs-3: clamp(24.16px, 20.23px + 1.23vw, 37.898px);
+  --fs-4: clamp(28.97px, 22.82px + 1.92vw, 50.498px);
+  --fs-5: clamp(34.87px, 25.6px + 2.9vw, 67.298px);
+  --fs-6: clamp(41.76px, 28.03px + 4.29vw, 89.81px);
+  --fs-7: clamp(50.25px, 30.41px + 6.2vw, 119.7px);
+  --fs-footer: clamp(44px, 17.85px + 8.17vw, 135.466px);
+
+  /* ---------- Spacing ---------- */
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --space-fixed-4: 32px;
+  --space-4: 40px;
+  --space-fixed-6: 48px;
+  --space-5: 64px;
+  --space-6: 80px;
+  --btn-chrome-pad-block: 10px;
+  --btn-chrome-pad-inline: 14px;
+  --field-pad-inline: 12px;
+  --page-inset: clamp(20px, 17.86px + 0.67vw, 32px);
+
+  /* ---------- Radii ---------- */
+  --bdrs-inner: 5px;
+  --bdrs-intermediate: 6px;
+  --bdrs-control: 8px;
+  --bdrs-outer: 10px;
+  --bdrs: 20px;
+  --bdrs-l: 1000px;
+
+  /* ---------- Elevation (floating UI only) ---------- */
+  --elevation-1: 0.5px 1px 1px rgba(0, 0, 0, 0.3);
+  --elevation-2: 0 2px 2px rgba(0, 0, 0, 0.1), 0 4px 4px rgba(0, 0, 0, 0.1), 0 6px 6px rgba(0, 0, 0, 0.1);
+  --elevation-3: 0 2px 2px rgba(0, 0, 0, 0.06), 0 4px 4px rgba(0, 0, 0, 0.06), 0 8px 8px rgba(0, 0, 0, 0.06), 0 16px 16px rgba(0, 0, 0, 0.06), 0 32px 32px rgba(0, 0, 0, 0.06);
+  --elevation-4: 0 4px 80px 0 rgba(0, 0, 0, 0.04);
+
+  /* ---------- Layout ---------- */
+  --content-max-width: 1440px;
+  --maw-w: 1024px;
+  --maw-n: 885px;
+  --maw-xn: 653px;
+  --nav-height: 80px;
+  --field-height: 40px;
+  --bdw: 1px;
+
+  /* ---------- z-index ---------- */
+  --z-footer: 500;
+  --z-header: 600;
+  --z-dropdown: 700;
+  --z-overlay: 800;
+  --z-modal: 900;
+  --z-transition: 950;
+
+  /* ---------- Motion ---------- */
+  --trs-time: 150ms;
+  --trs-fast: 200ms;
+  --trs-crossfade: 250ms;
+  --trs-base: 300ms;
+  --trs-slow: 400ms;
+  --ease: ease-in-out;
+  --ease-expo-out: cubic-bezier(0.19, 1, 0.22, 1);
+  --ease-cubic: cubic-bezier(0.4, 0.05, 0.22, 1.2);
+}
+
+@media (max-width: 60em) {
+  :root { --nav-height: 60px; }
+}
+
+/* ---------- Dark theme (opt-in: <html data-theme="dark">) ---------- */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #26292e;
+  --bg-section: #2d2f33;
+  --bg-section-98: #2d2f33;
+  --bg-section-91: #2d2f33;
+  --text-primary: #ffffff;
+  --ink: #ffffff;
+  --body: var(--ink-inverse-80);
+  --text-secondary: var(--white-60);
+  --ink-60: var(--white-60);
+  --line: var(--white-20);
+  --bd: var(--white-20);
+  --reveal-muted: #3e4c69;
+  --text-link-hover: #ffd1a3;
+  --btn-secondary-text: #ffffff;
+  --btn-secondary-text-hover: #26292e;
+  --btn-tertiary-bg: #2d2f33;
+  --btn-tertiary-text: #ffffff;
+  --card-solid-bg: #2d2f33;
+}

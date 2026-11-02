@@ -1,0 +1,24 @@
+# Secrets
+.env
+.env.local
+.env.*.local
+
+# Runtime data (mounted as volumes in Docker)
+uploads/*
+!uploads/.gitkeep
+outputs/*
+!outputs/.gitkeep
+temp/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Local tooling / backups
+.agents/
+.claude/
+.backup-pre-groq-web/
+.DS_Store

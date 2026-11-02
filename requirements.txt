@@ -1,0 +1,21 @@
+# FastAPI Web Backend
+fastapi>=0.115.0,<1.0.0
+uvicorn[standard]>=0.30.0,<1.0.0
+python-multipart>=0.0.12,<1.0.0
+jinja2>=3.1.4,<4.0.0
+aiofiles>=24.1.0,<25.0.0
+
+# Groq Cloud SDK & Networking
+groq>=0.11.0,<1.0.0
+requests>=2.32.0,<3.0.0
+httpx>=0.27.0,<1.0.0
+
+# Data Validation & Serialization
+pydantic>=2.8.0,<3.0.0
+
+# Environment & Configuration Management
+python-dotenv>=1.0.1,<2.0.0
+
+# Audio Processing & Acoustic Voiceprint Analysis
+pydub>=0.25.1,<1.0.0
+numpy>=1.26.0,<3.0.0
