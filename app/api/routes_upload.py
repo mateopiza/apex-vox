@@ -10,13 +10,14 @@ from __future__ import annotations
 import logging
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
-from app.api.deps import optional_user
+from app.api.deps import optional_user, requester_key
 from app.config import settings
 from app.models.schemas import ReorderRequest, UploadResponse
 from app.services.job_manager import job_manager
+from app.services.supabase_service import supabase_service
 
 logger = logging.getLogger("app.api.routes_upload")
 router = APIRouter(prefix="/api", tags=["Upload & Ordering"])
@@ -24,6 +25,7 @@ router = APIRouter(prefix="/api", tags=["Upload & Ordering"])
 
 @router.post("/upload", response_model=UploadResponse)
 async def upload_audio_files(
+    request: Request,
     files: List[UploadFile] = File(..., description="Audio files (MP3, OGG, WAV, etc.)"),
     session_id: Optional[str] = Form(default=None),
     user: Optional[Dict[str, Any]] = Depends(optional_user),
@@ -31,26 +33,50 @@ async def upload_audio_files(
     """
     Upload one or more audio files, probe their duration/format/size,
     and register them in an ordered session.
+
+    Without an account: up to GUEST_MAX_AUDIOS_PER_DAY audios per day, each of at
+    most GUEST_MAX_AUDIO_MINUTES; nothing is stored once transcribed.
     """
-    if settings.REQUIRE_LOGIN_TO_TRANSCRIBE and not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Crea tu cuenta gratis (2 horas al día) para subir audios / Sign up free to upload audio.",
-        )
     if not files:
         raise HTTPException(status_code=400, detail="No se recibieron archivos de audio.")
 
-    session = job_manager.create_or_get_session(session_id)
+    owner = requester_key(request, user)
+    session = job_manager.create_or_get_session(session_id, owner)
 
     for upload in files:
         filename = upload.filename or "audio.mp3"
+        if not user:
+            allowed = supabase_service.guest_audios_remaining(owner)
+            if len(session.tracks) + 1 > allowed:
+                raise HTTPException(
+                    status_code=403,
+                    detail=(
+                        f"Sin cuenta puedes transcribir {settings.GUEST_MAX_AUDIOS_PER_DAY} audios al día "
+                        f"(te quedan {allowed}). Crea tu cuenta gratis para tener 2 horas diarias. / "
+                        f"Without an account: {settings.GUEST_MAX_AUDIOS_PER_DAY} audios per day ({allowed} left)."
+                    ),
+                )
         content = await upload.read()
         try:
-            job_manager.add_file_to_session(
+            probed = job_manager.add_file_to_session(
                 session_id=session.session_id,
                 filename=filename,
                 content=content,
+                owner=owner,
             )
+            if not user and probed.duration_sec > settings.GUEST_MAX_AUDIO_SECONDS:
+                job_manager.remove_file_from_session(session.session_id, probed.file_id)
+                raise HTTPException(
+                    status_code=413,
+                    detail=(
+                        f"'{filename}' dura más de {settings.GUEST_MAX_AUDIO_MINUTES:.0f} minutos. "
+                        f"Sin cuenta el máximo es {settings.GUEST_MAX_AUDIO_MINUTES:.0f} min por audio; "
+                        f"con tu cuenta gratis tienes 2 horas al día. / "
+                        f"Without an account each audio can be up to {settings.GUEST_MAX_AUDIO_MINUTES:.0f} minutes."
+                    ),
+                )
+        except HTTPException:
+            raise
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
@@ -74,8 +100,15 @@ async def get_session_files(session_id: str) -> UploadResponse:
 
 
 @router.put("/sessions/{session_id}/order", response_model=UploadResponse)
-async def update_session_order(session_id: str, payload: ReorderRequest) -> UploadResponse:
+async def update_session_order(
+    session_id: str,
+    payload: ReorderRequest,
+    request: Request,
+    user: Optional[Dict[str, Any]] = Depends(optional_user),
+) -> UploadResponse:
     """Update the processing sequence order of uploaded audio files."""
+    if not job_manager.session_owned_by(session_id, requester_key(request, user)):
+        raise HTTPException(status_code=404, detail="Sesión no encontrada.")
     try:
         files = job_manager.reorder_session_files(session_id, payload.file_order)
         return UploadResponse(session_id=session_id, files=files)
@@ -84,8 +117,15 @@ async def update_session_order(session_id: str, payload: ReorderRequest) -> Uplo
 
 
 @router.delete("/sessions/{session_id}/files/{file_id}", response_model=UploadResponse)
-async def delete_session_file(session_id: str, file_id: str) -> UploadResponse:
+async def delete_session_file(
+    session_id: str,
+    file_id: str,
+    request: Request,
+    user: Optional[Dict[str, Any]] = Depends(optional_user),
+) -> UploadResponse:
     """Remove a specific audio track from the session."""
+    if not job_manager.session_owned_by(session_id, requester_key(request, user)):
+        raise HTTPException(status_code=404, detail="Sesión no encontrada.")
     try:
         files = job_manager.remove_file_from_session(session_id, file_id)
         return UploadResponse(session_id=session_id, files=files)

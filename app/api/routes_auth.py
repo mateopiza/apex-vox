@@ -15,16 +15,19 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
-from app.api.deps import optional_user, public_base_url, require_user
+from app.api.deps import client_ip, enforce_ip_limit, optional_user, public_base_url, require_user, requester_key, throttle
 from app.config import settings
 from app.models.schemas import (
+    NewsletterSubscribeRequest,
     OAuthExchangeRequest,
+    PasswordForgotRequest,
+    PasswordResetRequest,
     QuotaUsageResponse,
     UserLoginRequest,
     UserProfileResponse,
     UserRegisterRequest,
 )
-from app.services import oauth_service
+from app.services import email_service, oauth_service
 from app.services.storage_s4 import mega_s4_storage
 from app.services.supabase_service import supabase_service
 
@@ -35,7 +38,7 @@ router = APIRouter(prefix="/api", tags=["Auth, User Portal & Quotas"])
 
 
 @router.post("/auth/register", response_model=UserProfileResponse)
-async def register_user_endpoint(payload: UserRegisterRequest) -> UserProfileResponse:
+async def register_user_endpoint(payload: UserRegisterRequest, request: Request) -> UserProfileResponse:
     """
     Register a new user in Supabase Cloud.
     Automatically activates the Free Plan:
@@ -43,7 +46,7 @@ async def register_user_endpoint(payload: UserRegisterRequest) -> UserProfileRes
     - 24-hour storage retention in Mega S4.
     """
     try:
-        return supabase_service.register_user(
+        profile = supabase_service.register_user(
             email=payload.email,
             password=payload.password,
             full_name=payload.full_name,
@@ -51,18 +54,32 @@ async def register_user_endpoint(payload: UserRegisterRequest) -> UserProfileRes
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    enforce_ip_limit(request, profile.user_id)
+    email_service.send_async(
+        profile.email,
+        email_service.render_welcome(profile.full_name, profile.preferred_language),
+        tags=[{"name": "category", "value": "welcome"}],
+    )
+    return profile
 
 
 @router.post("/auth/login", response_model=UserProfileResponse)
-async def login_user_endpoint(payload: UserLoginRequest) -> UserProfileResponse:
+async def login_user_endpoint(payload: UserLoginRequest, request: Request) -> UserProfileResponse:
     """Authenticate an existing user and return profile + daily quota state."""
+    throttle(f"login-ip:{client_ip(request)}", limit=20, window_seconds=900)
     try:
-        return supabase_service.login_user(
+        profile = supabase_service.login_user(
             email=payload.email,
             password=payload.password,
         )
     except ValueError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
+    try:
+        enforce_ip_limit(request, profile.user_id)
+    except HTTPException:
+        supabase_service.revoke_token(profile.access_token)
+        raise
+    return profile
 
 
 @router.get("/auth/me", response_model=UserProfileResponse)
@@ -78,17 +95,118 @@ async def logout_endpoint(authorization: Optional[str] = Header(default=None)) -
     return {"status": "signed_out"}
 
 
+@router.delete("/auth/account")
+async def delete_account(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
+    """Delete the signed-in account and its data (Ley 1581 de 2012: derecho de supresión)."""
+    summary = supabase_service.delete_account(user["user_id"])
+    if summary.get("email"):
+        email_service.unsubscribe_newsletter_contact(summary["email"])
+    return {"status": "deleted", "jobs_deleted": summary["jobs_deleted"]}
+
+
+@router.get("/auth/security")
+async def account_security(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
+    """Networks used this month vs. the monthly limit."""
+    return supabase_service.account_ip_usage(user["user_id"])
+
+
 @router.get("/auth/config")
-async def auth_config() -> Dict[str, Any]:
-    """Public client configuration: social providers and playground rules."""
+async def auth_config(request: Request, user: Optional[Dict[str, Any]] = Depends(optional_user)) -> Dict[str, Any]:
+    """Public client configuration: sign-in providers, plans and visitor limits."""
+    guest_remaining = None if user else supabase_service.guest_audios_remaining(requester_key(request, user))
     return {
         "oauth_providers": oauth_service.enabled_providers(),
-        "plan_simulator": settings.ALLOW_PLAN_SIMULATOR,
-        "require_login": settings.REQUIRE_LOGIN_TO_TRANSCRIBE,
         "trial_days": settings.PRO_TRIAL_DAYS,
         "pro_period_days": settings.PRO_PERIOD_DAYS,
         "billing_configured": settings.is_bold_configured,
+        "guest_max_audios": settings.GUEST_MAX_AUDIOS_PER_DAY,
+        "guest_max_minutes": settings.GUEST_MAX_AUDIO_MINUTES,
+        "guest_audios_remaining": guest_remaining,
+        "newsletter_enabled": settings.is_email_configured,
     }
+
+
+@router.post("/auth/password/forgot")
+async def forgot_password(payload: PasswordForgotRequest, request: Request) -> Dict[str, Any]:
+    """E-mail a one-time reset link. Always answers the same way (no account enumeration)."""
+    email = (payload.email or "").strip().lower()
+    throttle(f"forgot-ip:{client_ip(request)}", limit=5, window_seconds=3600)
+    throttle(f"forgot-mail:{email}", limit=1, window_seconds=60)
+    issued = supabase_service.create_password_reset(email, ttl_minutes=60)
+    if issued:
+        token, user = issued
+        lang = payload.lang if payload.lang in ("es", "en") else user.get("preferred_language", "es")
+        reset_url = f"{public_base_url(request)}/?reset_token={token}"
+        email_service.send_async(
+            user["email"],
+            email_service.render_password_reset(user.get("full_name", ""), reset_url, 60, lang),
+            tags=[{"name": "category", "value": "password_reset"}],
+        )
+    return {"status": "sent_if_exists"}
+
+
+@router.post("/auth/password/reset", response_model=UserProfileResponse)
+async def reset_password(payload: PasswordResetRequest, request: Request) -> UserProfileResponse:
+    """Set a new password with a valid reset token; signs out other sessions."""
+    throttle(f"reset-ip:{client_ip(request)}", limit=10, window_seconds=3600)
+    try:
+        return supabase_service.reset_password(payload.token, payload.password)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except PermissionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/newsletter/subscribe")
+async def newsletter_subscribe(payload: NewsletterSubscribeRequest, request: Request) -> Dict[str, Any]:
+    """Start a double opt-in subscription: we e-mail a confirmation link."""
+    email = (payload.email or "").strip().lower()
+    throttle(f"news-ip:{client_ip(request)}", limit=5, window_seconds=3600)
+    throttle(f"news-mail:{email}", limit=1, window_seconds=120)
+    lang = payload.lang if payload.lang in ("es", "en") else "es"
+    try:
+        token = supabase_service.newsletter_request(email, lang)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if token:
+        confirm_url = f"{public_base_url(request)}/api/newsletter/confirm?token={token}"
+        email_service.send_async(
+            email,
+            email_service.render_newsletter_confirm(confirm_url, lang),
+            tags=[{"name": "category", "value": "newsletter_confirm"}],
+        )
+    return {"status": "pending_confirmation"}
+
+
+@router.get("/newsletter/confirm", include_in_schema=False)
+async def newsletter_confirm(request: Request, token: str = "") -> RedirectResponse:
+    """Confirmation link from the e-mail: adds the contact to the Resend segment + topic."""
+    confirmed = supabase_service.newsletter_confirm(token)
+    if not confirmed:
+        return RedirectResponse(url="/?newsletter=invalid", status_code=303)
+    email = confirmed["email"]
+    lang = confirmed["lang"]
+    email_service.upsert_newsletter_contact(email)
+    unsub = (
+        f"{public_base_url(request)}/api/newsletter/unsubscribe?email={email}"
+        f"&token={supabase_service.newsletter_unsubscribe_token(email)}"
+    )
+    email_service.send_async(
+        email,
+        email_service.render_newsletter_welcome(unsub, lang),
+        tags=[{"name": "category", "value": "newsletter_welcome"}],
+        headers={"List-Unsubscribe": f"<{unsub}>"},
+    )
+    return RedirectResponse(url="/?newsletter=confirmed", status_code=303)
+
+
+@router.get("/newsletter/unsubscribe", include_in_schema=False)
+async def newsletter_unsubscribe(email: str = "", token: str = "") -> RedirectResponse:
+    """One-click unsubscribe link (also used in the List-Unsubscribe header)."""
+    if not supabase_service.newsletter_unsubscribe(email, token):
+        return RedirectResponse(url="/?newsletter=invalid", status_code=303)
+    email_service.unsubscribe_newsletter_contact(email.strip().lower())
+    return RedirectResponse(url="/?newsletter=unsubscribed", status_code=303)
 
 
 @router.get("/auth/oauth/callback", include_in_schema=False)
@@ -107,6 +225,7 @@ async def oauth_callback(request: Request, code: Optional[str] = None, error: Op
         return finish("auth_error=expired")
     try:
         sb_user = oauth_service.exchange_code(code, verifier)
+        is_new = not supabase_service.email_registered(sb_user["email"])
         profile = supabase_service.upsert_oauth_user(
             email=sb_user["email"],
             full_name=oauth_service.display_name(sb_user),
@@ -114,6 +233,12 @@ async def oauth_callback(request: Request, code: Optional[str] = None, error: Op
         )
     except (oauth_service.OAuthError, ValueError):
         return finish("auth_error=failed")
+    if is_new:
+        email_service.send_async(
+            profile.email,
+            email_service.render_welcome(profile.full_name, profile.preferred_language),
+            tags=[{"name": "category", "value": "welcome"}],
+        )
     handoff = supabase_service.create_handoff_code(profile.access_token)
     return finish(f"auth_code={handoff}")
 
@@ -139,11 +264,16 @@ async def oauth_start(provider: str, request: Request) -> RedirectResponse:
 
 
 @router.post("/auth/oauth/exchange", response_model=UserProfileResponse)
-async def oauth_exchange(payload: OAuthExchangeRequest) -> UserProfileResponse:
+async def oauth_exchange(payload: OAuthExchangeRequest, request: Request) -> UserProfileResponse:
     """Swap the one-time code from the OAuth redirect for a session."""
     profile = supabase_service.consume_handoff_code(payload.code)
     if not profile:
         raise HTTPException(status_code=401, detail="El código de inicio de sesión expiró. Intenta de nuevo.")
+    try:
+        enforce_ip_limit(request, profile.user_id)
+    except HTTPException:
+        supabase_service.revoke_token(profile.access_token)
+        raise
     return profile
 
 

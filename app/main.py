@@ -29,6 +29,7 @@ from app.api import (
     auth_router,
     billing_router,
     export_router,
+    telegram_router,
     transcribe_router,
     upload_router,
 )
@@ -138,6 +139,45 @@ class CachedStaticFiles(StaticFiles):
         return response
 
 
+@app.on_event("startup")
+async def start_background_services() -> None:
+    """Register the Telegram webhook and schedule the nightly usage report."""
+    import threading
+
+    def boot() -> None:
+        from app.services import telegram_service
+
+        if telegram_service.is_configured() and settings.PUBLIC_BASE_URL:
+            result = telegram_service.set_webhook(settings.PUBLIC_BASE_URL)
+            logger.info("Telegram webhook registered: %s", result.get("ok"))
+        _daily_report_loop()
+
+    threading.Thread(target=boot, name="background-services", daemon=True).start()
+
+
+def _daily_report_loop() -> None:
+    """Send the usage report to TELEGRAM_CHAT_ID every day at 23:55 (America/Bogota, UTC-5)."""
+    import datetime as _dt
+    import os
+    import time
+
+    if not (settings.TELEGRAM_BOT_TOKEN and os.getenv("TELEGRAM_CHAT_ID", "").strip()):
+        return
+    from app.services.usage_reporter import compute_usage_report, send_daily_bot_notification
+
+    bogota = _dt.timezone(_dt.timedelta(hours=-5))
+    while True:
+        now = _dt.datetime.now(bogota)
+        target = now.replace(hour=23, minute=55, second=0, microsecond=0)
+        if target <= now:
+            target += _dt.timedelta(days=1)
+        time.sleep((target - now).total_seconds())
+        try:
+            send_daily_bot_notification(report=compute_usage_report(target_date=target.date().isoformat()))
+        except Exception as exc:
+            logger.warning("Daily report failed: %s", exc)
+
+
 # Mount Static Assets
 app.mount("/static", CachedStaticFiles(directory=str(STATIC_DIR)), name="static")
 
@@ -147,6 +187,7 @@ app.include_router(billing_router)
 app.include_router(upload_router)
 app.include_router(transcribe_router)
 app.include_router(export_router)
+app.include_router(telegram_router)
 
 
 @lru_cache(maxsize=1)
@@ -206,6 +247,8 @@ async def root(request: Request) -> Response:
     if html is not None:
         lang = _preferred_language(request.headers.get("accept-language", ""))
         html = html.replace('<html lang="es"', f'<html lang="{lang}" data-default-lang="{lang}"', 1)
+        base = settings.PUBLIC_BASE_URL or str(request.base_url).rstrip("/")
+        html = html.replace("{{BASE_URL}}", base).replace("{{OG_LANG}}", lang)
         return HTMLResponse(
             content=html,
             status_code=200,
@@ -222,6 +265,25 @@ async def root(request: Request) -> Response:
             "health_url": "/api/health",
         },
     )
+
+
+@app.get("/legal/{slug}", include_in_schema=False, response_class=HTMLResponse)
+async def legal_page(slug: str, request: Request, lang: str = "") -> HTMLResponse:
+    """Privacy policy, terms of service and security policy (ES / EN)."""
+    from app.services.legal_content import PAGES, render_page
+
+    if slug not in PAGES:
+        return HTMLResponse("Not Found", status_code=404)
+    chosen = lang if lang in ("es", "en") else _preferred_language(request.headers.get("accept-language", ""))
+    return HTMLResponse(render_page(slug, chosen, _asset_version()), headers={"Cache-Control": "public, max-age=3600"})
+
+
+@app.get("/.well-known/security.txt", include_in_schema=False)
+async def security_txt(request: Request) -> Response:
+    from app.services.legal_content import security_txt as build
+
+    base = settings.PUBLIC_BASE_URL or str(request.base_url).rstrip("/")
+    return Response(content=build(base), media_type="text/plain")
 
 
 @app.get("/favicon.ico", include_in_schema=False)

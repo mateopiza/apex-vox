@@ -24,14 +24,6 @@ def _register(client: TestClient, password: str = "correcthorse1") -> dict:
     return res.json()
 
 
-@pytest.fixture
-def production_rules(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr(settings, "ALLOW_PLAN_SIMULATOR", False)
-    monkeypatch.setattr(settings, "REQUIRE_LOGIN_TO_TRANSCRIBE", True)
-    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
-    yield
-
-
 def test_passwords_are_salted_and_short_ones_rejected() -> None:
     client = TestClient(app)
     weak = client.post("/api/auth/register", json={"email": f"w_{uuid.uuid4().hex[:6]}@x.co", "password": "1234"})
@@ -75,15 +67,15 @@ def test_logout_revokes_the_session() -> None:
     assert client.get("/api/auth/me", headers=auth).status_code == 401
 
 
-def test_production_requires_login_and_ignores_plan_simulator(production_rules) -> None:
-    client = TestClient(app)
-    files = [("files", ("a.wav", b"RIFF0000WAVE", "audio/wav"))]
-    assert client.post("/api/upload", files=files).status_code == 401
-    res = client.post("/api/transcribe", json={"session_id": "x", "plan_override": "pro", "api_key": "gsk_x"})
-    assert res.status_code == 401
+def test_client_cannot_choose_plan_or_api_keys(tmp_path) -> None:
+    """The removed simulator/key fields are ignored: plan and keys come from the server."""
+    from app.models.schemas import TranscribeRequest
 
-    cfg = client.get("/api/auth/config").json()
-    assert cfg["plan_simulator"] is False and cfg["require_login"] is True
+    req = TranscribeRequest(session_id="x", plan_override="pro", api_key="gsk_evil")
+    assert not hasattr(req, "plan_override")
+    cfg = TestClient(app).get("/api/auth/config").json()
+    assert "plan_simulator" not in cfg and "require_login" not in cfg
+    assert cfg["guest_max_audios"] >= 1
 
 
 def test_free_plan_minutes_and_calendar_are_pro_only() -> None:

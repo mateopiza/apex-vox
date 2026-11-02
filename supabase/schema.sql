@@ -16,7 +16,6 @@ create table if not exists public.profiles (
     id uuid primary key default uuid_generate_v4(),
     email text unique not null,
     full_name text not null default '',
-    password_hash text not null default '',
     plan text not null default 'free' check (plan in ('free', 'trial', 'pro')),
     preferred_language text not null default 'es' check (preferred_language in ('es', 'en')),
     trial_started_at timestamptz,

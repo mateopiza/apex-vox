@@ -186,6 +186,25 @@ def verify_bold_webhook_signature(raw_body: bytes, signature: Optional[str]) -> 
     return hmac.compare_digest(expected, signature.strip().lower())
 
 
+def notify_payment_activated(user: Dict[str, Any], payment: Dict[str, Any]) -> None:
+    """Receipt e-mail, sent once per approved payment."""
+    from app.services import email_service
+
+    currency = str(payment.get("currency") or "COP").upper()
+    _, _, amount_display = _price(currency)
+    email_service.send_async(
+        user.get("email", ""),
+        email_service.render_payment_confirmed(
+            user.get("full_name", ""),
+            user.get("pro_until"),
+            amount_display,
+            str(payment.get("reference", "")),
+            user.get("preferred_language", "es"),
+        ),
+        tags=[{"name": "category", "value": "payment_receipt"}],
+    )
+
+
 def process_bold_webhook_event(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
     Handle a verified Bold notification (CloudEvents format): SALE_APPROVED grants one
@@ -211,6 +230,7 @@ def process_bold_webhook_event(payload: Dict[str, Any]) -> Dict[str, Any]:
             reference=str(reference),
             currency=currency,
             source="bold_webhook",
+            on_activated=notify_payment_activated,
         )
     except (LookupError, PermissionError) as exc:
         logger.warning("Bold webhook for %s not applied: %s", reference, exc)

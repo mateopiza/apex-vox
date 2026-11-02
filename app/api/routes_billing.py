@@ -22,7 +22,7 @@ from app.models.schemas import (
     SubscribeActionRequest,
     UserProfileResponse,
 )
-from app.services import bold_service
+from app.services import bold_service, email_service
 from app.services.supabase_service import supabase_service
 
 logger = logging.getLogger("app.api.billing")
@@ -36,11 +36,17 @@ async def start_pro_trial(
 ) -> UserProfileResponse:
     """Activate the 3-day free trial of Apex Pro. Once per account, no card required."""
     try:
-        return supabase_service.start_trial(user["user_id"])
+        profile = supabase_service.start_trial(user["user_id"])
     except PermissionError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    email_service.send_async(
+        profile.email,
+        email_service.render_trial_started(profile.full_name, profile.quota.trial_ends_at, profile.preferred_language),
+        tags=[{"name": "category", "value": "trial_started"}],
+    )
+    return profile
 
 
 @router.post("/checkout", response_model=BoldCheckoutResponse)
@@ -97,6 +103,7 @@ async def confirm_payments(user: Dict[str, Any] = Depends(require_user)) -> User
                 reference=pending["reference"],
                 currency=pending.get("currency", "COP"),
                 source="bold_link_status",
+                on_activated=bold_service.notify_payment_activated,
             )
     return supabase_service.get_profile(user["user_id"])
 

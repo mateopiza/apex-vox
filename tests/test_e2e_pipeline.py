@@ -12,6 +12,8 @@ Validates the complete workflow inside Docker:
 
 from __future__ import annotations
 
+import uuid
+
 import json
 from pathlib import Path
 from typing import Any, List
@@ -248,7 +250,12 @@ def test_acoustic_voiceprint_clustering_and_voice_profile_enrollment(
     conv_wav = tmp_path / "conversation.wav"
     create_synthetic_wav(conv_wav, [(2.5, 130.0), (0.5, 0.0), (2.5, 250.0)])
 
-    # 1. Enroll "Carlos" via API
+    # 1. Enroll "Carlos" via API (voice profiles are private to the signed-in account)
+    reg = client.post(
+        "/api/auth/register",
+        json={"email": f"vp_{uuid.uuid4().hex[:8]}@apexvox.ai", "password": "voicePass123", "full_name": "VP"},
+    ).json()
+    client.headers.update({"Authorization": f"Bearer {reg['access_token']}"})
     with open(spk_a_wav, "rb") as f_a:
         vp_res = client.post(
             "/api/voice-profiles",
@@ -295,8 +302,14 @@ def test_acoustic_voiceprint_clustering_and_voice_profile_enrollment(
         audio_path=conv_wav,
         segments=clustered,
         speaker_assignments=initial_map,
+        owner_id=reg["user_id"],
     )
     assert matched_map[0] == "Carlos"
+    # Another account (or a visitor) never matches someone else's profiles
+    other_map, _ = match_enrolled_voice_profiles(
+        audio_path=conv_wav, segments=clustered, speaker_assignments=initial_map, owner_id=None,
+    )
+    assert other_map[0] != "Carlos"
     assert "Carlos" in matched_roles
 
     # Clean up enrolled profile

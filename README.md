@@ -80,6 +80,26 @@ La interfaz usa el lenguaje visual **Groq Web** (referencia no oficial de groq.c
 
 ---
 
+## 👤 Visitantes, cuentas y límites
+
+| | Sin cuenta | Gratis | Apex Pro |
+| :--- | :--- | :--- | :--- |
+| Audio | 3 audios/día, máx. 30 min c/u | 2 h/día | Ilimitado |
+| Motores Mc | Todos | Todos | Todos |
+| Se guarda | No (se borra al terminar; resultado 60 min en memoria) | 24 h | Ilimitado |
+| Apex Summa / actas | No | Vista previa | Completo |
+| Perfiles de voz | No | Sí (privados) | Sí (privados) |
+| Bot de Telegram | No | No | 1 chat por suscripción |
+
+- Una cuenta puede usarse desde **máximo 3 redes (IP) por mes**; las IPs se guardan solo como HMAC.
+- Correos con Resend (`hola@ialabs.app`): bienvenida, prueba activada, recibo de pago, restablecer contraseña, confirmación y bienvenida al boletín (doble opt-in, segmento y tema en Resend).
+- Bot de Telegram: el usuario genera un código en *Mi cuenta* y envía `/start CÓDIGO`; el webhook se registra solo al arrancar si `TELEGRAM_BOT_TOKEN` y `PUBLIC_BASE_URL` están definidos. El reporte diario llega a `TELEGRAM_CHAT_ID` a las 23:55 (Bogotá).
+- Políticas: `/legal/privacidad`, `/legal/terminos`, `/legal/seguridad` y `/.well-known/security.txt`.
+- Supabase: `supabase/migrations/20261102120000_security_hardening.sql` (RLS + revocar privilegios) y plantillas de Auth en `supabase/templates/`.
+- Marca: imágenes OG en `app/static/og/`, anuncios en `brand/out/` (`bash brand/render.sh` para regenerarlas).
+
+---
+
 ## 🛡️ Producción
 
 ```bash
