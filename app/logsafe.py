@@ -14,4 +14,7 @@ _CONTROL = re.compile(r"[\x00-\x1f\x7f  ]")
 
 
 def clean(value: Any, limit: int = 120) -> str:
-    return _CONTROL.sub(" ", str(value))[:limit]
+    # replace() de saltos de línea primero: es el saneador que reconocen los analizadores (CodeQL);
+    # la expresión regular quita además el resto de caracteres de control.
+    text = str(value).replace("\r\n", " ").replace("\n", " ").replace("\r", " ")
+    return _CONTROL.sub(" ", text)[:limit]
