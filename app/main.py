@@ -8,6 +8,7 @@ exporting, and the /api/health container healthcheck.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import shutil
 from functools import lru_cache
@@ -157,7 +158,37 @@ def _render_index() -> str | None:
     if not index_file.exists():
         return None
     html = index_file.read_text(encoding="utf-8")
-    return html.replace("{{ASSET_VERSION}}", settings.APP_VERSION)
+    return html.replace("{{ASSET_VERSION}}", _asset_version())
+
+
+def _asset_version() -> str:
+    """Content hash of the CSS/JS bundle, so every deploy busts long-lived caches."""
+    digest = hashlib.sha256()
+    for rel in ("css/tokens.css", "css/styles.css", "js/app.js"):
+        path = STATIC_DIR / rel
+        if path.exists():
+            digest.update(path.read_bytes())
+    return digest.hexdigest()[:12]
+
+
+def _preferred_language(accept_language: str) -> str:
+    """'es' when the visitor's browser prefers Spanish, otherwise 'en'."""
+    best_lang, best_q = "en", -1.0
+    for part in accept_language.split(","):
+        piece = part.strip()
+        if not piece:
+            continue
+        tag, _, params = piece.partition(";")
+        q = 1.0
+        if params.strip().startswith("q="):
+            try:
+                q = float(params.strip()[2:])
+            except ValueError:
+                q = 0.0
+        base = tag.strip().lower().split("-")[0]
+        if base in ("es", "en") and q > best_q:
+            best_lang, best_q = base, q
+    return best_lang
 
 
 @app.api_route("/", methods=["GET", "HEAD"], tags=["UI & Root"], response_model=None)
@@ -175,10 +206,12 @@ async def root(request: Request) -> Response:
     html = None if wants_json else _render_index()
 
     if html is not None:
+        lang = _preferred_language(request.headers.get("accept-language", ""))
+        html = html.replace('<html lang="es"', f'<html lang="{lang}" data-default-lang="{lang}"', 1)
         return HTMLResponse(
             content=html,
             status_code=200,
-            headers={"Cache-Control": "no-cache"},
+            headers={"Cache-Control": "no-cache", "Vary": "Accept-Language"},
         )
 
     return JSONResponse(

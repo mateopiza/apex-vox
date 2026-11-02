@@ -93,6 +93,17 @@ La interfaz usa el lenguaje visual **Groq Web** (referencia no oficial de groq.c
 
 ---
 
+## 🔐 Cuentas, prueba gratis y pagos
+
+- **Registro:** correo + contraseña (mínimo 8 caracteres, PBKDF2 con sal por usuario) o **Google / GitHub** vía Supabase Auth (flujo PKCE en el servidor). Los botones sociales aparecen solos cuando el proveedor está habilitado en Supabase.
+- **Sesiones:** token `Bearer apx_...` con vencimiento (`SESSION_TTL_DAYS`). El `user_id` nunca se acepta como credencial.
+- **Prueba gratis:** 3 días de Apex Pro, una sola vez por cuenta registrada, sin tarjeta.
+- **Pagos:** API oficial de *Link de pagos* de Bold. Cada pago aprobado ($30.000 COP / $10 USD) da `PRO_PERIOD_DAYS` (30) días de Pro. No hay cobro recurrente automático: Bold cobra link por link.
+- **Activación:** webhook firmado (`x-bold-signature`, HMAC-SHA256) en `/api/billing/bold/webhook` y, como respaldo, `/api/billing/confirm` consulta el estado del link al volver de Bold.
+- **Apex Summa:** el servidor oculta el análisis Pro y bloquea actas/calendario (402) en el plan gratis.
+
+---
+
 ## 🛡️ Producción
 
 ```bash

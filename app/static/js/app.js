@@ -13,12 +13,24 @@
 (function () {
   "use strict";
 
+  function detectInitialLanguage() {
+    const fromServer = document.documentElement.getAttribute("data-default-lang");
+    if (fromServer === "es" || fromServer === "en") return fromServer;
+    const prefs = navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || "en"];
+    for (const tag of prefs) {
+      const base = String(tag || "").toLowerCase().split("-")[0];
+      if (base === "es" || base === "en") return base;
+    }
+    return "en";
+  }
+
   const state = {
-    lang: localStorage.getItem("apex_vox_lang") || "es",
+    lang: localStorage.getItem("apex_vox_lang") || detectInitialLanguage(),
     activeView: "playground",
     user: JSON.parse(localStorage.getItem("apex_vox_user") || "null"),
     token: localStorage.getItem("apex_vox_token") || null,
-    plan: localStorage.getItem("apex_vox_plan") || "pro",
+    plan: "free",
+    config: { oauth_providers: [], plan_simulator: false, require_login: true, trial_days: 3, pro_period_days: 30 },
     sessionId: null,
     files: [],
     voiceProfiles: [],
@@ -50,7 +62,7 @@
       hero_cta_playground: "Abrir Playground Ahora",
       hero_cta_box: "Grabar Sin Límite (Apex Box 10h+)",
       hero_cta_register: "Regístrate: 2 Horas Gratis / Día",
-      hero_cta_trial: "Probar 3 Días Gratis (Plan Pro · Bold)",
+      hero_cta_trial: "Probar Apex Pro 3 días gratis",
       suite_heading: "Ecosistema del Producto Apex",
       suite_vox_status: "Producto Listo",
       suite_vox_part: "Transcripción (el núcleo)",
@@ -81,27 +93,27 @@
       plan_free_f3: "Acceso a motores <strong>Mc-Ayrton, Mc-Lewis, Mc-Norris y Mc-Piastri</strong> (Potenciado por Groq)",
       plan_free_f4: "Exportación TXT, SRT, VTT, JSON, CSV y Markdown",
       plan_free_cta: "Registrarse Gratis (2h / día)",
-      plan_pro_badge: "3 DÍAS DE PRUEBA GRATIS + COBRO AUTOMÁTICO",
+      plan_pro_badge: "3 DÍAS DE PRUEBA GRATIS AL REGISTRARTE",
       plan_pro_title: "Plan Apex Pro",
       per_month: "mes",
-      plan_pro_f1: "<strong>Prueba gratis de 3 días</strong> con cobro automático mensual vía <strong>Bold API</strong>",
+      plan_pro_f1: "<strong>Prueba gratis de 3 días</strong> para cuentas registradas, sin tarjeta",
       plan_pro_f2: "<strong>Transcripciones ilimitadas</strong> (sin límite diario de horas ni archivos)",
       plan_pro_f3: "<strong>Almacenamiento ilimitado permanente</strong> en <strong>Mega S4</strong> y <strong>Supabase Cloud</strong>",
       plan_pro_f4: "<strong>Resumen IA Apex Summa completo:</strong> Quién habló más, De qué se habló, Objetivos, Llamados de atención, Calendario de tareas y Gráficas",
       plan_pro_f5: "<strong>Generador de Actas Corporativas:</strong> Actas de Consejo, Junta Directiva, Comité y Asamblea",
-      plan_pro_cta: "Activar 3 Días Gratis con Bold API ($30.000 COP / $10 USD)",
+      plan_pro_cta: "Empezar prueba gratis de 3 días",
       portal_profile_title: "Perfil de Usuario y Cuota Diaria",
       lbl_name: "Nombre:",
       lbl_email: "Correo:",
       lbl_storage_retention: "Retención de Almacenamiento (Mega S4):",
       portal_quota_label: "Consumo de Audio Hoy (1 o varios audios):",
       portal_quota_hint: "Tienes 2 horas gratis cada día. Tus archivos en el plan gratuito se almacenan por 24 horas en Mega S4.",
-      portal_billing_title: "Suscripción Apex Pro — Bold API",
-      portal_billing_desc: "Obtén <strong>3 días de prueba gratis</strong> con cobro automático mensual ($30.000 COP o $10 USD). Desbloquea transcripciones ilimitadas, almacenamiento ilimitado en Mega S4 y todo el poder de <strong>Apex Summa</strong>.",
+      portal_billing_title: "Apex Pro — Pagos con Bold",
+      portal_billing_desc: "Activa <strong>3 días de prueba gratis</strong> (una vez por cuenta). Después, cada pago de <strong>$30.000 COP o $10 USD</strong> con Bold te da <strong>30 días de Apex Pro</strong>: transcripciones ilimitadas, almacenamiento ilimitado en Mega S4 y <strong>Apex Summa</strong>. Sin renovaciones automáticas.",
       lbl_currency: "Moneda de Cobro (Bold)",
       lbl_billing_mode: "Modalidad",
-      btn_start_trial_bold: "Iniciar Prueba Gratis 3 Días (Bold API)",
-      btn_generate_bold_link: "Ver Firma y Checkout Bold",
+      btn_start_trial_bold: "Iniciar prueba gratis de 3 días",
+      btn_generate_bold_link: "Pagar 30 días con Bold",
       portal_cloud_history_title: "Almacenamiento MEGA S4 & Historial en Supabase Cloud",
       btn_refresh: "Actualizar",
       kpi_retention_policy: "Política de Retención",
@@ -158,6 +170,16 @@
       lbl_password: "Contraseña",
       btn_create_free_account: "Crear Cuenta (2h Gratis / Día)",
       btn_login_existing: "Entrar",
+      lbl_billing_mode_value: "Pago único · 30 días por pago",
+      oauth_google: "Continuar con Google",
+      oauth_github: "Continuar con GitHub",
+      oauth_divider: "o con tu correo",
+      btn_logout: "Cerrar sesión",
+      speed_overline: "Velocidad Groq",
+      speed_title: "Minutos de audio, transcritos en segundos.",
+      speed_body: "La inferencia de Groq procesa el audio mucho más rápido que el tiempo real. Sube la reunión, sigue con tu día y vuelve a una transcripción con oradores, resumen y acta.",
+      speed_audio_lbl: "Audio de la reunión",
+      speed_text_lbl: "Transcripción lista",
       footer_statement: "Cada audio, en orden. Cada voz, con nombre. Cada reunión, con acta.",
       footer_status: "Estado del servicio",
       lbl_vp_name: "Nombre",
@@ -178,7 +200,7 @@
       hero_cta_playground: "Open Playground Now",
       hero_cta_box: "Record Unlimited (Apex Box 10h+)",
       hero_cta_register: "Sign Up: 2 Free Hours / Day",
-      hero_cta_trial: "Try 3 Days Free (Pro Plan · Bold)",
+      hero_cta_trial: "Try Apex Pro free for 3 days",
       suite_heading: "Apex Product Ecosystem",
       suite_vox_status: "Product Ready",
       suite_vox_part: "Transcription (the core)",
@@ -209,27 +231,27 @@
       plan_free_f3: "Access to <strong>Mc-Ayrton, Mc-Lewis, Mc-Norris & Mc-Piastri</strong> (Powered by Groq)",
       plan_free_f4: "Export to TXT, SRT, VTT, JSON, CSV & Markdown",
       plan_free_cta: "Sign Up Free (2h / day)",
-      plan_pro_badge: "3-DAY FREE TRIAL + AUTO BILLING",
+      plan_pro_badge: "3-DAY FREE TRIAL FOR REGISTERED USERS",
       plan_pro_title: "Apex Pro Plan",
       per_month: "month",
-      plan_pro_f1: "<strong>3-day free trial</strong> with automatic monthly billing via <strong>Bold API</strong>",
+      plan_pro_f1: "<strong>3-day free trial</strong> for registered accounts, no card required",
       plan_pro_f2: "<strong>Unlimited transcriptions</strong> (no daily hour or file limit)",
       plan_pro_f3: "<strong>Unlimited permanent storage</strong> in <strong>Mega S4</strong> & <strong>Supabase Cloud</strong>",
       plan_pro_f4: "<strong>Full Apex Summa AI Report:</strong> Who spoke most, Topics, Objectives, Callouts, Calendar Tasks & Charts",
       plan_pro_f5: "<strong>Corporate Minutes Generator:</strong> Board of Directors, Committee & Assembly Minutes",
-      plan_pro_cta: "Start 3-Day Free Trial with Bold API ($30,000 COP / $10 USD)",
+      plan_pro_cta: "Start the 3-day free trial",
       portal_profile_title: "User Profile & Daily Quota",
       lbl_name: "Name:",
       lbl_email: "Email:",
       lbl_storage_retention: "Storage Retention (Mega S4):",
       portal_quota_label: "Audio Usage Today (1 or multiple audios):",
       portal_quota_hint: "You get 2 free hours every day. Free tier files are retained for 24 hours in Mega S4.",
-      portal_billing_title: "Apex Pro Subscription — Bold API",
-      portal_billing_desc: "Get a <strong>3-day free trial</strong> with automatic monthly billing ($30,000 COP or $10 USD). Unlock unlimited transcriptions, unlimited Mega S4 storage, and the full power of <strong>Apex Summa</strong>.",
+      portal_billing_title: "Apex Pro — Payments with Bold",
+      portal_billing_desc: "Start a <strong>3-day free trial</strong> (once per account). After that, each <strong>$30,000 COP or $10 USD</strong> payment with Bold gives you <strong>30 days of Apex Pro</strong>: unlimited transcriptions, unlimited Mega S4 storage and <strong>Apex Summa</strong>. No automatic renewals.",
       lbl_currency: "Billing Currency (Bold)",
-      lbl_billing_mode: "Billing Mode",
-      btn_start_trial_bold: "Start 3-Day Free Trial (Bold API)",
-      btn_generate_bold_link: "View Bold Signature & Checkout",
+      lbl_billing_mode: "Billing",
+      btn_start_trial_bold: "Start 3-day free trial",
+      btn_generate_bold_link: "Pay 30 days with Bold",
       portal_cloud_history_title: "MEGA S4 Storage & Supabase Cloud History",
       btn_refresh: "Refresh",
       kpi_retention_policy: "Retention Policy",
@@ -286,6 +308,16 @@
       lbl_password: "Password",
       btn_create_free_account: "Create Account (2h Free / Day)",
       btn_login_existing: "Log In",
+      lbl_billing_mode_value: "One-off payment · 30 days each",
+      oauth_google: "Continue with Google",
+      oauth_github: "Continue with GitHub",
+      oauth_divider: "or with your email",
+      btn_logout: "Sign out",
+      speed_overline: "Groq speed",
+      speed_title: "Minutes of audio, transcribed in seconds.",
+      speed_body: "Groq inference processes audio far faster than real time. Upload the meeting, get on with your day, and come back to a transcript with speakers, a summary and minutes.",
+      speed_audio_lbl: "Meeting audio",
+      speed_text_lbl: "Transcript ready",
       footer_statement: "Every audio, in order. Every voice, named. Every meeting, minuted.",
       footer_status: "Service status",
       lbl_vp_name: "Name",
@@ -508,6 +540,140 @@
     return `${(b / (1024 * 1024)).toFixed(2)} MB`;
   }
 
+  function authHeaders(extra) {
+    const headers = Object.assign({}, extra || {});
+    if (state.token) headers.Authorization = `Bearer ${state.token}`;
+    return headers;
+  }
+
+  function authFetch(url, options) {
+    const opts = Object.assign({}, options || {});
+    opts.headers = authHeaders(opts.headers);
+    return fetch(url, opts).then((res) => {
+      if (res.status === 401 && state.token && !url.startsWith("/api/auth/")) {
+        clearSession();
+      }
+      return res;
+    });
+  }
+
+  function t(es, en) {
+    return state.lang === "en" ? en : es;
+  }
+
+  function storeSession(profile) {
+    state.user = profile;
+    if (profile.access_token) state.token = profile.access_token;
+    state.plan = (profile.quota && profile.quota.plan) || profile.plan || "free";
+    localStorage.setItem("apex_vox_user", JSON.stringify(Object.assign({}, profile, { access_token: "" })));
+    if (state.token) localStorage.setItem("apex_vox_token", state.token);
+    refreshAuthUi();
+  }
+
+  function clearSession() {
+    state.user = null;
+    state.token = null;
+    state.plan = "free";
+    localStorage.removeItem("apex_vox_user");
+    localStorage.removeItem("apex_vox_token");
+    localStorage.removeItem("apex_vox_plan");
+    refreshAuthUi();
+  }
+
+  function refreshAuthUi() {
+    if (openAuthBtn) {
+      openAuthBtn.textContent = state.user && state.user.full_name
+        ? state.user.full_name
+        : t("Registrarse / Entrar", "Sign Up / Log In");
+    }
+    const logoutBtn = document.getElementById("portal-logout-btn");
+    if (logoutBtn) logoutBtn.classList.toggle("hidden", !state.user);
+    updateHeaderPlanPill();
+    updateBillingButtons();
+  }
+
+  function updateBillingButtons() {
+    const trialBtn = document.getElementById("portal-activate-pro-btn");
+    const quota = state.user && state.user.quota;
+    if (trialBtn) {
+      const trialUsed = quota && !quota.trial_available;
+      trialBtn.classList.toggle("hidden", Boolean(state.user) && trialUsed);
+    }
+  }
+
+  function requireSession(message) {
+    if (state.token) return true;
+    const fbBox = document.getElementById("auth-feedback-box");
+    if (fbBox && message) {
+      fbBox.textContent = message;
+      fbBox.className = "alert-box alert-success";
+      fbBox.classList.remove("hidden");
+    }
+    if (authDialog && !authDialog.open) authDialog.showModal();
+    return false;
+  }
+
+  async function refreshProfile() {
+    if (!state.token) return;
+    try {
+      const res = await authFetch("/api/auth/me");
+      if (res.ok) storeSession(await res.json());
+    } catch (err) {
+      /* offline: keep cached profile */
+    }
+  }
+
+  async function loadClientConfig() {
+    try {
+      const res = await fetch("/api/auth/config");
+      if (res.ok) state.config = Object.assign(state.config, await res.json());
+    } catch (err) {
+      /* keep defaults */
+    }
+    const simulatorGroup = playgroundPlanSelect ? playgroundPlanSelect.closest(".form-group") : null;
+    if (simulatorGroup) simulatorGroup.classList.toggle("hidden", !state.config.plan_simulator);
+    if (!state.config.plan_simulator && playgroundPlanSelect) playgroundPlanSelect.value = state.plan === "free" ? "free" : "pro";
+    const oauthBox = document.getElementById("oauth-options");
+    let shown = 0;
+    document.querySelectorAll("[data-oauth-provider]").forEach((el) => {
+      const on = (state.config.oauth_providers || []).includes(el.getAttribute("data-oauth-provider"));
+      el.classList.toggle("hidden", !on);
+      if (on) shown += 1;
+    });
+    if (oauthBox) oauthBox.classList.toggle("hidden", shown === 0);
+  }
+
+  async function handleRedirectParams() {
+    const params = new URLSearchParams(window.location.search);
+    const authCode = params.get("auth_code");
+    const authError = params.get("auth_error");
+    const billing = params.get("billing");
+    if (authCode || authError || billing) {
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+    if (authCode) {
+      try {
+        const res = await fetch("/api/auth/oauth/exchange", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code: authCode }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || "Login failed");
+        storeSession(data);
+        showAlert(t(`¡Hola ${data.full_name}! Sesión iniciada.`, `Hi ${data.full_name}! You're signed in.`), "success");
+      } catch (err) {
+        showAlert(err.message);
+      }
+    } else if (authError) {
+      showAlert(t("No se pudo iniciar sesión con el proveedor. Intenta de nuevo.", "Could not sign in with that provider. Please try again."));
+    }
+    if (billing === "return" && state.token) {
+      switchView("portal");
+      await confirmBoldPayments(true);
+    }
+  }
+
   function showAlert(message, type = "error") {
     alertBox.textContent = message;
     alertBox.className = `alert-box ${type === "success" ? "alert-success" : "alert-error"}`;
@@ -550,15 +716,7 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Error al registrar cuenta.");
 
-      state.user = data;
-      state.token = data.access_token;
-      state.plan = data.plan || "free";
-      localStorage.setItem("apex_vox_user", JSON.stringify(data));
-      localStorage.setItem("apex_vox_token", data.access_token || "");
-      localStorage.setItem("apex_vox_plan", state.plan);
-
-      if (openAuthBtn) openAuthBtn.textContent = `${data.full_name}`;
-      updateHeaderPlanPill();
+      storeSession(data);
       if (authDialog) authDialog.close();
       showAlert(
         state.lang === "en"
@@ -593,15 +751,7 @@
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || "Credenciales inválidas.");
 
-      state.user = data;
-      state.token = data.access_token;
-      state.plan = data.plan || "free";
-      localStorage.setItem("apex_vox_user", JSON.stringify(data));
-      localStorage.setItem("apex_vox_token", data.access_token || "");
-      localStorage.setItem("apex_vox_plan", state.plan);
-
-      if (openAuthBtn) openAuthBtn.textContent = `${data.full_name}`;
-      updateHeaderPlanPill();
+      storeSession(data);
       if (authDialog) authDialog.close();
       loadUserPortalSummary();
     } catch (err) {
@@ -614,84 +764,113 @@
   }
 
   async function activateBoldProTrial() {
-    const currencyEl = document.getElementById("bold-currency-select");
-    const currency = currencyEl ? currencyEl.value : "COP";
-    const uid = state.user ? state.user.user_id : "guest_default";
+    if (!requireSession(t(
+      "Crea tu cuenta gratis para activar la prueba de 3 días de Apex Pro.",
+      "Create your free account to start the 3-day Apex Pro trial."
+    ))) return;
 
     try {
-      const res = await fetch("/api/billing/subscribe", {
+      const res = await authFetch("/api/billing/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: uid,
-          currency: currency,
-          auto_billing: true,
-        }),
+        body: JSON.stringify({ currency: currencyChoice() }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "No se pudo activar la prueba gratis.");
-
-      state.user = data;
-      state.plan = "pro";
-      localStorage.setItem("apex_vox_user", JSON.stringify(data));
-      localStorage.setItem("apex_vox_plan", "pro");
-      updateHeaderPlanPill();
-
-      if (state.currentResult && state.currentResult.summa_report) {
-        state.currentResult.plan = "pro";
-        state.currentResult.summa_report.is_locked = false;
-        renderApexSumma(state.currentResult);
+      if (res.status === 409) {
+        showAlert(t(
+          `${data.detail} Puedes continuar con Apex Pro pagando ${state.config.pro_period_days} días con Bold.`,
+          `${data.detail} You can keep Apex Pro by paying ${state.config.pro_period_days} days with Bold.`
+        ));
+        switchView("portal");
+        return;
       }
+      if (!res.ok) throw new Error(data.detail || t("No se pudo activar la prueba gratis.", "Could not start the free trial."));
 
+      storeSession(data);
+      await refreshSummaAccess();
       await loadUserPortalSummary();
-      showAlert(
-        state.lang === "en"
-          ? "3-Day Free Trial of Apex Pro Activated via Bold API ($30,000 COP / $10 USD auto-billing)! Unlimited transcriptions, Mega S4 storage & Apex Summa unlocked."
-          : "¡Prueba Gratis de 3 Días de Apex Pro activada con Bold API ($30.000 COP / $10 USD cobro automático)! Transcripciones ilimitadas, Mega S4 ilimitado y Apex Summa desbloqueados.",
-        "success"
-      );
+      showAlert(t(
+        "¡Prueba gratis de 3 días de Apex Pro activada! Transcripciones ilimitadas, Mega S4 ilimitado y Apex Summa desbloqueados.",
+        "Your 3-day Apex Pro trial is on! Unlimited transcriptions, unlimited Mega S4 storage and Apex Summa unlocked."
+      ), "success");
     } catch (err) {
       showAlert(err.message);
     }
   }
 
-  async function previewBoldCheckout() {
+  function currencyChoice() {
     const currencyEl = document.getElementById("bold-currency-select");
-    const currency = currencyEl ? currencyEl.value : "COP";
-    const previewEl = document.getElementById("bold-checkout-preview");
-    if (!previewEl) return;
+    return currencyEl ? currencyEl.value : "COP";
+  }
 
+  async function startBoldCheckout() {
+    if (!requireSession(t(
+      "Inicia sesión para pagar Apex Pro con Bold.",
+      "Sign in to pay for Apex Pro with Bold."
+    ))) return;
+    const previewEl = document.getElementById("bold-checkout-preview");
     try {
-      const res = await fetch("/api/billing/checkout", {
+      const res = await authFetch("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          user_id: state.user ? state.user.user_id : "guest_default",
-          currency: currency,
-          start_trial: true,
-        }),
+        body: JSON.stringify({ currency: currencyChoice() }),
       });
       const data = await res.json();
-      previewEl.classList.remove("hidden");
-      previewEl.innerHTML = `
-        <div><strong>Bold Order ID:</strong> <code>${escapeHtml(data.order_id)}</code></div>
-        <div><strong>Monto / Plan:</strong> ${escapeHtml(data.amount_display)} (${data.trial_days} días gratis + cobro automático)</div>
-        <div><strong>Firma Integridad SHA-256 (Bold):</strong> <code style="word-break: break-all;">${escapeHtml(data.integrity_signature)}</code></div>
-        <div class="bold-checkout-link">
-          <a href="${escapeHtml(data.checkout_url)}" target="_blank" rel="noopener noreferrer" class="text-link-strong">
-            Abrir Pasarela de Pago Bold (${escapeHtml(data.currency)})
-          </a>
-        </div>
-      `;
+      if (!res.ok) throw new Error(data.detail || t("No se pudo crear el link de pago.", "Could not create the payment link."));
+      if (previewEl) {
+        previewEl.classList.remove("hidden");
+        previewEl.innerHTML = `
+          <div><strong>${t("Referencia", "Reference")}</strong> <code>${escapeHtml(data.order_id)}</code></div>
+          <div><strong>${t("Monto", "Amount")}</strong> ${escapeHtml(data.amount_display)}</div>
+          <div class="bold-checkout-link">${t("Redirigiendo a Bold…", "Redirecting to Bold…")}</div>
+        `;
+      }
+      if (/^https:\/\/checkout\.bold\.co\//.test(data.checkout_url)) {
+        window.location.assign(data.checkout_url);
+      }
     } catch (err) {
       showAlert(err.message);
+    }
+  }
+
+  async function confirmBoldPayments(fromRedirect) {
+    if (!state.token) return;
+    try {
+      const res = await authFetch("/api/billing/confirm", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "");
+      const wasPaid = state.plan === "pro";
+      storeSession(data);
+      await loadUserPortalSummary();
+      if (fromRedirect) {
+        showAlert(
+          data.quota && data.quota.pro_until && data.plan !== "free"
+            ? t("¡Pago recibido! Apex Pro está activo.", "Payment received! Apex Pro is active.")
+            : t("Estamos esperando la confirmación de Bold. Si ya pagaste, se activará en unos minutos.",
+                "Waiting for Bold's confirmation. If you already paid, it will activate in a few minutes."),
+          data.plan !== "free" || wasPaid ? "success" : "error"
+        );
+      }
+    } catch (err) {
+      if (fromRedirect) showAlert(err.message);
+    }
+  }
+
+  async function refreshSummaAccess() {
+    if (!state.currentResult) return;
+    try {
+      const res = await authFetch(`/api/jobs/${state.currentResult.job_id}/summa?lang=${state.lang}`);
+      if (!res.ok) return;
+      state.currentResult.summa_report = await res.json();
+      renderApexSumma(state.currentResult);
+    } catch (err) {
+      /* keep current report */
     }
   }
 
   async function loadUserPortalSummary() {
-    const uid = state.user ? state.user.user_id : "guest_default";
     try {
-      const res = await fetch(`/api/portal/summary?user_id=${encodeURIComponent(uid)}`);
+      const res = await authFetch("/api/portal/summary");
       if (!res.ok) return;
       const data = await res.json();
 
@@ -878,7 +1057,7 @@
     dropzone.classList.add("drag-active");
 
     try {
-      const res = await fetch("/api/upload", {
+      const res = await authFetch("/api/upload", {
         method: "POST",
         body: formData,
       });
@@ -1142,8 +1321,12 @@
 
     const spkVal = speakersSelect.value;
     const numSpeakers = spkVal === "auto" ? null : parseInt(spkVal, 10);
-    const activePlan = playgroundPlanSelect ? playgroundPlanSelect.value : state.plan;
-    state.plan = activePlan;
+    if (state.config.require_login && !requireSession(t(
+      "Crea tu cuenta gratis: 2 horas de transcripción al día.",
+      "Create your free account: 2 hours of transcription per day."
+    ))) return;
+    const activePlan = state.config.plan_simulator && playgroundPlanSelect ? playgroundPlanSelect.value : state.plan;
+    if (state.config.plan_simulator) state.plan = activePlan;
     updateHeaderPlanPill();
 
     const payload = {
@@ -1156,12 +1339,11 @@
       prompt_hint: promptHintInput.value.trim() || null,
       api_key: apiKeyInput.value.trim() || null,
       deepgram_api_key: deepgramKeyInput ? deepgramKeyInput.value.trim() || null : null,
-      user_id: state.user ? state.user.user_id : "guest_default",
-      plan_override: activePlan,
+      plan_override: state.config.plan_simulator ? activePlan : null,
     };
 
     try {
-      const res = await fetch("/api/transcribe", {
+      const res = await authFetch("/api/transcribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -1290,7 +1472,7 @@
     const report = result.summa_report;
     if (!report) return;
 
-    const isLocked = report.is_locked && state.plan === "free";
+    const isLocked = Boolean(report.is_locked);
     const lockedBanner = document.getElementById("summa-locked-banner");
     const unlockTopBtn = document.getElementById("unlock-summa-pro-btn");
     const contentBody = document.getElementById("summa-content-body");
@@ -1446,6 +1628,7 @@
     const icsBtn = document.getElementById("summa-download-ics-btn");
     if (icsBtn) {
       icsBtn.href = `/api/jobs/${result.job_id}/calendar.ics`;
+      icsBtn.dataset.jobId = result.job_id;
     }
     const calGrid = document.getElementById("summa-calendar-grid");
     if (calGrid) {
@@ -1481,7 +1664,7 @@
 
     const jid = state.currentResult.job_id;
     try {
-      const res = await fetch(`/api/jobs/${jid}/minutes`, {
+      const res = await authFetch(`/api/jobs/${jid}/minutes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1746,7 +1929,48 @@
   if (langEnBtn) langEnBtn.addEventListener("click", () => applyLanguage("en"));
 
   if (openAuthBtn && authDialog) {
-    openAuthBtn.addEventListener("click", () => authDialog.showModal());
+    openAuthBtn.addEventListener("click", () => {
+      if (state.user) {
+        switchView("portal");
+      } else {
+        authDialog.showModal();
+      }
+    });
+  }
+
+  const portalLogoutBtn = document.getElementById("portal-logout-btn");
+  if (portalLogoutBtn) {
+    portalLogoutBtn.addEventListener("click", async () => {
+      try {
+        await authFetch("/api/auth/logout", { method: "POST" });
+      } finally {
+        clearSession();
+        loadUserPortalSummary();
+      }
+    });
+  }
+
+  const icsDownloadBtn = document.getElementById("summa-download-ics-btn");
+  if (icsDownloadBtn) {
+    icsDownloadBtn.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const jobId = icsDownloadBtn.dataset.jobId;
+      if (!jobId) return;
+      const res = await authFetch(`/api/jobs/${jobId}/calendar.ics`);
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        showAlert(data.detail || t("No se pudo exportar el calendario.", "Could not export the calendar."));
+        return;
+      }
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${jobId}_apex_summa_tasks.ics`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    });
   }
   if (closeAuthDialogBtn && authDialog) {
     closeAuthDialogBtn.addEventListener("click", () => authDialog.close());
@@ -1792,7 +2016,7 @@
   }
   const portalGenerateBoldLinkBtn = document.getElementById("portal-generate-bold-link-btn");
   if (portalGenerateBoldLinkBtn) {
-    portalGenerateBoldLinkBtn.addEventListener("click", previewBoldCheckout);
+    portalGenerateBoldLinkBtn.addEventListener("click", startBoldCheckout);
   }
   const refreshPortalBtn = document.getElementById("refresh-portal-btn");
   if (refreshPortalBtn) {
@@ -1814,7 +2038,6 @@
   if (playgroundPlanSelect) {
     playgroundPlanSelect.addEventListener("change", () => {
       state.plan = playgroundPlanSelect.value;
-      localStorage.setItem("apex_vox_plan", state.plan);
       updateHeaderPlanPill();
       if (state.currentResult && state.currentResult.summa_report) {
         state.currentResult.plan = state.plan;
@@ -2691,9 +2914,14 @@
   }
 
   // Initial boot
+  if (state.user && state.user.quota) state.plan = state.user.quota.plan || "free";
   applyLanguage(state.lang);
+  refreshAuthUi();
   checkSystemHealth();
   loadVoiceProfiles();
+  loadClientConfig()
+    .then(() => refreshProfile())
+    .then(() => handleRedirectParams());
   loadBoxOptimalConfig();
 
   // Support deep linking via ?view=box (e.g. from Chrome Extension or PWA shortcut)

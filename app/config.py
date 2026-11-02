@@ -155,6 +155,34 @@ class Settings:
     STATIC_CACHE_SECONDS: int = field(
         default_factory=lambda: int(os.getenv("STATIC_CACHE_SECONDS", "604800"))
     )
+    # Public URL of the app (OAuth and Bold callbacks). Empty = derive from the request.
+    PUBLIC_BASE_URL: str = field(
+        default_factory=lambda: os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+    )
+    # Playground plan simulator (free/pro switch). Never honoured in production.
+    ALLOW_PLAN_SIMULATOR: bool = field(
+        default_factory=lambda: _parse_bool(
+            os.getenv("ALLOW_PLAN_SIMULATOR") or None,
+            default=os.getenv("ENVIRONMENT", "development").strip().lower() != "production",
+        )
+    )
+    # Require a signed-in account to upload and transcribe (2h/day free starts at sign-up).
+    REQUIRE_LOGIN_TO_TRANSCRIBE: bool = field(
+        default_factory=lambda: _parse_bool(
+            os.getenv("REQUIRE_LOGIN_TO_TRANSCRIBE") or None,
+            default=os.getenv("ENVIRONMENT", "development").strip().lower() == "production",
+        )
+    )
+    SESSION_TTL_DAYS: int = field(
+        default_factory=lambda: int(os.getenv("SESSION_TTL_DAYS", "30"))
+    )
+    # Days of Apex Pro granted by each approved Bold payment.
+    PRO_PERIOD_DAYS: int = field(
+        default_factory=lambda: int(os.getenv("PRO_PERIOD_DAYS", "30"))
+    )
+    BOLD_API_BASE_URL: str = field(
+        default_factory=lambda: os.getenv("BOLD_API_BASE_URL", "https://integrations.api.bold.co").rstrip("/")
+    )
 
     # -------------------------------------------------------------------------
     # Plans, Quotas & Billing (Bold API)

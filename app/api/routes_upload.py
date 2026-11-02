@@ -8,11 +8,13 @@ probing, interactive reordering, track removal, and audio preview streaming.
 from __future__ import annotations
 
 import logging
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
+from app.api.deps import optional_user
+from app.config import settings
 from app.models.schemas import ReorderRequest, UploadResponse
 from app.services.job_manager import job_manager
 
@@ -24,11 +26,17 @@ router = APIRouter(prefix="/api", tags=["Upload & Ordering"])
 async def upload_audio_files(
     files: List[UploadFile] = File(..., description="Audio files (MP3, OGG, WAV, etc.)"),
     session_id: Optional[str] = Form(default=None),
+    user: Optional[Dict[str, Any]] = Depends(optional_user),
 ) -> UploadResponse:
     """
     Upload one or more audio files, probe their duration/format/size,
     and register them in an ordered session.
     """
+    if settings.REQUIRE_LOGIN_TO_TRANSCRIBE and not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Crea tu cuenta gratis (2 horas al día) para subir audios / Sign up free to upload audio.",
+        )
     if not files:
         raise HTTPException(status_code=400, detail="No se recibieron archivos de audio.")
 
