@@ -95,7 +95,7 @@ Accepted extensions: `.mp3 .ogg .wav .m4a .flac .webm .mp4`.
 | POST | `/api/voice-profiles` | User | Multipart `name`, `role`, `file` (5-30 s sample). Enrolls a voiceprint. |
 | DELETE | `/api/voice-profiles/{profile_id}` | User | Delete one of the caller's profiles. |
 | GET | `/api/metrics/daily?date=YYYY-MM-DD` | Admin | Usage, estimated cost and revenue. *Hidden.* |
-| POST | `/api/metrics/send-report` | Admin | Save the report to `outputs/reports/` and send it to Telegram or a webhook. *Hidden.* |
+| POST | `/api/metrics/send-report` | Admin | Save the report to `outputs/reports/` and send it to the configured Telegram chat or `REPORT_WEBHOOK_URL`. Destinations are never taken from the request. *Hidden.* |
 
 ## Export (`routes_export.py`, prefix `/api`)
 
@@ -138,7 +138,7 @@ Accepted extensions: `.mp3 .ogg .wav .m4a .flac .webm .mp4`.
 | POST | `/api/phone/verify/check` | Pro | Body `{"phone", "code"}`. Stores the verified phone. 10/h per account. |
 | DELETE | `/api/phone` | User | Remove the verified phone. |
 | GET | `/api/calls` | User | Phone state and the last 20 calls. |
-| POST | `/api/calls` | Pro | Body `{"to", "contact_name", "title"}`. Twilio calls the verified phone first; after the user presses 1 it dials `to` from `TWILIO_CALLER_ID`. One active call at a time, `CALLS_PER_DAY` per day, 10 per 10 min. |
+| POST | `/api/calls` | Pro | Body `{"to", "contact_name", "title"}`. Prefixes in `CALL_BLOCKED_PREFIXES` are refused. Twilio calls the verified phone first; after the user presses 1 it dials `to` from `TWILIO_CALLER_ID`. One active call at a time, `CALLS_PER_DAY` per day, 10 per 10 min. |
 | GET | `/api/calls/{call_id}` | Owner | Status, notes and `job_id` once processed. |
 | POST | `/api/calls/{call_id}/notes` | Owner | Body `{"text", "tag"}` while the call is active. `409` once processing started. |
 | POST | `/api/calls/{call_id}/hangup` | Owner | Hang up or cancel. |

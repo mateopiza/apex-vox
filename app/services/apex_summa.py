@@ -483,15 +483,15 @@ def generate_apex_summa_report(
         if isinstance(llm_data.get("topics"), list) and llm_data["topics"]:
             try:
                 topics = [TopicItem(**t) for t in llm_data["topics"][:5]]
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001
+                logger.debug("LLM topics ignored: unexpected shape")  # se conservan los temas heurísticos
         if isinstance(llm_data.get("objectives"), list) and llm_data["objectives"]:
             objectives = [str(o) for o in llm_data["objectives"][:6]]
         if isinstance(llm_data.get("callouts"), list) and llm_data["callouts"]:
             try:
                 callouts = [CalloutItem(**c) for c in llm_data["callouts"][:5]]
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001
+                logger.debug("LLM callouts ignored: unexpected shape")  # se conservan las alertas heurísticas
         if isinstance(llm_data.get("calendar_tasks"), list) and llm_data["calendar_tasks"]:
             try:
                 calendar_tasks = [
@@ -507,8 +507,8 @@ def generate_apex_summa_report(
                     )
                     for i, t in enumerate(llm_data["calendar_tasks"][:6])
                 ]
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001
+                logger.debug("LLM tasks ignored: unexpected shape")  # se conservan las tareas heurísticas
 
     charts = TranscriptionChartsData(
         speaker_distribution=speaker_stats,

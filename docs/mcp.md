@@ -3,7 +3,7 @@
 Apex Vox runs a [Model Context Protocol](https://modelcontextprotocol.io) server, so an AI assistant can identify, search and review your transcribed meetings and calls (details, live notes, summaries and minutes) on your behalf. Access is **read-only** and is granted per account through OAuth 2.1.
 
 - MCP endpoint: `https://<your-host>/mcp` (on the hosted service: `https://apex-vox.ialabs.app/mcp`)
-- Transport: Streamable HTTP. JSON-RPC 2.0 over `POST`, with JSON responses (no SSE stream)
+- Transport: Streamable HTTP. JSON-RPC 2.0 over `POST`, with JSON responses (no SSE stream). Batches hold at most 10 messages, the body at most 256 KB, and every message counts toward the limit of 120 per minute per account
 - Auth: OAuth 2.1 authorization code with PKCE (S256), dynamic client registration, public clients
 - Scope: `meetings:read`
 

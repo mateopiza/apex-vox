@@ -24,6 +24,7 @@ from typing import Any, Dict, Optional
 
 import httpx
 
+from app.logsafe import clean
 from app.config import settings
 from app.models.schemas import BoldCheckoutResponse
 
@@ -234,7 +235,7 @@ def process_bold_webhook_event(payload: Dict[str, Any]) -> Dict[str, Any]:
     user_id = user_id_from_order_reference(reference)
 
     if event_type not in _PAID_EVENTS or not user_id:
-        logger.info("Bold webhook ignored: type=%s reference=%s", event_type or "-", reference)
+        logger.info("Bold webhook ignored: type=%s reference=%s", clean(event_type or "-"), clean(reference))
         return {"status": "ignored", "event_type": event_type or None, "order_id": reference}
 
     try:
@@ -246,7 +247,7 @@ def process_bold_webhook_event(payload: Dict[str, Any]) -> Dict[str, Any]:
             on_activated=notify_payment_activated,
         )
     except (LookupError, PermissionError) as exc:
-        logger.warning("Bold webhook for %s not applied: %s", reference, exc)
+        logger.warning("Bold webhook for %s not applied: %s", clean(reference), clean(exc))
         return {"status": "ignored", "event_type": event_type, "order_id": reference}
 
     return {

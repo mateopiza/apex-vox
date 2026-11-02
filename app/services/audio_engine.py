@@ -16,8 +16,6 @@ from __future__ import annotations
 
 import json
 import logging
-import math
-import os
 import re
 import shutil
 import subprocess
@@ -280,8 +278,8 @@ def probe_audio(file_path: Path | str) -> AudioMetadata:
             if time_matches:
                 hh, mm, ss = time_matches[-1]
                 duration_sec = int(hh) * 3600.0 + int(mm) * 60.0 + float(ss)
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001
+            logger.debug("Fallback duration parse failed for %s", path.name)  # se queda la duración de ffprobe
 
     if duration_sec <= 0.0 and size_bytes > 0:
         # Safe fallback estimate (~48 kbps = 6000 bytes/sec) so valid blocks never fail with 0.0s

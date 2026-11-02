@@ -297,6 +297,15 @@ class Settings:
     CALL_ALLOWED_PREFIXES: list[str] = field(
         default_factory=lambda: _parse_list(os.getenv("CALL_ALLOWED_PREFIXES"), ["+57", "+1", "+52"])
     )
+    # Prefijos bloqueados aunque estén dentro de uno permitido: en +1 (NANP) hay países del Caribe
+    # con tarifas altas y números premium (+1-900, +1-976), usados en fraude telefónico y de SMS.
+    CALL_BLOCKED_PREFIXES: list[str] = field(
+        default_factory=lambda: _parse_list(os.getenv("CALL_BLOCKED_PREFIXES") or None, [  # vacío = lista por defecto
+            "+1900", "+1976", "+1242", "+1246", "+1264", "+1268", "+1284", "+1345", "+1441", "+1473",
+            "+1649", "+1658", "+1664", "+1721", "+1758", "+1767", "+1784", "+1809", "+1829", "+1849",
+            "+1868", "+1869", "+1876",
+        ])
+    )
     CALL_MAX_MINUTES: int = field(default_factory=lambda: int(os.getenv("CALL_MAX_MINUTES", "90")))
     CALLS_PER_DAY: int = field(default_factory=lambda: int(os.getenv("CALLS_PER_DAY", "30")))
     # Aviso de grabación a ambas partes (obligatorio en la mayoría de países; no desactivar sin asesoría)

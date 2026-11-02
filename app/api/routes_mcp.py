@@ -15,11 +15,13 @@ Conector MCP + OAuth 2.1 (app/api/routes_mcp.py)
 from __future__ import annotations
 
 import html
+import json
 from typing import Any, Dict
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse, Response
+from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import client_ip, public_base_url, request_language, require_user, throttle
 from app.services import mcp_oauth, mcp_server
@@ -27,6 +29,8 @@ from app.services.mcp_oauth import OAuthError
 
 router = APIRouter(tags=["MCP (ChatGPT, Claude)"])
 
+MAX_BATCH = 10  # mensajes JSON-RPC por petición
+MAX_BODY_BYTES = 256 * 1024
 ALLOWED_ORIGINS = ("https://claude.ai", "https://chatgpt.com", "https://chat.openai.com")
 BRAND_MARK = (
     '<svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
@@ -128,8 +132,10 @@ _CONSENT = {
     "es": {
         "error_title": "No se pudo conectar", "back": "Volver a Apex Vox", "page": "Conectar app",
         "wants": "quiere acceder a tu cuenta de Apex Vox",
-        "perms": ["Ver la lista de tus reuniones transcritas.", "Leer y buscar en tus transcripciones.",
-                  "Leer los resúmenes y tareas de Apex Summa (Apex Pro)."],
+        "perms": ["Ver la lista de tus reuniones transcritas.", "Leer y buscar en tus transcripciones y apuntes.",
+                  "Ver tus llamadas grabadas, con el nombre y número de cada contacto.",
+                  "Ver tus próximas reuniones de calendario y sus enlaces.",
+                  "Leer los resúmenes, actas y tareas de Apex Summa (Apex Pro)."],
         "note": "Solo lectura: no puede borrar, grabar ni pagar nada. Puedes desconectarla cuando quieras en <strong>Mi cuenta</strong>.",
         "checking": "Comprobando tu sesión…", "allow": "Permitir acceso", "login": "Iniciar sesión para continuar",
         "cancel": "Cancelar",
@@ -137,8 +143,10 @@ _CONSENT = {
     "en": {
         "error_title": "Could not connect", "back": "Back to Apex Vox", "page": "Connect app",
         "wants": "wants to access your Apex Vox account",
-        "perms": ["See the list of your transcribed meetings.", "Read and search your transcripts.",
-                  "Read Apex Summa summaries and tasks (Apex Pro)."],
+        "perms": ["See the list of your transcribed meetings.", "Read and search your transcripts and notes.",
+                  "See your recorded calls, with each contact's name and number.",
+                  "See your upcoming calendar meetings and their links.",
+                  "Read Apex Summa summaries, minutes and tasks (Apex Pro)."],
         "note": "Read-only: it cannot delete, record or pay for anything. You can disconnect it anytime in <strong>My account</strong>.",
         "checking": "Checking your session…", "allow": "Allow access", "login": "Sign in to continue",
         "cancel": "Cancel",
@@ -245,14 +253,22 @@ async def mcp_endpoint(request: Request) -> Response:
     user = mcp_oauth.user_for_access_token(auth[7:].strip() if auth.lower().startswith("bearer ") else "")
     if not user:
         return _unauthorized(request)
-    throttle(f"mcp:{user['user_id']}", limit=120, window_seconds=60)
+    body_bytes = await request.body()
+    if len(body_bytes) > MAX_BODY_BYTES:
+        return JSONResponse(mcp_server._error(None, -32600, "Request too large"), status_code=413)
     try:
-        payload = await request.json()
+        payload = json.loads(body_bytes or b"null")
     except ValueError:
         return JSONResponse(mcp_server._error(None, -32700, "Parse error"), status_code=400)
 
     messages = payload if isinstance(payload, list) else [payload]
-    responses = [r for r in (mcp_server.handle_message(m, user) for m in messages) if r is not None]
+    if len(messages) > MAX_BATCH:
+        return JSONResponse(mcp_server._error(None, -32600, f"Batch too large (max {MAX_BATCH})"), status_code=400)
+    for _ in messages:  # cada mensaje del lote cuenta para el límite, no solo la petición HTTP
+        throttle(f"mcp:{user['user_id']}", limit=120, window_seconds=60)
+    # Las herramientas leen disco y recorren transcripciones: fuera del bucle de eventos.
+    handled = await run_in_threadpool(lambda: [mcp_server.handle_message(m, user) for m in messages])
+    responses = [r for r in handled if r is not None]
     if not responses:
         return Response(status_code=202)
     body = responses if isinstance(payload, list) else responses[0]

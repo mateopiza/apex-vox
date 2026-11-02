@@ -261,18 +261,14 @@ async def get_daily_usage_metrics(
 @router.post("/metrics/send-report", dependencies=[Depends(require_admin)], include_in_schema=False)
 async def trigger_daily_bot_report(
     date: Optional[str] = Query(default=None, description="Target date YYYY-MM-DD (defaults to today)"),
-    telegram_bot_token: Optional[str] = Query(default=None),
-    telegram_chat_id: Optional[str] = Query(default=None),
-    webhook_url: Optional[str] = Query(default=None),
 ) -> dict:
-    """Save the daily report to `outputs/reports/` and send it via Telegram Bot / Webhook."""
+    """Save the daily report to `outputs/reports/` and send it to the configured Telegram chat / webhook.
+
+    Destinations come only from the server configuration: accepting a URL or bot token in the
+    request would let the endpoint post data to arbitrary hosts (SSRF).
+    """
     report = compute_usage_report(target_date=date)
-    return send_daily_bot_notification(
-        report=report,
-        telegram_bot_token=telegram_bot_token,
-        telegram_chat_id=telegram_chat_id,
-        webhook_url=webhook_url,
-    )
+    return send_daily_bot_notification(report=report)
 
 
 # -----------------------------------------------------------------------------

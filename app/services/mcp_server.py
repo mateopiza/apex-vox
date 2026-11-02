@@ -40,6 +40,7 @@ INSTRUCTIONS = (
 )
 MAX_TRANSCRIPT_CHARS = 60_000
 CONTENT_SCAN_LIMIT = 60  # reuniones recientes en las que find_meeting busca dentro del texto
+SEARCH_SCAN_LIMIT = 200  # reuniones recientes que recorre search_meetings (acota el costo por llamada)
 
 _READ_ONLY = {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False}
 
@@ -713,7 +714,7 @@ def tool_search_meetings(user: Dict[str, Any], args: Dict[str, Any]) -> Tuple[st
         return phrase in t or all(term in t for term in terms)
 
     hits: List[Dict[str, Any]] = []
-    for rec in _enriched_records(user["user_id"]):
+    for rec in _enriched_records(user["user_id"])[:SEARCH_SCAN_LIMIT] if not only else _enriched_records(user["user_id"]):
         if (only and rec["job_id"] != only) or not _in_range(rec, rng):
             continue
         result = job_manager.get_job_result(rec["job_id"])

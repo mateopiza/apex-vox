@@ -60,8 +60,8 @@ PRIVACY_ES: List[Section] = [
         "(apex-vox.ialabs.app). Para cualquier consulta sobre tus datos escribe a <a href=\"mailto:{contact}\">{contact}</a>."
     ]),
     ("Qué datos tratamos", [
-        "<strong>Cuenta:</strong> nombre, correo, idioma preferido y, si usas Google o GitHub, el correo verificado que ese proveedor nos entrega. "
-        "Las contraseñas se guardan solo como hash PBKDF2-SHA256 con sal individual.",
+        ("<strong>Cuenta:</strong> nombre, correo, idioma preferido y, si usas Google o GitHub, el correo verificado que ese proveedor nos entrega. "
+         "Las contraseñas se guardan solo como hash PBKDF2-SHA256 con sal individual."),
         "<strong>Audio y transcripciones:</strong> los archivos que subes, el texto transcrito, los oradores detectados, los resúmenes de Apex Summa y las actas que generes.",
         "<strong>Perfiles de voz:</strong> si registras una muestra, guardamos una huella acústica numérica y el nombre que le asignes, visibles solo para tu cuenta.",
         "<strong>Uso y seguridad:</strong> consumo diario de audio, plan, pagos (referencia, monto y estado; nunca datos de tarjeta) y un hash no reversible de las redes (IP) desde las que usas la cuenta.",
@@ -69,9 +69,9 @@ PRIVACY_ES: List[Section] = [
         "<strong>Boletín (opcional):</strong> tu correo y la fecha de confirmación de la suscripción.",
     ]),
     ("Para qué los usamos", [
-        "Prestar el servicio de transcripción, identificación de oradores y análisis; aplicar los límites de cada plan; procesar pagos; "
-        "proteger las cuentas (por ejemplo, limitar una cuenta a {max_ips} redes por mes para evitar que se comparta); "
-        "enviarte correos de la cuenta (bienvenida, recibos, restablecer contraseña) y, solo si te suscribes, el boletín.",
+        ("Prestar el servicio de transcripción, identificación de oradores y análisis; aplicar los límites de cada plan; procesar pagos; "
+         "proteger las cuentas (por ejemplo, limitar una cuenta a {max_ips} redes por mes para evitar que se comparta); "
+         "enviarte correos de la cuenta (bienvenida, recibos, restablecer contraseña) y, solo si te suscribes, el boletín."),
         "No vendemos tus datos ni usamos tus audios para entrenar modelos propios.",
     ]),
     ("Cuánto tiempo los conservamos", [
@@ -86,8 +86,8 @@ PRIVACY_ES: List[Section] = [
         "Cada uno trata los datos solo para prestarnos su servicio. Algunos están fuera de Colombia, lo que implica una transferencia internacional de datos.",
     ]),
     ("Tus derechos", [
-        "Conforme a la Ley 1581 de 2012 y el Decreto 1377 de 2013 puedes conocer, actualizar, rectificar y suprimir tus datos, revocar la autorización y presentar quejas ante la Superintendencia de Industria y Comercio. "
-        "Puedes eliminar tu cuenta y todos sus datos desde tu cuenta (icono de usuario) o escribiéndonos a <a href=\"mailto:{contact}\">{contact}</a>; respondemos en un máximo de 15 días hábiles.",
+        ("Conforme a la Ley 1581 de 2012 y el Decreto 1377 de 2013 puedes conocer, actualizar, rectificar y suprimir tus datos, revocar la autorización y presentar quejas ante la Superintendencia de Industria y Comercio. "
+         "Puedes eliminar tu cuenta y todos sus datos desde tu cuenta (icono de usuario) o escribiéndonos a <a href=\"mailto:{contact}\">{contact}</a>; respondemos en un máximo de 15 días hábiles."),
         "Puedes darte de baja del boletín con el enlace de cada correo.",
     ]),
     ("Cookies y almacenamiento local", [
@@ -108,8 +108,8 @@ PRIVACY_EN: List[Section] = [
         "<strong>Newsletter (optional):</strong> your email and the confirmation date.",
     ]),
     ("Why we use it", [
-        "To provide transcription, speaker identification and analysis; apply plan limits; process payments; protect accounts (for example, limiting an account to {max_ips} networks per month to prevent sharing); "
-        "send account emails (welcome, receipts, password reset) and, only if you subscribe, the newsletter.",
+        ("To provide transcription, speaker identification and analysis; apply plan limits; process payments; protect accounts (for example, limiting an account to {max_ips} networks per month to prevent sharing); "
+         "send account emails (welcome, receipts, password reset) and, only if you subscribe, the newsletter."),
         "We do not sell your data or use your audio to train our own models.",
     ]),
     ("Retention", [
@@ -123,8 +123,8 @@ PRIVACY_EN: List[Section] = [
         "Telegram (only if you link the bot), Cloudflare (DNS) and Google Fonts (web fonts). Some are outside Colombia, which means an international data transfer.",
     ]),
     ("Your rights", [
-        "Under Colombian Law 1581 of 2012 you may access, update, correct and delete your data, withdraw consent and complain to the Superintendencia de Industria y Comercio. "
-        "Delete your account and all its data from your account (user icon) or write to <a href=\"mailto:{contact}\">{contact}</a>; we answer within 15 business days.",
+        ("Under Colombian Law 1581 of 2012 you may access, update, correct and delete your data, withdraw consent and complain to the Superintendencia de Industria y Comercio. "
+         "Delete your account and all its data from your account (user icon) or write to <a href=\"mailto:{contact}\">{contact}</a>; we answer within 15 business days."),
         "Unsubscribe from the newsletter with the link in every issue.",
     ]),
     ("Cookies and local storage", [
@@ -139,8 +139,8 @@ TERMS_ES: List[Section] = [
         "Si no estás de acuerdo, no uses el servicio. Debes ser mayor de 18 años o actuar con autorización de tu representante legal.",
     ]),
     ("2. El servicio", [
-        "Apex Vox transcribe audio, identifica oradores y, en Apex Pro, genera análisis (Apex Summa), calendarios de tareas y actas. "
-        "Los resultados se producen con modelos de inteligencia artificial de terceros y pueden contener errores u omisiones: revísalos antes de usarlos en decisiones legales, médicas, financieras o laborales.",
+        ("Apex Vox transcribe audio, identifica oradores y, en Apex Pro, genera análisis (Apex Summa), calendarios de tareas y actas. "
+         "Los resultados se producen con modelos de inteligencia artificial de terceros y pueden contener errores u omisiones: revísalos antes de usarlos en decisiones legales, médicas, financieras o laborales."),
         "Podemos mejorar, cambiar o retirar funciones. No garantizamos disponibilidad ininterrumpida; haremos esfuerzos razonables para mantener el servicio operativo y avisar de mantenimientos programados.",
     ]),
     ("3. Cuentas", [
@@ -166,8 +166,8 @@ TERMS_ES: List[Section] = [
         "Crear cuentas adicionales para obtener la promoción más de una vez es un uso abusivo y puede llevar al cobro de la diferencia o a la suspensión de las cuentas.",
     ]),
     ("7. Retracto, reversión y reembolsos", [
-        "<strong>Retracto:</strong> conforme al artículo 47 de la Ley 1480 de 2011 (Estatuto del Consumidor), puedes retractarte dentro de los 5 días hábiles siguientes al pago escribiendo a <a href=\"mailto:{contact}\">{contact}</a>. "
-        "La ley exceptúa los servicios cuya prestación comenzó con tu acuerdo; si ya usaste funciones de Apex Pro, el reembolso será proporcional a los días no usados.",
+        ("<strong>Retracto:</strong> conforme al artículo 47 de la Ley 1480 de 2011 (Estatuto del Consumidor), puedes retractarte dentro de los 5 días hábiles siguientes al pago escribiendo a <a href=\"mailto:{contact}\">{contact}</a>. "
+         "La ley exceptúa los servicios cuya prestación comenzó con tu acuerdo; si ya usaste funciones de Apex Pro, el reembolso será proporcional a los días no usados."),
         "<strong>Reversión del pago:</strong> en los casos del artículo 51 de la Ley 1480 de 2011 (fraude, operación no solicitada, servicio no prestado o que no corresponde a lo ofrecido) puedes solicitar la reversión dentro de los 5 días hábiles siguientes a conocer el hecho, ante nosotros y ante el emisor de tu medio de pago.",
         "Los reembolsos aprobados se hacen al mismo medio de pago dentro de los 30 días calendario siguientes.",
     ]),
@@ -302,8 +302,8 @@ HABEAS_ES: List[Section] = [
         "Conservamos prueba de la autorización (fecha de registro y aceptación). Puedes revocarla en cualquier momento, salvo cuando exista un deber legal o contractual de conservar los datos.",
     ]),
     ("9. Derechos del titular", [
-        "Conforme al artículo 8 de la Ley 1581 de 2012 puedes: conocer, actualizar y rectificar tus datos; solicitar prueba de la autorización; ser informado del uso dado a tus datos; presentar quejas ante la Superintendencia de Industria y Comercio (SIC); "
-        "revocar la autorización y/o pedir la supresión de los datos; y acceder gratuitamente a ellos.",
+        ("Conforme al artículo 8 de la Ley 1581 de 2012 puedes: conocer, actualizar y rectificar tus datos; solicitar prueba de la autorización; ser informado del uso dado a tus datos; presentar quejas ante la Superintendencia de Industria y Comercio (SIC); "
+         "revocar la autorización y/o pedir la supresión de los datos; y acceder gratuitamente a ellos."),
         "También puedes eliminar tu cuenta y todos sus datos directamente desde \"Mi cuenta\".",
     ]),
     ("10. Consultas y reclamos", [
@@ -432,6 +432,7 @@ def render_page(slug: str, lang: str, asset_version: str, base: str) -> str:
     import html as _html
 
     lang = lang if lang in ("es", "en") else "es"
+    base = _html.escape(base, quote=True)
     title, sections = PAGES[slug][lang]
     ctx = _ctx()
     nav_labels = {

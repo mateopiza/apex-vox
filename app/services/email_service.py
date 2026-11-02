@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import html
 import logging
+import re
 import threading
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import quote
@@ -21,6 +22,7 @@ from app.config import settings
 
 logger = logging.getLogger("app.services.email_service")
 
+_EMAIL_RE = re.compile(r"[^@\s/?#]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}")
 RESEND_API = "https://api.resend.com"
 _TIMEOUT = httpx.Timeout(10.0, connect=5.0)
 
@@ -470,11 +472,19 @@ def _headers() -> Dict[str, str]:
     return {"Authorization": f"Bearer {settings.RESEND_API_KEY}", "Content-Type": "application/json"}
 
 
+def _category(tags: Optional[List[Dict[str, str]]]) -> str:
+    """Etiqueta del correo para los logs: nunca el asunto (lleva nombres, títulos de reuniones o enlaces)."""
+    for tag in tags or []:
+        if tag.get("name") == "category":
+            return str(tag.get("value", ""))[:40]
+    return "uncategorized"
+
+
 def send_email(to: str, rendered: Tuple[str, str, str], tags: Optional[List[Dict[str, str]]] = None,
                headers: Optional[Dict[str, str]] = None) -> bool:
     """Send one email synchronously. Returns True on success; never raises."""
     if not settings.is_email_configured:
-        logger.info("Email not sent (RESEND_API_KEY missing): %s", rendered[0])
+        logger.info("Email not sent (RESEND_API_KEY missing): %s", _category(tags))
         return False
     subject, html_body, text_body = rendered
     payload: Dict[str, Any] = {
@@ -494,11 +504,11 @@ def send_email(to: str, rendered: Tuple[str, str, str], tags: Optional[List[Dict
         with httpx.Client(timeout=_TIMEOUT) as client:
             resp = client.post(f"{RESEND_API}/emails", json=payload, headers=_headers())
         if resp.status_code >= 400:
-            logger.warning("Resend rejected '%s': %s %s", subject, resp.status_code, resp.text[:200])
+            logger.warning("Resend rejected an email (%s): HTTP %s", _category(tags), resp.status_code)
             return False
         return True
     except httpx.HTTPError as exc:
-        logger.warning("Resend unreachable for '%s': %s", subject, exc)
+        logger.warning("Resend unreachable (%s): %s", _category(tags), type(exc).__name__)
         return False
 
 
@@ -529,6 +539,8 @@ def upsert_newsletter_contact(email: str, first_name: str = "") -> bool:
             if resp.status_code < 400:
                 return True
             # Existing contact: re-subscribe, then make sure segment + topic are set.
+            if not _EMAIL_RE.fullmatch(email or ""):
+                return False
             target = quote(email, safe="")
             client.patch(f"{RESEND_API}/contacts/{target}", json={"unsubscribed": False}, headers=_headers())
             if settings.RESEND_NEWSLETTER_SEGMENT_ID:
@@ -547,6 +559,8 @@ def upsert_newsletter_contact(email: str, first_name: str = "") -> bool:
 
 def unsubscribe_newsletter_contact(email: str) -> bool:
     if not settings.is_email_configured:
+        return False
+    if not _EMAIL_RE.fullmatch(email or ""):
         return False
     target = quote(email, safe="")
     try:

@@ -23,6 +23,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 
+from app.logsafe import clean
 from app.api.deps import is_paid, require_user
 from app.models.schemas import (
     BoxBlockUploadResponse,
@@ -170,8 +171,8 @@ async def upload_recording_block(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        logger.exception("Error processing block for session %s", box_session_id)
-        raise HTTPException(status_code=500, detail=f"Error al procesar bloque de audio: {exc}") from exc
+        logger.exception("Error processing block for session %s", clean(box_session_id))
+        raise HTTPException(status_code=500, detail="Error al procesar el bloque de audio.") from exc
 
 
 @router.post("/sessions/{box_session_id}/notes", response_model=BoxNoteItem)
@@ -236,8 +237,8 @@ async def finalize_box_recording_session(
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
-        logger.exception("Error finalizing Apex Box session %s", box_session_id)
-        raise HTTPException(status_code=500, detail=f"Error al finalizar la sesión: {exc}") from exc
+        logger.exception("Error finalizing Apex Box session %s", clean(box_session_id))
+        raise HTTPException(status_code=500, detail="Error al finalizar la sesión.") from exc
 
 
 _extension_cache: Dict[str, bytes] = {}

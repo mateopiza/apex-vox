@@ -20,8 +20,8 @@ import shutil
 import threading
 import time
 import uuid
-from pathlib import Path
 from typing import Any, Dict, List, Optional
+from urllib.parse import urlparse
 
 import httpx
 
@@ -49,13 +49,22 @@ def is_configured() -> bool:
     return bool(settings.RECALL_API_KEY)
 
 
+_REGION_RE = re.compile(r"[a-z]{2}-[a-z]+-\d")
+_PATH_RE = re.compile(r"/(?:[\w-]+/)*")
+
+
 def _base() -> str:
-    return f"https://{settings.RECALL_REGION or 'us-west-2'}.recall.ai/api/v1"
+    region = settings.RECALL_REGION or "us-west-2"
+    if not _REGION_RE.fullmatch(region):
+        raise RecallError("RECALL_REGION no es válida.")
+    return f"https://{region}.recall.ai/api/v1"
 
 
 def _request(method: str, path: str, json_body: Optional[Dict[str, Any]] = None) -> Any:
     if not is_configured():
         raise RecallError("El bot de reuniones no está configurado.")
+    if not _PATH_RE.fullmatch(path):  # ids de bot y rutas solo con letras, números, _ y -
+        raise RecallError("Ruta no válida.")
     try:
         with httpx.Client(timeout=30.0) as client:
             resp = client.request(method, f"{_base()}{path}", json=json_body,
@@ -63,7 +72,7 @@ def _request(method: str, path: str, json_body: Optional[Dict[str, Any]] = None)
     except httpx.HTTPError as exc:
         raise RecallError(f"No se pudo contactar al servicio del bot: {exc}") from exc
     if resp.status_code >= 400:
-        logger.warning("Recall %s %s -> %s %s", method, path, resp.status_code, resp.text[:300])
+        logger.warning("Recall %s /%s -> HTTP %s", method, path.split("/")[1], resp.status_code)
         raise RecallError(f"El servicio del bot respondió {resp.status_code}.")
     return resp.json() if resp.content else None
 
@@ -79,14 +88,18 @@ def extract_meeting_url(*texts: Optional[str]) -> Optional[str]:
 
 
 def platform_of(url: str) -> str:
-    u = url.lower()
-    if "meet.google.com" in u:
+    host = (urlparse(url).hostname or "").lower()
+
+    def on(domain: str) -> bool:
+        return host == domain or host.endswith("." + domain)
+
+    if on("meet.google.com"):
         return "google_meet"
-    if "zoom.us" in u:
+    if on("zoom.us"):
         return "zoom"
-    if "teams." in u:
+    if on("teams.microsoft.com") or on("teams.live.com"):
         return "microsoft_teams"
-    if "webex.com" in u:
+    if on("webex.com"):
         return "webex"
     return "other"
 
@@ -141,7 +154,7 @@ def cancel_bot(bot_id: str) -> None:
         try:
             _request("POST", f"/bot/{bot_id}/leave_call/")
         except RecallError:
-            pass
+            logger.info("Bot %s already left or finished", bot_id)  # se marca cancelado igual
     _update(bot_id, status="cancelled")
 
 

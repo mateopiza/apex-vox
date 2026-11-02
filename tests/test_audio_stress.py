@@ -13,20 +13,16 @@ Adversarial and empirical verification covering:
 
 from __future__ import annotations
 
-import tempfile
 from pathlib import Path
 import pytest
 
-from app.config import settings
 from app.services.audio_engine import (
-    AudioChunkInfo,
     chunk_audio_file,
     detect_silences,
     probe_audio,
     process_audio_sequence,
 )
 from tests.fixtures.audio_generator import (
-    convert_audio_format,
     create_synthetic_wav,
 )
 

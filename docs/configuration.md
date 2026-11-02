@@ -123,7 +123,7 @@ These are commented out in `.env.example`. Uncomment them to override the defaul
 
 ## Recorded calls with a masked number (Twilio)
 
-Apex Pro only. Calling is on when `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_VERIFY_SERVICE_SID` and a valid `TWILIO_CALLER_ID` are set. Webhooks are built from `PUBLIC_BASE_URL`, which must be the public `https://` origin Twilio reaches.
+Apex Pro only. Calling is on when `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_VERIFY_SERVICE_SID`, a valid `TWILIO_CALLER_ID` **and an `https://` `PUBLIC_BASE_URL`** are set. Every Twilio URL (TwiML, status callbacks, signature check) is built only from `PUBLIC_BASE_URL`, never from the request's `Host` header, so a client cannot point Twilio at its own server and dial arbitrary numbers.
 
 | Variable | Default | Required | Description |
 | --- | --- | --- | --- |
@@ -133,6 +133,7 @@ Apex Pro only. Calling is on when `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TW
 | `TWILIO_VERIFY_SERVICE_SID` | empty | Yes, for calls | Verify service (`VA...`) that sends the SMS code to verify the user's phone. |
 | `TWILIO_CALLER_ID` | empty | Yes, for calls | Twilio number in E.164 (`+1...`) that contacts see. The user's own number is never shown to the contact. |
 | `CALL_ALLOWED_PREFIXES` | `+57,+1,+52` | No | Country prefixes allowed for the user's phone and for destinations. Also restrict Geo Permissions in the Twilio console to avoid toll fraud. |
+| `CALL_BLOCKED_PREFIXES` | NANP high-cost ranges (`+1900`, `+1976`, Caribbean area codes such as `+1876`, `+1809`, `+1284`…) | No | Refused even inside an allowed prefix, for the user's phone and for destinations. Blocks the usual toll-fraud and SMS-pumping ranges inside `+1`. |
 | `CALL_MAX_MINUTES` | `90` | No | Maximum length of a call. |
 | `CALLS_PER_DAY` | `30` | No | Calls per account in 24 hours. |
 | `CALL_RECORDING_NOTICE` | `true` | No | Both parties hear that the call is recorded. Keep it on unless you have legal advice for your jurisdiction. |

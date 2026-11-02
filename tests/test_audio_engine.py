@@ -16,12 +16,7 @@ from app.config import settings
 from app.services.audio_engine import (
     AudioChunkError,
     AudioChunkInfo,
-    AudioDependencyError,
     AudioEngineError,
-    AudioMetadata,
-    AudioProbeError,
-    ProbedAudio,
-    SilenceDetectionError,
     align_whisper_segments,
     calculate_split_points,
     calculate_timeline_offsets,
