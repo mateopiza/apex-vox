@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import ipaddress
+
 import threading
 import time
 from typing import Any, Dict, Optional
@@ -49,17 +51,60 @@ def is_paid(user: Optional[Dict[str, Any]]) -> bool:
     return bool(user) and str(user.get("plan", "free")).lower() in ("pro", "trial")
 
 
+# Rangos oficiales de Cloudflare (https://www.cloudflare.com/ips/). El origen solo acepta
+# tráfico desde ellos (Traefik ipAllowList), así que CF-Connecting-IP es fiable solo cuando
+# la conexión llega desde uno de estos rangos.
+_CLOUDFLARE_RANGES = [ipaddress.ip_network(n) for n in (
+    "173.245.48.0/20",
+    "103.21.244.0/22",
+    "103.22.200.0/22",
+    "103.31.4.0/22",
+    "141.101.64.0/18",
+    "108.162.192.0/18",
+    "190.93.240.0/20",
+    "188.114.96.0/20",
+    "197.234.240.0/22",
+    "198.41.128.0/17",
+    "162.158.0.0/15",
+    "104.16.0.0/13",
+    "104.24.0.0/14",
+    "172.64.0.0/13",
+    "131.0.72.0/22",
+    "2400:cb00::/32",
+    "2606:4700::/32",
+    "2803:f800::/32",
+    "2405:b500::/32",
+    "2405:8100::/32",
+    "2a06:98c0::/29",
+    "2c0f:f248::/32",
+)]
+
+
+def _is_cloudflare(addr: str) -> bool:
+    try:
+        ip = ipaddress.ip_address(addr)
+    except ValueError:
+        return False
+    return any(ip in net for net in _CLOUDFLARE_RANGES)
+
+
 def client_ip(request: Request) -> str:
     """
-    Visitor IP. Behind Traefik the right-most X-Forwarded-For entry is the address
-    the proxy saw; earlier entries are client-supplied and can be forged.
+    IP real del visitante. Traefik pone en el último X-Forwarded-For la dirección que vio
+    (las anteriores las envía el cliente y se pueden falsificar). Si esa dirección es de
+    Cloudflare, la IP del visitante es CF-Connecting-IP.
     """
     forwarded = request.headers.get("x-forwarded-for", "")
-    if forwarded:
-        last = forwarded.split(",")[-1].strip()
-        if last:
-            return last
-    return request.client.host if request.client else "unknown"
+    peer = forwarded.split(",")[-1].strip() if forwarded else ""
+    if not peer:
+        peer = request.client.host if request.client else "unknown"
+    if _is_cloudflare(peer):
+        real = request.headers.get("cf-connecting-ip", "").strip()
+        try:
+            return str(ipaddress.ip_address(real))
+        except ValueError:
+            pass
+    return peer
 
 
 def requester_key(request: Request, user: Optional[Dict[str, Any]]) -> str:

@@ -842,6 +842,8 @@ class SupabaseCloudService:
             user = db["users"].get(user_id)
             if not user:
                 return True
+            if user.get("unlimited_ips"):  # cuentas exentas (p. ej. la del dueño)
+                return True
             months = user.setdefault("ip_months", {})
             for key in [k for k in months if k != month]:
                 months.pop(key, None)

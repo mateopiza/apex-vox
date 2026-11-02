@@ -615,6 +615,11 @@
     localStorage.setItem("apex_vox_user", JSON.stringify(Object.assign({}, profile, { access_token: "" })));
     if (state.token) localStorage.setItem("apex_vox_token", state.token);
     refreshAuthUi();
+    const oauthNext = sessionStorage.getItem("apex_oauth_next");
+    if (state.token && oauthNext && oauthNext.startsWith("/oauth/authorize?")) {
+      sessionStorage.removeItem("apex_oauth_next");
+      location.assign(oauthNext);
+    }
   }
 
   function clearSession() {
@@ -1132,7 +1137,33 @@
     }
   }
 
+  async function loadMcpConnections() {
+    const info = document.getElementById("mcp-connections");
+    const revokeBtn = document.getElementById("mcp-revoke-btn");
+    if (!info) return;
+    if (!state.token) {
+      info.textContent = t("Inicia sesión para conectar tus apps.", "Sign in to connect your apps.");
+      if (revokeBtn) revokeBtn.classList.add("hidden");
+      return;
+    }
+    try {
+      const res = await authFetch("/api/mcp/connections");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "");
+      const urlInput = document.getElementById("mcp-url-input");
+      if (urlInput && data.mcp_url) urlInput.value = data.mcp_url;
+      const names = (data.connections || []).map((c) => c.client_name);
+      info.textContent = names.length
+        ? t(`Apps conectadas: ${names.join(", ")}`, `Connected apps: ${names.join(", ")}`)
+        : t("Apps conectadas: ninguna todavía.", "Connected apps: none yet.");
+      if (revokeBtn) revokeBtn.classList.toggle("hidden", !names.length);
+    } catch (err) {
+      info.textContent = t("No se pudieron cargar las apps conectadas.", "Could not load connected apps.");
+    }
+  }
+
   async function loadUserPortalSummary() {
+    loadMcpConnections();
     try {
       const res = await authFetch("/api/portal/summary");
       if (!res.ok) return;
@@ -2285,6 +2316,26 @@
   if (portalGenerateBoldLinkBtn) {
     portalGenerateBoldLinkBtn.addEventListener("click", startBoldCheckout);
   }
+  const mcpCopyBtn = document.getElementById("mcp-copy-btn");
+  if (mcpCopyBtn) {
+    mcpCopyBtn.addEventListener("click", async () => {
+      const input = document.getElementById("mcp-url-input");
+      try {
+        await navigator.clipboard.writeText(input.value);
+        mcpCopyBtn.textContent = t("Copiado", "Copied");
+        setTimeout(() => (mcpCopyBtn.textContent = t("Copiar", "Copy")), 1500);
+      } catch (_) {
+        input.select();
+      }
+    });
+  }
+  const mcpRevokeBtn = document.getElementById("mcp-revoke-btn");
+  if (mcpRevokeBtn) {
+    mcpRevokeBtn.addEventListener("click", async () => {
+      await authFetch("/api/mcp/connections", { method: "DELETE" });
+      loadMcpConnections();
+    });
+  }
   const refreshPortalBtn = document.getElementById("refresh-portal-btn");
   if (refreshPortalBtn) {
     refreshPortalBtn.addEventListener("click", loadUserPortalSummary);
@@ -3193,6 +3244,11 @@
   }
   if (boxOpenInPlaygroundBtn) {
     boxOpenInPlaygroundBtn.addEventListener("click", () => switchView("playground"));
+  }
+
+  // Service worker: hace instalable la app web en celulares y escritorio
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js", { scope: "/" }).catch(() => {}));
   }
 
   // Initial boot

@@ -603,6 +603,7 @@ class JobManager:
                     "job_id": job_id,
                     "user_id": resolved_uid,
                     "session_id": req.session_id,
+                    "title": (ordered_filenames[0] if ordered_filenames else "Transcripción"),
                     "engine_brand": engine_brand,
                     "total_duration_sec": total_duration,
                     "total_duration_formatted": result.total_duration_formatted,

@@ -212,6 +212,9 @@ app.mount("/static", CachedStaticFiles(directory=str(STATIC_DIR)), name="static"
 app.include_router(auth_router)
 app.include_router(billing_router)
 app.include_router(box_router)
+from app.api.routes_mcp import router as mcp_router  # noqa: E402
+
+app.include_router(mcp_router)
 app.include_router(upload_router)
 app.include_router(transcribe_router)
 app.include_router(export_router)
@@ -325,35 +328,66 @@ async def favicon() -> Response:
 
 @app.get("/manifest.webmanifest", include_in_schema=False)
 async def web_app_manifest() -> JSONResponse:
-    """Serve PWA manifest for mobile web app installation (Modo App Web en Celular)."""
+    """Manifiesto de la app web instalable (Android, iPhone, escritorio)."""
+    base = settings.PUBLIC_BASE_URL or "https://apex-vox.ialabs.app"
     return JSONResponse(
         content={
-            "name": "Apex Vox & Apex Box — Grabador Ilimitado por Bloques",
-            "short_name": "Apex Box",
-            "description": "Grabación ilimitada por bloques sin llenar RAM, modo Reunión Presencial y Virtual (Zoom, Meet, Teams), notas en vivo y transcripción continua.",
-            "start_url": "/?view=box",
+            "id": "/",
+            "name": "Apex Vox",
+            "short_name": "Apex Vox",
+            "description": "Transcripción de reuniones con oradores, resumen Apex Summa, actas y grabación Apex Box.",
+            "lang": "es",
+            "dir": "ltr",
+            "start_url": "/?source=pwa",
+            "scope": "/",
             "display": "standalone",
+            "display_override": ["standalone", "minimal-ui"],
             "background_color": "#f3f3ee",
-            "theme_color": "#f43e01",
+            "theme_color": "#f3f3ee",
             "orientation": "any",
+            "categories": ["productivity", "business"],
             "icons": [
-                {
-                    "src": "/static/favicon.svg",
-                    "sizes": "any",
-                    "type": "image/svg+xml",
-                    "purpose": "any maskable",
-                }
+                {"src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+                {"src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+                {"src": "/static/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+                {"src": "/static/favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any"},
             ],
+            "shortcuts": [
+                {"name": "Grabar con Apex Box", "short_name": "Grabar", "url": "/?view=box&source=pwa",
+                 "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]},
+                {"name": "Mi cuenta", "url": "/?view=portal&source=pwa",
+                 "icons": [{"src": "/static/icons/icon-192.png", "sizes": "192x192"}]},
+            ],
+            "related_applications": [{"platform": "webapp", "url": f"{base}/manifest.webmanifest"}],
         },
         media_type="application/manifest+json",
+        headers={"Cache-Control": "public, max-age=3600"},
     )
+
+
+@app.get("/sw.js", include_in_schema=False)
+async def service_worker() -> Response:
+    """Service worker mínimo: hace la app instalable y muestra un aviso si no hay conexión."""
+    js = """self.addEventListener('install', (e) => self.skipWaiting());
+self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+self.addEventListener('fetch', (event) => {
+  if (event.request.mode !== 'navigate') return;
+  event.respondWith(fetch(event.request).catch(() => new Response(
+    '<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">' +
+    '<title>Apex Vox</title><body style="font-family:sans-serif;background:#f3f3ee;color:#302b28;padding:32px">' +
+    '<h1>Sin conexión</h1><p>Apex Vox necesita internet. Vuelve a intentarlo cuando tengas señal.</p>',
+    { headers: { 'Content-Type': 'text/html; charset=utf-8' } })));
+});
+"""
+    return Response(js, media_type="application/javascript",
+                    headers={"Cache-Control": "no-cache", "Service-Worker-Allowed": "/"})
 
 
 @app.get("/robots.txt", include_in_schema=False)
 async def robots() -> Response:
     """Allow the landing page, keep API and job artefacts out of indexes."""
     return Response(
-        content="User-agent: *\nAllow: /$\nDisallow: /api/\n",
+        content="User-agent: *\nAllow: /$\nDisallow: /api/\nDisallow: /oauth/\nDisallow: /mcp\n",
         media_type="text/plain",
     )
 

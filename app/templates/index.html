@@ -6,6 +6,7 @@
   <title>Apex Vox — Audio Studio · Potenciado por Groq | Apex Summa &amp; Apex Box</title>
   <meta name="description" content="Apex Vox: transcripción multi-audio, identificación de oradores y resúmenes ejecutivos con Apex Summa. Potenciado por Groq." />
   <meta name="theme-color" content="#f3f3ee" />
+  <meta name="application-name" content="Apex Vox" />
   <meta name="color-scheme" content="light" />
   <link rel="canonical" href="{{BASE_URL}}/" />
   <meta property="og:type" content="website" />
@@ -24,10 +25,14 @@
   <meta name="twitter:description" content="Transcripción multi-audio, oradores identificados y actas con Apex Summa. Potenciado por Groq." />
   <meta name="twitter:image" content="{{BASE_URL}}/static/og/og-{{OG_LANG}}.png" />
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="/static/icons/favicon-32.png" type="image/png" sizes="32x32" />
+  <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" sizes="180x180" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-title" content="Apex Box" />
+  <meta name="apple-mobile-web-app-title" content="Apex Vox" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&amp;family=Share+Tech+Mono&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" />
@@ -308,6 +313,27 @@
           </div>
 
           <div id="bold-checkout-preview" class="bold-checkout-preview hidden" aria-live="polite"></div>
+        </div>
+      </div>
+
+      <div class="card" id="mcp-card">
+        <div class="card-header">
+          <h2 class="card-title"><span class="step-badge">MCP</span> <span>Conectar con ChatGPT y Claude</span></h2>
+          <span class="meta-tag timeline">Solo lectura</span>
+        </div>
+        <p class="card-lead">Pregúntale a ChatGPT o a Claude por tus reuniones: qué se acordó, quién dijo qué, tareas pendientes. Agrega este conector y autoriza tu cuenta.</p>
+        <div class="mcp-url-row">
+          <input type="text" class="form-control" id="mcp-url-input" value="https://apex-vox.ialabs.app/mcp" readonly aria-label="URL del conector MCP" />
+          <button type="button" class="btn-secondary" id="mcp-copy-btn">Copiar</button>
+        </div>
+        <ol class="mcp-steps">
+          <li><strong>Claude:</strong> Configuración → Conectores → Agregar conector personalizado → pega la URL.</li>
+          <li><strong>ChatGPT:</strong> Configuración → Aplicaciones y conectores → Crear (modo desarrollador) → pega la URL con autenticación OAuth.</li>
+          <li>Inicia sesión y pulsa <strong>Permitir acceso</strong>. Resúmenes y tareas: Apex Pro.</li>
+        </ol>
+        <p class="field-hint" id="mcp-connections">Apps conectadas: —</p>
+        <div class="button-row">
+          <button type="button" class="btn-secondary btn-small hidden" id="mcp-revoke-btn">Desconectar todas las apps</button>
         </div>
       </div>
 

@@ -826,6 +826,7 @@ class ApexBoxManager:
                 "job_id": job_id,
                 "user_id": session.user_id,
                 "session_id": session.upload_session_id,
+                "title": session.title,
                 "engine_brand": engine_brand,
                 "total_duration_sec": total_dur,
                 "total_duration_formatted": result.total_duration_formatted,

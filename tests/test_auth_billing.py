@@ -230,3 +230,20 @@ def test_legal_pages_terms_and_habeas_data() -> None:
     assert client.get("/legal/habeas-data?lang=en").status_code == 200
     home = client.get("/").text
     assert 'href="/legal/habeas-data"' in home
+
+
+
+def test_client_ip_trusts_cf_connecting_ip_only_from_cloudflare() -> None:
+    from starlette.requests import Request
+
+    from app.api.deps import client_ip
+
+    def req(xff: str, cf: str = "") -> Request:
+        headers = [(b"x-forwarded-for", xff.encode())]
+        if cf:
+            headers.append((b"cf-connecting-ip", cf.encode()))
+        return Request({"type": "http", "headers": headers, "client": ("10.0.0.1", 1234)})
+
+    assert client_ip(req("172.70.1.10", "190.1.2.3")) == "190.1.2.3"  # llega desde Cloudflare
+    assert client_ip(req("8.8.8.8", "190.1.2.3")) == "8.8.8.8"  # directo: no se confía en la cabecera
+    assert client_ip(req("1.2.3.4, 172.70.1.10", "bogus")) == "172.70.1.10"
