@@ -89,6 +89,13 @@ def _today_str() -> str:
     return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d")
 
 
+TRANSCRIPTION_COLUMNS = frozenset({
+    "job_id", "user_id", "session_id", "engine_brand", "total_duration_sec", "total_duration_formatted",
+    "detected_speakers_count", "storage_provider", "s4_audio_key", "s4_result_key", "retention_policy",
+    "expires_at", "plan", "file_order", "dominant_speaker", "result_json", "summa_json", "created_at",
+})
+
+
 class SupabaseCloudService:
     """
     Production client for Supabase Cloud (Auth + PostgREST) with synchronized
@@ -1030,6 +1037,12 @@ class SupabaseCloudService:
                 db["transcriptions"].pop(jid, None)
             for key in [k for k in db.get("daily_usage", {}) if k.startswith(f"{user_id}:")]:
                 db["daily_usage"].pop(key, None)
+            # Llamadas (números de contactos y apuntes), bots y eventos de calendario de la cuenta
+            for coll in ("phone_calls", "meeting_bots"):
+                items = db.get(coll) or {}
+                for key in [k for k, v in items.items() if v.get("user_id") == user_id]:
+                    items.pop(key, None)
+            (db.get("calendar_events") or {}).pop(user_id, None)
             for ref, pay in db.get("payments", {}).items():
                 if pay.get("user_id") == user_id:
                     pay["user_id"] = "deleted"  # keep accounting record without personal link
@@ -1054,7 +1067,9 @@ class SupabaseCloudService:
             db = self._load_db()
             db["transcriptions"][job_id] = record
             self._save_db(db)
-        self._sync_to_supabase_table("transcriptions", record, upsert_col="job_id")
+        # PostgREST rechaza columnas que no existen: solo se envían las de supabase/schema.sql.
+        remote = {k: v for k, v in record.items() if k in TRANSCRIPTION_COLUMNS}
+        self._sync_to_supabase_table("transcriptions", remote, upsert_col="job_id")
 
     def list_user_transcriptions(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Return non-expired transcription records for the user portal."""

@@ -267,7 +267,11 @@ def process_finished_bot(bot_id: str) -> Optional[str]:
                 block_index=index, duration_hint_sec=end - start, transcribe_immediately=True,
             )
             start, index = end, index + 1
-        fin = apex_box_manager.finalize_session(session.box_session_id, BoxFinalizeRequest(generate_minutes=True))
+        fin = apex_box_manager.finalize_session(
+            session.box_session_id, BoxFinalizeRequest(generate_minutes=True),
+            record_extra={"source": "meeting_bot", "meeting_url": rec.get("meeting_url"), "bot_id": bot_id,
+                          "event_uid": rec.get("event_uid") or None},
+        )
         _update(bot_id, status="done", job_id=fin.job_id)
         link = f"{settings.PUBLIC_BASE_URL or 'https://apex-vox.ialabs.app'}/?job={fin.job_id}"
         if user.get("email"):

@@ -282,6 +282,33 @@ class Settings:
     RESEND_INBOUND_WEBHOOK_SECRET: str = field(
         default_factory=lambda: os.getenv("RESEND_INBOUND_WEBHOOK_SECRET", "").strip()
     )
+    # Llamadas grabadas con número enmascarado (Twilio, Apex Pro)
+    TWILIO_ACCOUNT_SID: str = field(default_factory=lambda: os.getenv("TWILIO_ACCOUNT_SID", "").strip())
+    TWILIO_AUTH_TOKEN: str = field(default_factory=lambda: os.getenv("TWILIO_AUTH_TOKEN", "").strip())
+    # Opcional: clave API (SK…) para la API REST; el token de cuenta sigue validando los webhooks
+    TWILIO_API_KEY_SID: str = field(default_factory=lambda: os.getenv("TWILIO_API_KEY_SID", "").strip())
+    TWILIO_API_KEY_SECRET: str = field(default_factory=lambda: os.getenv("TWILIO_API_KEY_SECRET", "").strip())
+    TWILIO_VERIFY_SERVICE_SID: str = field(
+        default_factory=lambda: os.getenv("TWILIO_VERIFY_SERVICE_SID", "").strip()
+    )
+    # Número Twilio (E.164) que ven los contactos: el número real del usuario nunca se muestra
+    TWILIO_CALLER_ID: str = field(default_factory=lambda: os.getenv("TWILIO_CALLER_ID", "").strip())
+    # Prefijos de destino permitidos (protege contra fraude a números premium o internacionales)
+    CALL_ALLOWED_PREFIXES: list[str] = field(
+        default_factory=lambda: _parse_list(os.getenv("CALL_ALLOWED_PREFIXES"), ["+57", "+1", "+52"])
+    )
+    CALL_MAX_MINUTES: int = field(default_factory=lambda: int(os.getenv("CALL_MAX_MINUTES", "90")))
+    CALLS_PER_DAY: int = field(default_factory=lambda: int(os.getenv("CALLS_PER_DAY", "30")))
+    # Aviso de grabación a ambas partes (obligatorio en la mayoría de países; no desactivar sin asesoría)
+    CALL_RECORDING_NOTICE: bool = field(
+        default_factory=lambda: _parse_bool(os.getenv("CALL_RECORDING_NOTICE"), True)
+    )
+    # Borrar la grabación en Twilio una vez copiada a Apex Vox
+    TWILIO_DELETE_RECORDINGS: bool = field(
+        default_factory=lambda: _parse_bool(os.getenv("TWILIO_DELETE_RECORDINGS"), True)
+    )
+    # Zona horaria para mostrar fechas y entender «ayer», «el lunes»… en el conector MCP
+    APP_TIMEZONE: str = field(default_factory=lambda: os.getenv("APP_TIMEZONE", "America/Bogota").strip())
     # Aviso por correo antes de que termine el mes pagado (renovación manual).
     RENEWAL_REMINDER_DAYS: int = field(
         default_factory=lambda: int(os.getenv("RENEWAL_REMINDER_DAYS", "3"))

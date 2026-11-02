@@ -637,6 +637,8 @@ class JobManager:
                     "file_order": ordered_filenames,
                     "dominant_speaker": summa_report.dominant_speaker,
                     "created_at": summa_report.generated_at,
+                    "source": "upload",
+                    "speakers": sorted({s.speaker for s in result.segments}),
                 }
             )
 

@@ -50,7 +50,8 @@ Live instance: <https://apex-vox.ialabs.app>
 **Meetings and integrations**
 - Meeting bot (Recall.ai, Apex Pro): sends a bot into a Zoom, Google Meet, Microsoft Teams or Webex call, then transcribes the recording and emails a link to the result.
 - Calendar invitations by email (Resend Inbound): invite the configured address to a meeting and the bot is scheduled to join it automatically.
-- MCP server for ChatGPT and Claude: OAuth 2.1 with PKCE and dynamic client registration, and five read-only tools ([docs/mcp.md](docs/mcp.md)).
+- Recorded calls with a masked number (Twilio, Apex Pro): verify your phone by SMS, then call anyone from Apex Vox. Twilio rings you first and connects the contact, who only sees the Apex Vox number. Both sides hear a recording notice; the dual-channel recording gives exact speakers, and notes taken during the call land on the timeline of the transcript, summary and minutes.
+- MCP server for ChatGPT and Claude: OAuth 2.1 with PKCE and dynamic client registration, and read-only tools that identify a meeting from a description ("the call with Carlos yesterday"), filter by date, source or speaker, and review details, live notes, transcripts, summaries, minutes, tasks, upcoming meetings and calls ([docs/mcp.md](docs/mcp.md)).
 - Telegram bot (Apex Pro): send a voice note to a linked chat and get its transcript back.
 
 **Accounts and plans**
@@ -77,7 +78,7 @@ Live instance: <https://apex-vox.ialabs.app>
 | **Frontend** | Vanilla JavaScript (no framework), HTML + CSS design tokens, Spanish/English i18n, installable PWA (manifest + service worker), MediaRecorder + Web Audio API, Screen Wake Lock API |
 | **Chrome extension** | Manifest V3 (Chrome 116+), `tabCapture`, AudioWorklet sound meter, pinned recorder tab, `chrome.i18n` (`_locales/es`, `_locales/en`) |
 | **AI assistants** | [Model Context Protocol](https://modelcontextprotocol.io) server (Streamable HTTP, JSON-RPC) with OAuth 2.1 + PKCE and dynamic client registration (RFC 7591 / 8414 / 9728) for ChatGPT and Claude |
-| **Integrations** | [Recall.ai](https://www.recall.ai) meeting bot, [Resend](https://resend.com) email (transactional, newsletter, inbound invitations), [Bold](https://bold.co) payment links, Telegram Bot API, [Supabase](https://supabase.com) OAuth (Google, GitHub) and optional sync |
+| **Integrations** | [Recall.ai](https://www.recall.ai) meeting bot, [Twilio](https://www.twilio.com) recorded calls and phone verification, [Resend](https://resend.com) email (transactional, newsletter, inbound invitations), [Bold](https://bold.co) payment links, Telegram Bot API, [Supabase](https://supabase.com) OAuth (Google, GitHub) and optional sync |
 | **Storage** | JSON state file on a data volume, S3-compatible object storage (SigV4, presigned URLs) |
 | **Security** | PBKDF2-SHA256 passwords, HMAC-signed tokens and download links, Svix webhook signatures, strict CSP and security headers, per-IP rate limits, Cloudflare (proxy, WAF, Full-strict TLS) |
 | **DevOps** | Docker / Docker Compose, Dokploy + Traefik, GitHub Actions (pytest with FFmpeg, ruff, `node --check`, Docker build), CodeQL, gitleaks, Dependabot |
@@ -118,6 +119,7 @@ flowchart LR
     SB[Supabase<br/>OAuth + optional sync]
     B[Bold]
     RC[Recall.ai]
+    TW[Twilio]
     RS[Resend]
   end
 
@@ -176,7 +178,7 @@ The minimum for a working instance is `GROQ_API_KEY`. In production also set `EN
 
 ## Running tests
 
-The test suite generates real audio and runs it through FFmpeg, so **`ffmpeg` and `ffprobe` must be installed**. External APIs (Groq, Deepgram, Bold, Recall.ai, Resend) are mocked, so you need no real keys.
+The test suite generates real audio and runs it through FFmpeg, so **`ffmpeg` and `ffprobe` must be installed**. External APIs (Groq, Deepgram, Bold, Recall.ai, Twilio, Resend) are mocked, so you need no real keys.
 
 ```bash
 pip install -r requirements-dev.txt
@@ -238,7 +240,7 @@ CI ([`.github/workflows/ci.yml`](.github/workflows/ci.yml)) runs the tests, a `r
 - Vulnerabilities: report them privately as described in [SECURITY.md](SECURITY.md), never in public issues.
 - Questions: see [SUPPORT.md](SUPPORT.md).
 
-Powered by [Groq](https://groq.com). "Groq", "Deepgram", "Recall.ai", "Resend", "Supabase", "Bold", "Zoom", "Google Meet", "Microsoft Teams", "Webex", "ChatGPT" and "Claude" are trademarks of their respective owners. This project is not affiliated with them.
+Powered by [Groq](https://groq.com). "Groq", "Deepgram", "Recall.ai", "Twilio", "Resend", "Supabase", "Bold", "Zoom", "Google Meet", "Microsoft Teams", "Webex", "ChatGPT" and "Claude" are trademarks of their respective owners. This project is not affiliated with them.
 
 ## License
 
