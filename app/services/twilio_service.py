@@ -33,6 +33,7 @@ from xml.sax.saxutils import escape, quoteattr
 
 import httpx
 
+from app.logsafe import clean
 from app.config import settings
 from app.services.supabase_service import supabase_service
 
@@ -331,7 +332,7 @@ def hangup(call_id: str) -> None:
         try:
             _request("POST", _account_url(f"/Calls/{rec['call_sid']}.json"), [("Status", "completed")])
         except TwilioError:
-            logger.info("Call %s already finished when hanging up", call_id)  # Twilio ya la cerró
+            logger.info("Call %s already finished when hanging up", clean(call_id))  # Twilio ya la cerró
     if rec.get("status") in ACTIVE_STATUSES and rec.get("status") != "in_call":
         _update(call_id, status="cancelled")
 

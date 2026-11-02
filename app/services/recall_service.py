@@ -25,6 +25,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from app.logsafe import clean
 from app.config import settings
 from app.services.supabase_service import supabase_service
 
@@ -72,7 +73,7 @@ def _request(method: str, path: str, json_body: Optional[Dict[str, Any]] = None)
     except httpx.HTTPError as exc:
         raise RecallError(f"No se pudo contactar al servicio del bot: {exc}") from exc
     if resp.status_code >= 400:
-        logger.warning("Recall %s /%s -> HTTP %s", method, path.split("/")[1], resp.status_code)
+        logger.warning("Recall %s /%s -> HTTP %s", clean(method), clean(path.split("/")[1]), resp.status_code)
         raise RecallError(f"El servicio del bot respondió {resp.status_code}.")
     return resp.json() if resp.content else None
 
@@ -154,7 +155,7 @@ def cancel_bot(bot_id: str) -> None:
         try:
             _request("POST", f"/bot/{bot_id}/leave_call/")
         except RecallError:
-            logger.info("Bot %s already left or finished", bot_id)  # se marca cancelado igual
+            logger.info("Bot %s already left or finished", clean(bot_id))  # se marca cancelado igual
     _update(bot_id, status="cancelled")
 
 

@@ -381,9 +381,11 @@ async def legal_page(slug: str, request: Request) -> HTMLResponse:
     """Privacy policy, terms of service and security policy (ES / EN)."""
     from app.services.legal_content import PAGES, render_page
 
-    if slug not in PAGES:
+    page_key = {key: key for key in PAGES}.get(slug)  # clave constante, nunca el texto de la URL
+    if not page_key:
         return HTMLResponse("Not Found", status_code=404)
-    page = render_page(slug, request_language(request), _asset_version(), public_base_url(request))
+    lang = "en" if request_language(request) == "en" else "es"
+    page = render_page(page_key, lang, _asset_version(), public_base_url(request))
     return HTMLResponse(page, headers={"Cache-Control": "public, max-age=3600"})
 
 
