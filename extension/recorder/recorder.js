@@ -13,6 +13,9 @@
   const BLOCK_SEC = 180;
   const BITRATE = 48000;
   const MAX_RETRIES = 3;
+  const SOUND_RMS = 0.006; // ~ -44 dBFS: por encima se considera que hay sonido
+  const SILENCE_WARN_SEC = 15; // aviso tras este silencio continuo
+  const WAVE_POINTS = 160;
 
   const $ = (id) => document.getElementById(id);
   const el = {
@@ -29,6 +32,9 @@
     speakers: $("stat-speakers"),
     pending: $("stat-pending"),
     status: $("status"),
+    wave: $("wave"),
+    signal: $("signal"),
+    sources: $("sources"),
     result: $("result"),
     resultMeta: $("result-meta"),
     resultLink: $("result-link"),
@@ -58,6 +64,9 @@
     failedBlocks: 0,
     segments: 0,
     speakers: new Set(),
+    meters: [], // [{ label, level, lastSoundAt, ended, row }]
+    wave: [],
+    lastTickAt: 0,
   };
 
   // ---------------------------------------------------------------------------
@@ -148,6 +157,7 @@
   function renderRecordingState() {
     el.pill.textContent = st.recording ? "REC" : "NO REC";
     el.pill.classList.toggle("on", st.recording);
+    if (!st.recording) el.pill.classList.remove("warn");
     el.recBtn.textContent = st.recording ? "■ Detener" : "● Grabar";
     el.recBtn.classList.toggle("stop", st.recording);
     el.recBtn.disabled = st.busy;
@@ -155,11 +165,22 @@
   }
 
   function tick() {
+    st.lastTickAt = Date.now();
     const sec = elapsedSec();
+    const sig = signalState();
+    const noSound = sig.kind === "warn" || sig.kind === "off";
     el.clock.textContent = hhmmss(sec);
-    document.title = `● REC ${hhmmss(sec)} · Apex Box`;
-    chrome.action.setBadgeText({ text: badgeTime(sec) });
-    chrome.action.setTitle({ title: `Apex Box · REC ${hhmmss(sec)}` });
+    document.title = `${noSound ? "⚠ SIN SONIDO" : "● REC"} ${hhmmss(sec)} · Apex Box`;
+    // Badge: tiempo en rojo si entra sonido; "MUDO" en ámbar si no se está captando nada.
+    chrome.action.setBadgeBackgroundColor({ color: noSound ? "#d97706" : "#f43e01" });
+    chrome.action.setBadgeText({ text: noSound ? "MUDO" : badgeTime(sec) });
+    chrome.action.setTitle({
+      title: `Apex Box · REC ${hhmmss(sec)}${
+        sig.kind === "off" ? " · ⚠ fuente desconectada" : noSound ? ` · ⚠ sin sonido hace ${sig.silentSec} s` : " · captando sonido"
+      }`,
+    });
+    if (document.hidden) return;
+    renderMeters();
   }
 
   function setIdleIndicator() {
@@ -182,7 +203,12 @@
   }
 
   async function acquireStream() {
-    if (mode() === "presencial") return getMic();
+    st.meterSources = [];
+    if (mode() === "presencial") {
+      const mic = await getMic();
+      st.meterSources.push({ label: "Micrófono", stream: mic, node: st.audioCtx.createMediaStreamSource(mic) });
+      return mic;
+    }
 
     if (!st.source) {
       throw new Error("Elige la pestaña de la reunión: ábrela y pulsa el icono de Apex Box.");
@@ -198,18 +224,145 @@
     });
     st.streams.push(tabStream);
 
-    st.audioCtx = new AudioContext();
     const out = st.audioCtx.createMediaStreamDestination();
     const tabSrc = st.audioCtx.createMediaStreamSource(tabStream);
     tabSrc.connect(st.audioCtx.destination); // seguir escuchando la reunión
     tabSrc.connect(out);
+    st.meterSources.push({ label: "Reunión", stream: tabStream, node: tabSrc });
 
     try {
-      st.audioCtx.createMediaStreamSource(await getMic()).connect(out);
+      const mic = await getMic();
+      const micSrc = st.audioCtx.createMediaStreamSource(mic);
+      micSrc.connect(out);
+      st.meterSources.push({ label: "Micrófono", stream: mic, node: micSrc });
     } catch (err) {
       showStatus("Grabando solo el audio de la reunión (sin micrófono).");
     }
     return out.stream;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Medidor de sonido: ondas + aviso de silencio
+  // ---------------------------------------------------------------------------
+
+  // dBFS -60..0 → 0..1
+  function levelToUnit(rms) {
+    if (rms <= 0) return 0;
+    return Math.min(1, Math.max(0, (20 * Math.log10(rms) + 60) / 60));
+  }
+
+  async function startMeters() {
+    const ctx = st.audioCtx;
+    await ctx.audioWorklet.addModule("level-meter.js");
+    // Salida a ganancia 0 → destino: asegura que el grafo procese el medidor sin sonar.
+    const sink = ctx.createGain();
+    sink.gain.value = 0;
+    sink.connect(ctx.destination);
+
+    const now = Date.now();
+    el.sources.innerHTML = "";
+    st.meters = st.meterSources.map(({ label, stream, node }) => {
+      const row = document.createElement("li");
+      row.innerHTML = `<span></span><span class="bar"><i></i></span><span class="state"></span>`;
+      row.firstChild.textContent = label;
+      el.sources.appendChild(row);
+
+      const meter = { label, level: 0, lastSoundAt: now, ended: false, row };
+      const worklet = new AudioWorkletNode(ctx, "level-meter");
+      worklet.port.onmessage = (e) => onLevel(meter, e.data);
+      node.connect(worklet);
+      worklet.connect(sink);
+
+      stream.getAudioTracks().forEach((t) => {
+        t.addEventListener("ended", () => (meter.ended = true));
+      });
+      return meter;
+    });
+    st.wave = [];
+  }
+
+  function onLevel(meter, { rms }) {
+    const now = Date.now();
+    meter.level = rms;
+    if (rms >= SOUND_RMS) meter.lastSoundAt = now;
+
+    // El primer medidor marca el ritmo de la onda (≈20 puntos/s) con el nivel combinado.
+    if (meter === st.meters[0]) {
+      const combined = Math.max(...st.meters.map((m) => m.level));
+      st.wave.push(combined);
+      if (st.wave.length > WAVE_POINTS) st.wave.shift();
+      if (!document.hidden) renderMeters();
+      // Los mensajes del hilo de audio no se frenan en segundo plano: también mueven el reloj/badge.
+      if (st.recording && now - st.lastTickAt >= 1000) tick();
+    }
+  }
+
+  function signalState() {
+    if (!st.recording || !st.meters.length) return { kind: "idle", silentSec: 0 };
+    const now = Date.now();
+    if (st.meters.every((m) => m.ended)) return { kind: "off", silentSec: 0 };
+    const lastSound = Math.max(...st.meters.filter((m) => !m.ended).map((m) => m.lastSoundAt));
+    const silentSec = Math.floor((now - lastSound) / 1000);
+    return { kind: silentSec >= SILENCE_WARN_SEC ? "warn" : "ok", silentSec };
+  }
+
+  function renderMeters() {
+    const sig = signalState();
+    el.signal.className = `signal ${sig.kind}`;
+    el.signal.textContent = {
+      idle: "Sin grabar",
+      ok: "● Captando sonido",
+      warn: `⚠ No entra sonido hace ${sig.silentSec} s — revisa micrófono o pestaña`,
+      off: "⚠ Fuente de audio desconectada — no se está grabando sonido",
+    }[sig.kind];
+
+    if (st.recording) {
+      const noSound = sig.kind === "warn" || sig.kind === "off";
+      el.pill.textContent = noSound ? "REC · SIN SONIDO" : "REC";
+      el.pill.classList.toggle("warn", noSound);
+    }
+
+    const now = Date.now();
+    st.meters.forEach((m) => {
+      const silent = (now - m.lastSoundAt) / 1000 >= SILENCE_WARN_SEC;
+      m.row.className = m.ended ? "off" : silent ? "warn" : "";
+      m.row.querySelector("i").style.width = `${Math.round(levelToUnit(m.level) * 100)}%`;
+      m.row.querySelector(".state").textContent = m.ended ? "desconectada" : silent ? "sin señal" : "ok";
+    });
+
+    drawWave(sig.kind);
+  }
+
+  function drawWave(kind) {
+    const c = el.wave;
+    const dpr = window.devicePixelRatio || 1;
+    const w = Math.max(1, Math.round(c.clientWidth * dpr));
+    const h = Math.max(1, Math.round(c.clientHeight * dpr));
+    if (c.width !== w || c.height !== h) {
+      c.width = w;
+      c.height = h;
+    }
+    const g = c.getContext("2d");
+    g.clearRect(0, 0, w, h);
+    const mid = h / 2;
+    g.fillStyle = { ok: "#225c05", warn: "#d97706", off: "#c93706" }[kind] || "#cecebf";
+
+    const step = w / WAVE_POINTS;
+    const barW = Math.max(1, step * 0.6);
+    const offset = WAVE_POINTS - st.wave.length;
+    for (let i = 0; i < WAVE_POINTS; i++) {
+      const v = i >= offset ? levelToUnit(st.wave[i - offset]) : 0;
+      const bh = Math.max(dpr, v * (h - 4 * dpr));
+      g.fillRect(i * step, mid - bh / 2, barW, bh);
+    }
+  }
+
+  function resetMeters() {
+    st.meters = [];
+    st.meterSources = [];
+    st.wave = [];
+    el.sources.innerHTML = "";
+    renderMeters();
   }
 
   async function releaseStreams() {
@@ -297,6 +450,9 @@
   // ---------------------------------------------------------------------------
 
   async function startRecording() {
+    // Crear el AudioContext en el mismo clic (antes de cualquier await) evita que Chrome
+    // lo deje suspendido por la política de autoplay.
+    st.audioCtx = new AudioContext();
     st.busy = true;
     renderRecordingState();
     el.result.classList.add("hidden");
@@ -304,6 +460,8 @@
 
     try {
       const stream = await acquireStream();
+      if (st.audioCtx.state === "suspended") await st.audioCtx.resume().catch(() => {});
+      await startMeters();
       const platform = mode() === "virtual" && st.source ? detectPlatform(st.source.url) : null;
       const session = await api("/api/box/sessions", {
         method: "POST",
@@ -340,10 +498,6 @@
         if (prev.state !== "inactive") prev.stop();
       }, BLOCK_SEC * 1000);
 
-      stream.getAudioTracks().forEach((t) =>
-        t.addEventListener("ended", () => st.recording && showStatus("La fuente de audio se cerró.", true))
-      );
-
       tick();
       st.tickTimer = setInterval(tick, 1000);
       showStatus("");
@@ -354,6 +508,7 @@
       });
     } catch (err) {
       await releaseStreams();
+      resetMeters();
       showStatus(`No se pudo iniciar: ${err.message}`, true);
     } finally {
       st.busy = false;
@@ -406,6 +561,7 @@
       st.recording = false;
       st.busy = false;
       st.recorder = null;
+      resetMeters();
       setIdleIndicator();
       renderStats();
       renderRecordingState();
@@ -483,5 +639,9 @@
     renderModeHint();
     renderStats();
     renderRecordingState();
+    renderMeters();
   })();
+
+  document.addEventListener("visibilitychange", () => !document.hidden && renderMeters());
+  window.addEventListener("resize", renderMeters);
 })();

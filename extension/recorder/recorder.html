@@ -56,6 +56,13 @@
     <!-- Grabar + estadísticas -->
     <section class="card">
       <div class="clock" id="clock">00:00:00</div>
+
+      <div class="audio" aria-label="Nivel de audio">
+        <canvas id="wave" class="wave" height="64" aria-hidden="true"></canvas>
+        <p class="signal idle" id="signal" role="status" aria-live="polite">Sin grabar</p>
+        <ul class="sources" id="sources"></ul>
+      </div>
+
       <button type="button" class="btn rec" id="rec-btn">● Grabar</button>
 
       <dl class="stats">

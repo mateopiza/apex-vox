@@ -16,7 +16,8 @@ Graba reuniones presenciales y llamadas virtuales durante horas desde una pesta�
 Funciones principales:
 Grabación por bloques de 3 minutos que se envían y liberan de la memoria, para sesiones de 10 horas o más.
 Modo Presencial (micrófono del equipo) y modo Virtual (audio de la pestaña de Google Meet, Zoom, Microsoft Teams o Webex + tu micrófono).
-Indicador en el icono de la extensión: REC y tiempo transcurrido mientras se graba.
+Indicador en el icono de la extensión: REC y tiempo transcurrido mientras se graba; "MUDO" en ámbar si no entra sonido.
+Ondas de sonido en vivo y nivel por fuente (micrófono y reunión) para confirmar que se está captando audio; aviso si pasan 15 s sin sonido o si la fuente se desconecta.
 Estadísticas en vivo: tiempo, bloques enviados, segmentos transcritos y hablantes detectados.
 Al finalizar, un enlace con el informe Apex Summa y el acta según el tipo de reunión (Ejecutiva, Consejo, Comité, Asamblea o Seguimiento).
 
