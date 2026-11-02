@@ -79,6 +79,7 @@ class JobManager:
         self._sessions: Dict[str, UploadSession] = {}
         self._jobs: Dict[str, JobStatusResponse] = {}
         self._results: Dict[str, TranscriptionResult] = {}
+        self._job_owners: Dict[str, str] = {}  # job id -> cuenta o clave del invitado
 
     # -------------------------------------------------------------------------
     # Session Management
@@ -116,6 +117,7 @@ class JobManager:
         with self._lock:
             self._results.pop(job_id, None)
             self._jobs.pop(job_id, None)
+            self._job_owners.pop(job_id, None)
         (settings.OUTPUT_DIR / f"{job_id}_merged.mp3").unlink(missing_ok=True)
 
     def get_session(self, session_id: str) -> Optional[UploadSession]:
@@ -252,7 +254,14 @@ class JobManager:
                 current_step="En cola para procesamiento...",
             )
             self._jobs[job_id] = status
+            if session.owner:
+                self._job_owners[job_id] = session.owner
             return status
+
+    def job_owner(self, job_id: str) -> Optional[str]:
+        """Quién creó el trabajo (se guarda al crearlo: la sesión de un invitado se descarta al terminar)."""
+        with self._lock:
+            return self._job_owners.get(job_id)
 
     def _update_job(
         self,

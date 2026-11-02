@@ -1688,6 +1688,7 @@
 
       state.sessionId = data.session_id;
       state.files = data.files || [];
+      state.sessionMediaToken = data.media_token || state.sessionMediaToken;
       renderTrackQueue();
     } catch (err) {
       showAlert(err.message || "Error subiendo archivos.");
@@ -1733,7 +1734,7 @@
       const chunkLabel = file.is_over_25mb
         ? `<span class="meta-tag chunk-warn">Auto-Chunk &lt;25MB</span>`
         : `<span class="meta-tag">Almacenado</span>`;
-      const audioSrc = `/api/sessions/${encodeURIComponent(state.sessionId)}/files/${encodeURIComponent(file.file_id)}/audio`;
+      const audioSrc = `/api/sessions/${encodeURIComponent(state.sessionId)}/files/${encodeURIComponent(file.file_id)}/audio${state.sessionMediaToken ? `?t=${encodeURIComponent(state.sessionMediaToken)}` : ""}`;
       const listenLabel = isEn ? "Listen" : "Escuchar";
       const pauseLabel = isEn ? "Pause" : "Pausar";
 
@@ -1915,6 +1916,7 @@
       if (res.ok) {
         const data = await res.json();
         state.files = data.files || [];
+      state.sessionMediaToken = data.media_token || state.sessionMediaToken;
         renderTrackQueue();
       }
     } catch (err) {
@@ -1988,7 +1990,7 @@
 
     state.pollTimer = setInterval(async () => {
       try {
-        const res = await fetch(`/api/jobs/${jobId}/status`);
+        const res = await authFetch(`/api/jobs/${jobId}/status`);
         const statusData = await res.json();
         if (!res.ok) {
           throw new Error(statusData.detail || t("No se pudo consultar el estado.", "Could not check the status."));
@@ -2023,7 +2025,7 @@
 
   async function loadJobResult(jobId) {
     try {
-      const res = await fetch(`/api/jobs/${jobId}/result`);
+      const res = await authFetch(`/api/jobs/${jobId}/result`);
       const result = await res.json();
       if (!res.ok) {
         throw new Error(result.detail || t("No se pudo obtener el resultado.", "Could not load the result."));
@@ -2073,15 +2075,16 @@
     if (summaBox) summaBox.classList.toggle("hidden", isGuestResult);
     if (guestCta) guestCta.classList.toggle("hidden", !isGuestResult);
 
-    mergedAudioPlayer.src = `/api/jobs/${result.job_id}/audio`;
+    const mediaQ = result.media_token ? `?t=${encodeURIComponent(result.media_token)}` : "";
+    mergedAudioPlayer.src = `/api/jobs/${result.job_id}/audio${mediaQ}`;
 
     const jid = result.job_id;
-    document.getElementById("export-txt").href = `/api/jobs/${jid}/export/txt`;
-    document.getElementById("export-srt").href = `/api/jobs/${jid}/export/srt`;
-    document.getElementById("export-vtt").href = `/api/jobs/${jid}/export/vtt`;
-    document.getElementById("export-json").href = `/api/jobs/${jid}/export/json`;
-    document.getElementById("export-csv").href = `/api/jobs/${jid}/export/csv`;
-    document.getElementById("export-md").href = `/api/jobs/${jid}/export/md`;
+    document.getElementById("export-txt").href = `/api/jobs/${jid}/export/txt${mediaQ}`;
+    document.getElementById("export-srt").href = `/api/jobs/${jid}/export/srt${mediaQ}`;
+    document.getElementById("export-vtt").href = `/api/jobs/${jid}/export/vtt${mediaQ}`;
+    document.getElementById("export-json").href = `/api/jobs/${jid}/export/json${mediaQ}`;
+    document.getElementById("export-csv").href = `/api/jobs/${jid}/export/csv${mediaQ}`;
+    document.getElementById("export-md").href = `/api/jobs/${jid}/export/md${mediaQ}`;
 
     if (!isGuestResult) renderApexSumma(result);
     renderSpeakerTabs(result);
@@ -2247,7 +2250,7 @@
     // 5. Próximas Tareas en Forma de Calendario
     const icsBtn = document.getElementById("summa-download-ics-btn");
     if (icsBtn) {
-      icsBtn.href = `/api/jobs/${result.job_id}/calendar.ics`;
+      icsBtn.href = `/api/jobs/${result.job_id}/calendar.ics${result.media_token ? `?t=${encodeURIComponent(result.media_token)}` : ""}`;
       icsBtn.dataset.jobId = result.job_id;
     }
     const calGrid = document.getElementById("summa-calendar-grid");
@@ -2502,7 +2505,7 @@
     });
 
     try {
-      const res = await fetch(`/api/jobs/${state.currentResult.job_id}/speakers`, {
+      const res = await authFetch(`/api/jobs/${state.currentResult.job_id}/speakers`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ speaker_map: speakerMap }),

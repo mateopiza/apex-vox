@@ -265,6 +265,9 @@ class TranscriptionResult(BaseModel):
     job_id: str
     session_id: Optional[str] = None
     user_id: Optional[str] = None
+    media_token: Optional[str] = Field(
+        default=None, description="Signed read-only token for audio, exports and calendar links (?t=); never stored"
+    )
     plan: str = "free"
     status: str = "completed"
     detected_speakers_count: int = 1
@@ -289,6 +292,7 @@ class UploadResponse(BaseModel):
     """Response returned by POST /api/upload."""
     session_id: str
     files: List[ProbedAudio]
+    media_token: Optional[str] = Field(default=None, description="Signed token for <audio> previews (?t=)")
 
 
 class ReorderRequest(BaseModel):

@@ -276,7 +276,8 @@ def test_chrome_extension_mv3_package_icons_and_official_groq_badge() -> None:
         recorder_html = zf.read("recorder/recorder.html").decode("utf-8")
         for field_id in ('id="meeting-type"', 'id="title"', 'name="mode"', 'id="engine"', 'id="rec-btn"'):
             assert field_id in recorder_html
-        assert "https://console.groq.com/powered-by-groq-light.svg" in recorder_html
+        assert 'src="powered-by-groq-light.svg"' in recorder_html
+        assert "recorder/powered-by-groq-light.svg" in zf.namelist()
         assert "Powered by Groq for fast inference." in recorder_html
 
         # Verify PNG icon dimensions match declared sizes (16x16, 48x48, 128x128)

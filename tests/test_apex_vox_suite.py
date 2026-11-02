@@ -33,6 +33,7 @@ from starlette.testclient import TestClient
 from app.config import resolve_engine_code
 from app.main import app
 from app.services.storage_s4 import mega_s4_storage
+from app.services.supabase_service import supabase_service
 from tests.fixtures.audio_generator import create_synthetic_wav
 
 
@@ -265,7 +266,8 @@ def test_apex_summa_7_part_report_calendar_and_minutes(
         json={"email": f"summa_{uuid.uuid4().hex[:8]}@apexvox.ai", "password": "summaPass123", "full_name": "Summa"},
     ).json()
     client.headers.update({"Authorization": f"Bearer {reg['access_token']}"})
-    assert client.post("/api/billing/subscribe", json={}).status_code == 200  # Apex Pro trial
+    uid = reg["user_id"]
+    supabase_service.activate_paid_period(uid, f"SUMMATEST-{uid[:8]}", "USD", "test")  # Apex Pro pagado
 
     wav_path = tmp_path / "consejo_directivo.wav"
     create_synthetic_wav(wav_path, [(2.5, 140.0), (0.6, 0.0), (2.0, 240.0)])
@@ -310,7 +312,7 @@ def test_apex_summa_7_part_report_calendar_and_minutes(
 
     res_json = client.get(f"/api/jobs/{job_id}/result").json()
     assert res_json["engine_brand"] == "Mc-Lewis"
-    assert res_json["storage_provider"] == "mega_s4"
+    assert res_json["storage_provider"] == "apex_vox_cloud"
     assert res_json["summa_report"] is not None
 
     summa = res_json["summa_report"]

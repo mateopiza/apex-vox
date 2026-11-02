@@ -8,7 +8,7 @@ import threading
 import time
 from typing import Any, Dict, Optional
 
-from fastapi import Header, HTTPException, Request
+from fastapi import HTTPException, Header, Query, Request
 
 from app.config import settings
 from app.services.supabase_service import supabase_service
@@ -112,6 +112,95 @@ def requester_key(request: Request, user: Optional[Dict[str, Any]]) -> str:
     if user:
         return user["user_id"]
     return supabase_service.guest_key(client_ip(request))
+
+
+# -----------------------------------------------------------------------------
+# Acceso a trabajos y sesiones de subida
+# -----------------------------------------------------------------------------
+# Solo el dueño (cuenta o invitado por IP) puede leer o modificar un trabajo.
+# Para lo que el navegador pide con un enlace normal (<audio src>, descargas, .ics)
+# y que no puede llevar la cabecera Authorization, el dueño recibe un token firmado
+# (HMAC con el secreto de la app) que caduca a las MEDIA_TOKEN_TTL_SECONDS.
+
+MEDIA_TOKEN_TTL_SECONDS = 6 * 3600
+
+
+def media_token(resource: str, ttl: int = MEDIA_TOKEN_TTL_SECONDS) -> str:
+    """Token de solo lectura para un recurso, p. ej. 'job:<id>' o 'session:<id>'."""
+    import time
+
+    exp = int(time.time()) + ttl
+    return f"{exp}.{supabase_service._digest(f'media:{resource}:{exp}')[:32]}"
+
+
+def media_token_valid(resource: str, token: Optional[str]) -> bool:
+    import hmac
+    import time
+
+    try:
+        exp_text, sig = (token or "").split(".", 1)
+        exp = int(exp_text)
+    except ValueError:
+        return False
+    if exp < time.time():
+        return False
+    return hmac.compare_digest(sig, supabase_service._digest(f"media:{resource}:{exp}")[:32])
+
+
+def job_owner(job_id: str) -> Optional[str]:
+    """Cuenta dueña del trabajo, o la clave del invitado que creó la sesión."""
+    from app.services.job_manager import job_manager
+
+    owner = job_manager.job_owner(job_id)
+    if owner:
+        return owner
+    result = job_manager.get_job_result(job_id)
+    if result and result.user_id:
+        return result.user_id
+    status = job_manager.get_job_status(job_id)
+    session_id = (status.session_id if status else None) or (result.session_id if result else None)
+    session = job_manager.get_session(session_id) if session_id else None
+    return session.owner if session else None
+
+
+def require_job_owner(
+    job_id: str, request: Request, authorization: Optional[str] = Header(default=None)
+) -> str:
+    """El trabajo debe pertenecer a quien lo pide; si no, 404 (no se revela si existe)."""
+    user = optional_user(request, authorization)
+    owner = job_owner(job_id)
+    if not owner or owner != requester_key(request, user):
+        raise HTTPException(status_code=404, detail="Trabajo no encontrado.")
+    return job_id
+
+
+def require_job_media(
+    job_id: str,
+    request: Request,
+    t: Optional[str] = Query(default=None, description="Token de descarga firmado"),
+    authorization: Optional[str] = Header(default=None),
+) -> str:
+    """Audio, exportaciones y calendario: dueño o token de descarga válido."""
+    if media_token_valid(f"job:{job_id}", t):
+        return job_id
+    return require_job_owner(job_id, request, authorization)
+
+
+def require_session_media(
+    session_id: str,
+    request: Request,
+    t: Optional[str] = Query(default=None, description="Token de descarga firmado"),
+    authorization: Optional[str] = Header(default=None),
+) -> str:
+    """Pistas de una sesión de subida: dueño o token de descarga válido."""
+    from app.services.job_manager import job_manager
+
+    if media_token_valid(f"session:{session_id}", t):
+        return session_id
+    user = optional_user(request, authorization)
+    if not job_manager.session_owned_by(session_id, requester_key(request, user)):
+        raise HTTPException(status_code=404, detail="Sesión no encontrada.")
+    return session_id
 
 
 def require_admin(x_admin_key: Optional[str] = Header(default=None)) -> None:

@@ -15,7 +15,16 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 
-from app.api.deps import is_paid, optional_user, require_admin, require_user, requester_key
+from app.api.deps import (
+    is_paid,
+    media_token,
+    optional_user,
+    require_admin,
+    require_job_media,
+    require_job_owner,
+    require_user,
+    requester_key,
+)
 from app.config import resolve_engine_code, settings
 from app.models.schemas import (
     ApexSummaReport,
@@ -129,7 +138,7 @@ async def start_transcription_job(
 
 
 @router.get("/jobs/{job_id}/status", response_model=JobStatusResponse)
-async def get_job_status(job_id: str) -> JobStatusResponse:
+async def get_job_status(job_id: str = Depends(require_job_owner)) -> JobStatusResponse:
     """Poll the current status and progress percentage of a transcription job."""
     status = job_manager.get_job_status(job_id)
     if not status:
@@ -138,11 +147,11 @@ async def get_job_status(job_id: str) -> JobStatusResponse:
 
 
 @router.get("/jobs/{job_id}/result", response_model=TranscriptionResult)
-async def get_job_result(job_id: str) -> TranscriptionResult:
+async def get_job_result(job_id: str = Depends(require_job_owner)) -> TranscriptionResult:
     """Retrieve the complete chronological transcription and speaker diarization result."""
     result = job_manager.get_job_result(job_id)
     if result:
-        return result
+        return result.model_copy(update={"media_token": media_token(f"job:{job_id}")})
 
     status = job_manager.get_job_status(job_id)
     if status:
@@ -161,17 +170,18 @@ async def get_job_result(job_id: str) -> TranscriptionResult:
 
 @router.patch("/jobs/{job_id}/speakers", response_model=TranscriptionResult)
 async def rename_job_speakers(
-    job_id: str, payload: RenameSpeakersRequest
+    payload: RenameSpeakersRequest, job_id: str = Depends(require_job_owner)
 ) -> TranscriptionResult:
     """Rename speaker labels across all segments of a completed transcription job."""
     try:
-        return job_manager.rename_speakers(job_id, payload.speaker_map)
+        result = job_manager.rename_speakers(job_id, payload.speaker_map)
+        return result.model_copy(update={"media_token": media_token(f"job:{job_id}")})
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/jobs/{job_id}/audio")
-async def stream_merged_job_audio(job_id: str) -> FileResponse:
+async def stream_merged_job_audio(job_id: str = Depends(require_job_media)) -> FileResponse:
     """Stream the merged continuous MP3 timeline audio for interactive playback."""
     merged_path = settings.OUTPUT_DIR / f"{job_id}_merged.mp3"
     if not merged_path.exists():
@@ -281,7 +291,7 @@ def _require_summa_access(result, user: Optional[Dict[str, Any]]) -> None:
 
 @router.get("/jobs/{job_id}/summa", response_model=ApexSummaReport)
 async def get_job_apex_summa_report(
-    job_id: str,
+    job_id: str = Depends(require_job_owner),
     lang: str = Query(default="es", description="Language: es or en"),
     user: Optional[Dict[str, Any]] = Depends(optional_user),
 ) -> ApexSummaReport:
@@ -313,8 +323,8 @@ async def get_job_apex_summa_report(
 
 @router.post("/jobs/{job_id}/minutes", response_model=MinutesDocumentResponse)
 async def create_job_meeting_minutes(
-    job_id: str,
     payload: MinutesGenerationRequest,
+    job_id: str = Depends(require_job_owner),
     user: Optional[Dict[str, Any]] = Depends(optional_user),
 ) -> MinutesDocumentResponse:
     """
@@ -344,7 +354,7 @@ async def create_job_meeting_minutes(
 
 @router.get("/jobs/{job_id}/calendar.ics")
 async def download_job_tasks_calendar_ics(
-    job_id: str,
+    job_id: str = Depends(require_job_media),
     user: Optional[Dict[str, Any]] = Depends(optional_user),
 ) -> Response:
     """Download the upcoming tasks ('Próximas tareas') as an iCalendar (.ics) file."""
