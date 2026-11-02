@@ -307,7 +307,8 @@ def test_extension_download_link_falls_back_to_local_zip_without_s4(monkeypatch)
     assert res.headers["cache-control"] == "no-store"
 
     html = client.get("/").text
-    assert 'href="/api/box/extension/download"' in html
+    # El botón de la web lleva a la Chrome Web Store; el ZIP queda para desarrollo.
+    assert 'href="https://chromewebstore.google.com/detail/hjjecchpiodaefnmdhfkbiejcakojgdo"' in html
 
 
 def test_s4_presigned_url_uses_region_from_endpoint(monkeypatch) -> None:
