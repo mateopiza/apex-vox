@@ -48,6 +48,56 @@
   // ---------------------------------------------------------------------------
   const I18N = {
     es: {
+      android_step1: "Abre esta página en <strong>Chrome</strong>.",
+      android_step2: "Toca el menú <strong>⋮</strong>.",
+      android_step3: "Elige <strong>Instalar app</strong> o <strong>Agregar a pantalla de inicio</strong>.",
+      app_card_desc: "Ábrelo como una app desde tu pantalla de inicio y graba tus reuniones presenciales.",
+      app_card_title: "Instala Apex Vox en tu celular",
+      app_install_btn: "Instalar app",
+      app_installed: "Ya estás usando la app instalada.",
+      box_blocks_log_empty: "Aún no has grabado.",
+      box_btn_add_note: "+ Anotar",
+      box_btn_cut_block: "Enviar bloque ahora",
+      box_btn_download_ext: "Descargar extensión (.zip)",
+      box_btn_open_summa: "Ver resumen completo",
+      box_btn_start: "● Grabar",
+      box_btn_stop_finalize: "■ Detener y crear resumen",
+      box_empty_live_desc: "Pulsa <strong>Grabar</strong> y la transcripción aparecerá cada 3 minutos.",
+      box_empty_live_title: "Aquí verás lo que se dice",
+      box_ext_card_desc: "Graba desde una pestaña fija de Chrome, también tus llamadas de Zoom, Meet o Teams. Al terminar recibes un enlace con notas, resumen y acta.",
+      box_ext_card_title: "Extensión de Chrome",
+      box_kpi_blocks: "Bloques enviados",
+      box_kpi_segments: "Frases transcritas",
+      box_lbl_elapsed: "TIEMPO GRABADO",
+      box_lbl_engine: "Modelo",
+      box_lbl_note_speaker: "Quién (opcional)",
+      box_lbl_note_text: "Nota",
+      box_lbl_platform: "Plataforma",
+      box_lbl_title: "Título de la reunión",
+      box_lead_desc: "Graba tu reunión el tiempo que necesites. Se guarda en <strong>bloques de 3 minutos</strong> y la transcripción aparece mientras hablas.",
+      box_live_feed_title: "Transcripción en vivo",
+      box_main_title: "Grabar una reunión",
+      box_mode_pres_desc: "Usa el micrófono de este equipo o de tu celular.",
+      box_mode_pres_title: "Presencial",
+      box_mode_virt_desc: "Zoom, Google Meet, Teams o Webex: graba la llamada y tu micrófono.",
+      box_mode_virt_title: "Virtual",
+      box_notes_desc: "Anota acuerdos o tareas sin parar la grabación. Cada nota guarda el minuto exacto y aparece en el resumen.",
+      box_notes_empty: "Aún no hay notas.",
+      box_notes_title: "Notas",
+      box_status_ready: "LISTO",
+      ext_step1: "Descomprime el <strong>.zip</strong>.",
+      ext_step2: "Abre <code>chrome://extensions</code> y activa el <strong>Modo de desarrollador</strong>.",
+      ext_step3: "Pulsa <strong>Cargar descomprimida</strong> y elige la carpeta.",
+      guest_notice: "Sin cuenta: hasta <strong>3 audios al día</strong> de máximo <strong>30 minutos</strong>, con cualquier motor. No guardamos ni analizamos nada.",
+      ios_step1: "Abre esta página en <strong>Safari</strong>.",
+      ios_step2: "Toca <strong>Compartir</strong> (el cuadro con la flecha).",
+      ios_step3: "Elige <strong>Agregar a pantalla de inicio</strong>.",
+      tag_Warning: "Alerta",
+      tag_agreement: "Acuerdo",
+      tag_idea: "Idea",
+      tag_note: "Nota",
+      tag_question: "Pregunta",
+      tag_task: "Tarea",
       brand_title: "Apex Vox",
       powered_by_groq: "Potenciado por Groq",
       brand_subtitle: "Transcribe, identifica quién habla y resume tus reuniones",
@@ -212,6 +262,56 @@
       lbl_vp_sample: "Muestra de voz",
     },
     en: {
+      android_step1: "Open this page in <strong>Chrome</strong>.",
+      android_step2: "Tap the <strong>⋮</strong> menu.",
+      android_step3: "Choose <strong>Install app</strong> or <strong>Add to Home screen</strong>.",
+      app_card_desc: "Open it like an app from your home screen and record your in-person meetings.",
+      app_card_title: "Install Apex Vox on your phone",
+      app_install_btn: "Install app",
+      app_installed: "You are already using the installed app.",
+      box_blocks_log_empty: "Nothing recorded yet.",
+      box_btn_add_note: "+ Add note",
+      box_btn_cut_block: "Send block now",
+      box_btn_download_ext: "Download extension (.zip)",
+      box_btn_open_summa: "View full summary",
+      box_btn_start: "● Record",
+      box_btn_stop_finalize: "■ Stop and create summary",
+      box_empty_live_desc: "Press <strong>Record</strong> and the transcript will appear every 3 minutes.",
+      box_empty_live_title: "What is said will appear here",
+      box_ext_card_desc: "Record from a pinned Chrome tab, including your Zoom, Meet or Teams calls. When you finish you get a link with notes, summary and minutes.",
+      box_ext_card_title: "Chrome extension",
+      box_kpi_blocks: "Blocks sent",
+      box_kpi_segments: "Sentences transcribed",
+      box_lbl_elapsed: "TIME RECORDED",
+      box_lbl_engine: "Model",
+      box_lbl_note_speaker: "Who (optional)",
+      box_lbl_note_text: "Note",
+      box_lbl_platform: "Platform",
+      box_lbl_title: "Meeting title",
+      box_lead_desc: "Record your meeting for as long as you need. It is saved in <strong>3-minute blocks</strong> and the transcript appears as you talk.",
+      box_live_feed_title: "Live transcript",
+      box_main_title: "Record a meeting",
+      box_mode_pres_desc: "Uses the microphone of this computer or your phone.",
+      box_mode_pres_title: "In person",
+      box_mode_virt_desc: "Zoom, Google Meet, Teams or Webex: records the call and your microphone.",
+      box_mode_virt_title: "Virtual",
+      box_notes_desc: "Write down agreements or tasks without stopping the recording. Each note keeps the exact minute and shows up in the summary.",
+      box_notes_empty: "No notes yet.",
+      box_notes_title: "Notes",
+      box_status_ready: "READY",
+      ext_step1: "Unzip the <strong>.zip</strong>.",
+      ext_step2: "Open <code>chrome://extensions</code> and turn on <strong>Developer mode</strong>.",
+      ext_step3: "Click <strong>Load unpacked</strong> and choose the folder.",
+      guest_notice: "Without an account: up to <strong>3 audios a day</strong> of at most <strong>30 minutes</strong>, with any engine. We don't store or analyze anything.",
+      ios_step1: "Open this page in <strong>Safari</strong>.",
+      ios_step2: "Tap <strong>Share</strong> (the square with the arrow).",
+      ios_step3: "Choose <strong>Add to Home Screen</strong>.",
+      tag_Warning: "Alert",
+      tag_agreement: "Agreement",
+      tag_idea: "Idea",
+      tag_note: "Note",
+      tag_question: "Question",
+      tag_task: "Task",
       brand_title: "Apex Vox",
       powered_by_groq: "Powered by Groq",
       brand_subtitle: "Transcribe, identify speakers and summarize your meetings",
@@ -476,6 +576,149 @@
   // Language & View Switching
   // ---------------------------------------------------------------------------
 
+
+  // ---------------------------------------------------------------------------
+  // Traducción de textos fijos sin clave data-i18n (coincidencia exacta)
+  // ---------------------------------------------------------------------------
+  const TEXT_EN = {
+      "Saltar al contenido": "Skip to content",
+      "Plan Gratis (2h/día)": "Free plan (2h/day)",
+      "Potenciado por Groq": "Powered by Groq",
+      "Plan Gratis": "Free plan",
+      "Usuario Invitado": "Guest user",
+      "24 horas (Plan Gratis)": "24 hours (Free plan)",
+      "USD 10 / 30 días": "USD 10 / 30 days",
+      "/ 30 días": "/ 30 days",
+      "Conectar con ChatGPT y Claude": "Connect with ChatGPT and Claude",
+      "Solo lectura": "Read-only",
+      "Pregúntale a ChatGPT o a Claude por tus reuniones: qué se acordó, quién dijo qué, tareas pendientes. Agrega este conector y autoriza tu cuenta.": "Ask ChatGPT or Claude about your meetings: what was agreed, who said what, pending tasks. Add this connector and authorize your account.",
+      "Copiar": "Copy",
+      "Configuración → Conectores → Agregar conector personalizado → pega la URL.": "Settings → Connectors → Add custom connector → paste the URL.",
+      "Configuración → Aplicaciones y conectores → Crear (modo desarrollador) → pega la URL con autenticación OAuth.": "Settings → Apps & connectors → Create (developer mode) → paste the URL with OAuth authentication.",
+      "Inicia sesión y pulsa": "Sign in and press",
+      "Permitir acceso": "Allow access",
+      ". Resúmenes y tareas: Apex Pro.": ". Summaries and tasks: Apex Pro.",
+      "Apps conectadas: —": "Connected apps: —",
+      "Desconectar todas las apps": "Disconnect all apps",
+      "Gratis": "Free",
+      "24 Horas": "24 Hours",
+      "0 archivos en orden": "0 files in order",
+      "Duración total: 00:00:00": "Total duration: 00:00:00",
+      "Preparando pipeline...": "Preparing…",
+      "Potenciado por Groq · Guardando de forma segura...": "Powered by Groq · Saving securely…",
+      "Ilimitado": "Unlimited",
+      "Subtítulos SRT": "SRT subtitles",
+      "Subtítulos VTT": "VTT subtitles",
+      "Copiar texto": "Copy text",
+      "Apex Summa IA · Potenciado por Groq": "Apex Summa AI · Powered by Groq",
+      "Desbloquear con Prueba Pro 3 Días": "Unlock with Apex Pro",
+      "Activar Apex Pro": "Activate Apex Pro",
+      "Buscar en la transcripción": "Search the transcript",
+      "BLOQUE 1": "BLOCK 1",
+      "0 notas": "0 notes",
+      "Bot para reuniones virtuales": "Bot for virtual meetings",
+      "El bot entra a tu Zoom, Meet o Teams, graba y te envía la transcripción con resumen y acta.": "The bot joins your Zoom, Meet or Teams, records and sends you the transcript with summary and minutes.",
+      "Enviar bot": "Send bot",
+      "También puedes invitar a": "You can also invite",
+      "a tus reuniones: el bot entrará solo a la hora.": "to your meetings: the bot will join on time by itself.",
+      "Grabar": "Record",
+      "CUENTA": "ACCOUNT",
+      "Mi cuenta": "My account",
+      "PLANES": "PLANS",
+      "Inicio": "Home",
+    "NOTA": "NOTE",
+      "Apex Vox — Inicio": "Apex Vox — Home",
+      "Navegación principal": "Main navigation",
+      "Plan activo y cuota diaria": "Active plan and daily quota",
+      "Apex Vox — Inicio y planes": "Apex Vox — Home and plans",
+      "URL del conector MCP": "MCP connector URL",
+      "Configuración y cola de audios": "Settings and audio queue",
+      "Limpiar lista": "Clear list",
+      "Subir archivos de audio": "Upload audio files",
+      "Secuencia ordenada de pistas de audio": "Ordered audio tracks",
+      "Ej: Reunión de Consejo entre Carlos y Ana...": "E.g. Board meeting between Carlos and Ana…",
+      "Nombre (ej. Carlos, Dra. Ana)": "Name (e.g. Carlos, Dr. Ana)",
+      "Resultados de transcripción y resumen IA Apex Summa": "Transcript and Apex Summa AI summary",
+      "Descargar transcripción": "Download transcript",
+      "Buscar palabra o frase...": "Search a word or phrase…",
+      "Apex Box — Grabar reuniones": "Apex Box — Record meetings",
+      "Grabar una reunión y tomar notas": "Record a meeting and take notes",
+      "Tipo de reunión": "Meeting type",
+      "Ej. Comité semanal": "E.g. Weekly committee",
+      "Nivel de sonido en vivo": "Live sound level",
+      "Tipo de nota": "Note type",
+      "Ej. Carlos": "E.g. Carlos",
+      "Escribe y presiona Enter": "Type and press Enter",
+      "Extensión de Chrome y transcripción en vivo": "Chrome extension and live transcript",
+      "Pega el enlace de la reunión": "Paste the meeting link",
+      "Enlace de la reunión": "Meeting link",
+      "Navegación móvil": "Mobile navigation",
+      "tu@correo.com": "you@email.com",
+      "Cerrar": "Close",
+      "Ej. Carlos Mendoza": "E.g. Carlos Mendoza",
+      "Presencial / Celular": "In person / Phone",
+      "Mc-Lewis · Híbrido": "Mc-Lewis · Hybrid",
+      "Mc-Ayrton · Máxima precisión": "Mc-Ayrton · Highest accuracy",
+      "Mc-Norris · Huella vocal": "Mc-Norris · Voiceprint",
+      "Mc-Piastri · Ultra rápido": "Mc-Piastri · Ultra fast"
+  };
+  const PAGE_META = {
+    es: {
+      title: "Apex Vox — Transcribe y resume tus reuniones con IA",
+      description: "Transcribe audios y reuniones con oradores identificados, resúmenes, tareas y actas. Graba en Zoom, Meet o Teams. 2 horas gratis al día.",
+    },
+    en: {
+      title: "Apex Vox — Transcribe and summarize your meetings with AI",
+      description: "Transcribe audio and meetings with identified speakers, summaries, tasks and minutes. Record Zoom, Meet or Teams. 2 free hours a day.",
+    },
+  };
+  const originalText = new WeakMap();
+  const I18N_ATTRS = ["placeholder", "aria-label", "title", "alt"];
+
+  function translateNode(root, lang) {
+    if (!root) return;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    let node;
+    while ((node = walker.nextNode())) {
+      const parent = node.parentElement;
+      if (!parent || parent.closest("[data-i18n], script, style, code, textarea")) continue;
+      if (!originalText.has(node)) originalText.set(node, node.nodeValue);
+      const orig = originalText.get(node);
+      const key = orig.replace(/\s+/g, " ").trim();
+      if (!key) continue;
+      const en = TEXT_EN[key];
+      if (!en) continue;
+      node.nodeValue = lang === "en" ? orig.replace(key, en) : orig;
+    }
+    const els = root.querySelectorAll ? root.querySelectorAll(I18N_ATTRS.map((a) => `[${a}]`).join(",")) : [];
+    els.forEach((el) => {
+      I18N_ATTRS.forEach((attr) => {
+        if (!el.hasAttribute(attr)) return;
+        const store = `data-orig-${attr}`;
+        if (!el.hasAttribute(store)) el.setAttribute(store, el.getAttribute(attr));
+        const orig = el.getAttribute(store);
+        const en = TEXT_EN[orig.trim()];
+        if (en) el.setAttribute(attr, lang === "en" ? en : orig);
+      });
+    });
+  }
+
+  function applyPageMeta(lang) {
+    const meta = PAGE_META[lang] || PAGE_META.es;
+    document.title = meta.title;
+    const desc = document.querySelector('meta[name="description"]');
+    if (desc) desc.setAttribute("content", meta.description);
+  }
+
+  // Contenido que el JS agrega después (listas, alertas): se traduce al aparecer
+  new MutationObserver((mutations) => {
+    if (state.lang !== "en") return;
+    mutations.forEach((m) => m.addedNodes.forEach((n) => {
+      if (n.nodeType === 1) translateNode(n, "en");
+      else if (n.nodeType === 3 && n.parentElement) translateNode(n.parentElement, "en");
+    }));
+  }).observe(document.body, { childList: true, subtree: true });
+
   function applyLanguage(lang) {
     const clean = lang === "en" ? "en" : "es";
     state.lang = clean;
@@ -488,6 +731,8 @@
       langEnBtn.classList.toggle("active", clean === "en");
     }
 
+    translateNode(document.body, clean);
+    applyPageMeta(clean);
     const dict = I18N[clean] || I18N.es;
     document.querySelectorAll("[data-i18n]").forEach((el) => {
       const key = el.getAttribute("data-i18n");
@@ -606,6 +851,11 @@
       }
       return res;
     });
+  }
+
+  function planLabel(quota) {
+    if (quota && quota.is_unlimited) return "Apex Pro";
+    return t("Plan gratis (2 h al día)", "Free plan (2 h a day)");
   }
 
   function t(es, en) {
@@ -809,7 +1059,7 @@
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Error al registrar cuenta.");
+      if (!res.ok) throw new Error(data.detail || t("Error al registrar la cuenta.", "Could not create the account."));
 
       storeSession(data);
       if (authDialog) authDialog.close();
@@ -844,7 +1094,7 @@
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Credenciales inválidas.");
+      if (!res.ok) throw new Error(data.detail || t("Correo o contraseña incorrectos.", "Wrong email or password."));
 
       storeSession(data);
       if (authDialog) authDialog.close();
@@ -997,7 +1247,7 @@
       }
     } catch (err) { /* ignore */ }
     const planEl = document.getElementById("portal-kpi-plan");
-    if (planEl && state.user && state.user.quota) planEl.textContent = state.user.quota.plan_display_name || state.plan;
+    if (planEl && state.user && state.user.quota) planEl.textContent = planLabel(state.user.quota);
     await loadTelegramStatus();
   }
 
@@ -1146,10 +1396,11 @@
     }
   }
 
-  const BOT_STATUS = {
-    scheduled: "Programado", joining: "Entrando", waiting_room: "En sala de espera", recording: "Grabando",
-    processing: "Procesando", done: "Listo", failed: "Falló", cancelled: "Cancelado",
-  };
+  const botStatusLabel = (status) => ({
+    scheduled: t("Programado", "Scheduled"), joining: t("Entrando", "Joining"), waiting_room: t("En sala de espera", "In waiting room"),
+    recording: t("Grabando", "Recording"), processing: t("Procesando", "Processing"), done: t("Listo", "Done"),
+    failed: t("Falló", "Failed"), cancelled: t("Cancelado", "Cancelled"),
+  }[status] || status);
 
   async function loadMeetingBots() {
     const list = document.getElementById("bot-list");
@@ -1176,7 +1427,7 @@
         const when = b.join_at ? new Date(b.join_at).toLocaleString() : new Date(b.created_at).toLocaleString();
         const link = b.job_id ? ` · <a class="text-link-strong" href="/?job=${encodeURIComponent(b.job_id)}">${t("Ver resumen", "View summary")}</a>` : "";
         rows.push(`<li class="track-item"><div class="track-meta"><div class="track-name">${escapeHtml(b.title)}</div>
-          <div class="track-sub"><span>${escapeHtml(when)}</span><span>${BOT_STATUS[b.status] || escapeHtml(b.status)}${link}</span></div></div></li>`);
+          <div class="track-sub"><span>${escapeHtml(when)}</span><span>${escapeHtml(botStatusLabel(b.status))}${link}</span></div></div></li>`);
       });
       list.innerHTML = rows.join("") || `<li class="track-item track-item--static">${t("Aún no has enviado el bot.", "You haven't sent the bot yet.")}</li>`;
     } catch (err) {
@@ -1252,9 +1503,9 @@
 
       if (nameEl) nameEl.textContent = data.user.full_name;
       if (emailEl) emailEl.textContent = data.user.email;
-      if (badgeEl) badgeEl.textContent = data.quota.plan_display_name;
-      if (retEl) retEl.textContent = data.storage.retention_policy;
-      if (kpiRet) kpiRet.textContent = data.quota.is_unlimited ? "Ilimitado" : "24 Horas";
+      if (badgeEl) badgeEl.textContent = planLabel(data.quota);
+      if (retEl) retEl.textContent = data.quota.is_unlimited ? t("Sin límite de tiempo (Apex Pro)", "No time limit (Apex Pro)") : t("24 horas (Plan gratis)", "24 hours (Free plan)");
+      if (kpiRet) kpiRet.textContent = data.quota.is_unlimited ? t("Ilimitado", "Unlimited") : t("24 horas", "24 hours");
       if (kpiCount) kpiCount.textContent = String((data.transcriptions || []).length);
 
       if (qNumbers && qBar) {
@@ -1264,7 +1515,7 @@
         } else {
           const used = Number(data.quota.used_today_seconds) || 0;
           const limit = Number(data.quota.daily_limit_seconds) || 7200;
-          qNumbers.textContent = `${formatSecondsHHMMSS(used)} / ${formatSecondsHHMMSS(limit)} (2h Gratis)`;
+          qNumbers.textContent = `${formatSecondsHHMMSS(used)} / ${formatSecondsHHMMSS(limit)} (${t("2 h gratis", "2 h free")})`;
           qBar.style.width = `${Math.min(100, Math.max(3, (used / limit) * 100))}%`;
         }
       }
@@ -1273,7 +1524,7 @@
         histList.innerHTML = "";
         const items = data.transcriptions || [];
         if (items.length === 0) {
-          histList.innerHTML = `<li class="track-item track-item--static">No hay transcripciones registradas aún. Ve al Playground para procesar tus audios.</li>`;
+          histList.innerHTML = `<li class="track-item track-item--static">${t("Aún no tienes transcripciones. Ve a Studio para transcribir tus audios.", "No transcripts yet. Go to Studio to transcribe your audio.")}</li>`;
         } else {
           items.forEach((rec) => {
             const li = document.createElement("li");
@@ -1283,7 +1534,7 @@
               <div class="track-top">
                 <span class="track-order-badge">${escapeHtml(rec.engine_brand || "Mc-Lewis")}</span>
                 <span class="track-name">Job ${escapeHtml(rec.job_id)} — Orador principal: ${escapeHtml(rec.dominant_speaker || "Hablante 1")}</span>
-                <span class="meta-tag timeline">${rec.retention_policy === "unlimited" ? "Almacenado · sin límite" : "Almacenado · 24 h"}</span>
+                <span class="meta-tag timeline">${rec.retention_policy === "unlimited" ? t("Almacenado · sin límite", "Stored · no limit") : t("Almacenado · 24 h", "Stored · 24 h")}</span>
               </div>
               <div class="track-meta">
                 <span class="meta-tag">Duración: ${escapeHtml(rec.total_duration_formatted || "00:00:00")}</span>
@@ -1321,7 +1572,7 @@
       }
     } catch (err) {
       healthDot.className = "status-dot warn";
-      healthText.textContent = "Sin conexión";
+      healthText.textContent = t("Sin conexión", "Offline");
     }
   }
 
@@ -1395,7 +1646,7 @@
         body: formData,
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Error registrando perfil de voz.");
+      if (!res.ok) throw new Error(data.detail || t("No se pudo guardar el perfil de voz.", "Could not save the voice profile."));
       vpNameInput.value = "";
       vpFileInput.value = "";
       await loadVoiceProfiles();
@@ -1432,7 +1683,7 @@
         body: formData,
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Error al subir los archivos de audio.");
+      if (!res.ok) throw new Error(data.detail || t("No se pudieron subir los audios.", "Could not upload the audio files."));
 
       state.sessionId = data.session_id;
       state.files = data.files || [];
@@ -1488,11 +1739,11 @@
       li.innerHTML = `
         <div class="track-top">
           <span class="drag-handle" title="${isEn ? "Drag to reorder audio" : "Arrastra para cambiar el orden del audio"}">⠿</span>
-          <span class="track-order-badge" title="Posición en la secuencia">#${index + 1}</span>
+          <span class="track-order-badge" title="${t("Posición en la secuencia", "Position in the sequence")}">#${index + 1}</span>
           <span class="track-name" title="${escapeHtml(file.filename)}">${escapeHtml(file.filename)}</span>
           <div class="track-controls">
-            <button type="button" class="icon-btn move-up-btn" title="Subir posición" ${index === 0 ? "disabled" : ""}>↑</button>
-            <button type="button" class="icon-btn move-down-btn" title="Bajar posición" ${index === count - 1 ? "disabled" : ""}>↓</button>
+            <button type="button" class="icon-btn move-up-btn" title="${t("Subir", "Move up")}" ${index === 0 ? "disabled" : ""}>↑</button>
+            <button type="button" class="icon-btn move-down-btn" title="${t("Bajar", "Move down")}" ${index === count - 1 ? "disabled" : ""}>↓</button>
             <button type="button" class="icon-btn danger remove-track-btn" title="Eliminar audio">×</button>
           </div>
         </div>
@@ -1627,7 +1878,7 @@
     });
 
     queueCountLabel.textContent = `${count} archivo${count === 1 ? "" : "s"} en secuencia`;
-    queueDurationLabel.textContent = `Duración total: ${formatSecondsHHMMSS(cumulativeSec)} (${cumulativeSec.toFixed(1)}s)`;
+    queueDurationLabel.textContent = `${t("Duración total", "Total duration")}: ${formatSecondsHHMMSS(cumulativeSec)}`;
   }
 
   async function moveTrack(fromIdx, toIdx) {
@@ -1686,7 +1937,7 @@
     const chosenEngine = engineSelect ? engineSelect.value : "Mc-Lewis";
     updateProgressUI(
       5,
-      `Iniciando Apex Vox con motor ${chosenEngine} (Potenciado por Groq)...`
+      t(`Transcribiendo con ${chosenEngine}…`, `Transcribing with ${chosenEngine}…`)
     );
 
     const spkVal = speakersSelect.value;
@@ -1711,7 +1962,7 @@
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.detail || "No se pudo iniciar la transcripción.");
+        throw new Error(data.detail || t("No se pudo iniciar la transcripción.", "Could not start the transcription."));
       }
 
       state.currentJobId = data.job_id;
@@ -1739,7 +1990,7 @@
         const res = await fetch(`/api/jobs/${jobId}/status`);
         const statusData = await res.json();
         if (!res.ok) {
-          throw new Error(statusData.detail || "Error consultando estado del trabajo.");
+          throw new Error(statusData.detail || t("No se pudo consultar el estado.", "Could not check the status."));
         }
 
         const chunkInfo =
@@ -1774,7 +2025,7 @@
       const res = await fetch(`/api/jobs/${jobId}/result`);
       const result = await res.json();
       if (!res.ok) {
-        throw new Error(result.detail || "Error al obtener el resultado.");
+        throw new Error(result.detail || t("No se pudo obtener el resultado.", "Could not load the result."));
       }
 
       state.currentResult = result;
@@ -2042,7 +2293,7 @@
         }),
       });
       const doc = await res.json();
-      if (!res.ok) throw new Error(doc.detail || "Error generando el acta.");
+      if (!res.ok) throw new Error(doc.detail || t("No se pudo generar el acta.", "Could not generate the minutes."));
 
       state.currentMinutes = doc;
       if (previewContainer) {
@@ -2257,7 +2508,7 @@
       });
       const updated = await res.json();
       if (!res.ok) {
-        throw new Error(updated.detail || "Error al renombrar oradores.");
+        throw new Error(updated.detail || t("No se pudieron renombrar los oradores.", "Could not rename the speakers."));
       }
 
       state.currentResult = updated;
@@ -2525,7 +2776,7 @@
     try {
       await navigator.clipboard.writeText(state.currentResult.full_text || "");
       const prev = copyTranscriptBtn.textContent;
-      copyTranscriptBtn.textContent = "¡Copiado!";
+      copyTranscriptBtn.textContent = t("¡Copiado!", "Copied!");
       setTimeout(() => {
         copyTranscriptBtn.textContent = prev;
       }, 1800);
@@ -2675,8 +2926,8 @@
     if (boxActiveModeBadge) {
       boxActiveModeBadge.textContent =
         boxState.mode === "virtual"
-          ? "Modo: Reunión Virtual (Zoom / Meet / Teams + Mic)"
-          : "Modo: Reunión Presencial / App Celular";
+          ? t("Modo: reunión virtual", "Mode: virtual meeting")
+          : t("Modo: presencial", "Mode: in person");
     }
     if (boxPlatformSelect && boxState.mode === "presencial" && boxPlatformSelect.value !== "presencial" && boxPlatformSelect.value !== "mobile_pwa") {
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
@@ -2700,7 +2951,7 @@
 
     const payload = {
       title: (boxTitleInput && boxTitleInput.value.trim()) ||
-        (boxState.mode === "virtual" ? "Reunión Virtual (Zoom/Meet/Teams)" : "Reunión Presencial / App Móvil"),
+        (boxState.mode === "virtual" ? t("Reunión virtual", "Virtual meeting") : t("Reunión presencial", "In-person meeting")),
       mode: boxState.mode,
       platform: (boxPlatformSelect && boxPlatformSelect.value) || (boxState.mode === "virtual" ? "google_meet" : "presencial"),
       language: (boxLanguageSelect && boxLanguageSelect.value) || "es",
@@ -2716,7 +2967,7 @@
     });
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data.detail || "No se pudo inicializar la sesión de Apex Box.");
+      throw new Error(data.detail || t("No se pudo iniciar la grabación.", "Could not start the recording."));
     }
     boxState.boxSessionId = data.box_session_id;
     boxState.nextBlockIndex = 0;
@@ -2928,7 +3179,7 @@
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.detail || `Error al procesar bloque #${blockIndex + 1}`);
+        throw new Error(data.detail || t(`No se pudo procesar el bloque ${blockIndex + 1}`, `Could not process block ${blockIndex + 1}`));
       }
 
       boxState.completedBlocksCount = data.total_blocks_received;
@@ -2965,7 +3216,7 @@
     // Render blocks history
     if (boxBlocksHistoryList) {
       if (boxState.blocks.length === 0) {
-        boxBlocksHistoryList.innerHTML = `<div class="track-item"><span>Sin bloques enviados todavía.</span></div>`;
+        boxBlocksHistoryList.innerHTML = `<div class="track-item"><span>${t("Aún no has grabado.", "Nothing recorded yet.")}</span></div>`;
       } else {
         boxBlocksHistoryList.innerHTML = boxState.blocks
           .slice()
@@ -3068,13 +3319,13 @@
       setBoxRecordingButtons(true);
 
       showBoxAlert(
-        `Grabando (${boxState.mode === "virtual" ? "reunión virtual" : "presencial"}). La transcripción aparece cada 3 minutos.`,
+        t(`Grabando (${boxState.mode === "virtual" ? "reunión virtual" : "presencial"}). La transcripción aparece cada 3 minutos.`, `Recording (${boxState.mode === "virtual" ? "virtual meeting" : "in person"}). The transcript appears every 3 minutes.`),
         "success"
       );
     } catch (err) {
       boxState.status = "idle";
       showBoxAlert(
-        `No se pudo acceder al micrófono/audio (${err.message}). Revisa que el navegador tenga permiso para usar el micrófono.`,
+        t(`No se pudo usar el micrófono (${err.message}). Revisa que el navegador tenga permiso.`, `Could not use the microphone (${err.message}). Check the browser permission.`),
         "error"
       );
     }
@@ -3147,7 +3398,7 @@
       });
       const finalized = await res.json();
       if (!res.ok) {
-        throw new Error(finalized.detail || "Error al finalizar la sesión.");
+        throw new Error(finalized.detail || t("No se pudo finalizar la grabación.", "Could not finish the recording."));
       }
 
       state.currentJobId = finalized.job_id;
@@ -3159,7 +3410,7 @@
         boxOpenInPlaygroundBtn.classList.remove("hidden");
       }
       showBoxAlert(
-        `¡Sesión finalizada con éxito! ${finalized.result.segments.length} segmentos y ${boxState.notes.length} notas integrados en Apex Summa y Acta Oficial.`,
+        t(`¡Listo! ${finalized.result.segments.length} frases y ${boxState.notes.length} notas en tu resumen y acta.`, `Done! ${finalized.result.segments.length} sentences and ${boxState.notes.length} notes in your summary and minutes.`),
         "success"
       );
     } catch (err) {
@@ -3244,7 +3495,7 @@
       });
       const note = await res.json();
       if (!res.ok) {
-        throw new Error(note.detail || "No se pudo guardar la nota.");
+        throw new Error(note.detail || t("No se pudo guardar la nota.", "Could not save the note."));
       }
       boxState.notes.push(note);
       boxNoteTextInput.value = "";
@@ -3335,6 +3586,38 @@
   }
   if (boxOpenInPlaygroundBtn) {
     boxOpenInPlaygroundBtn.addEventListener("click", () => switchView("playground"));
+  }
+
+  // Dispositivo: en computador se muestra la extensión; en celular, cómo instalar la app
+  const ua = navigator.userAgent || "";
+  const isIOS = /iPhone|iPad|iPod/i.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const isAndroid = /Android/i.test(ua);
+  const isMobile = isIOS || isAndroid || /Mobi/i.test(ua);
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+  document.documentElement.classList.add(isMobile ? "is-mobile" : "is-desktop");
+  document.documentElement.classList.toggle("is-ios", isIOS);
+  document.documentElement.classList.toggle("is-android", isAndroid);
+  if (isStandalone) {
+    document.querySelectorAll(".install-ios, .install-android").forEach((el) => el.classList.add("hidden"));
+    const installedMsg = document.getElementById("pwa-installed-msg");
+    if (installedMsg) installedMsg.classList.remove("hidden");
+  }
+  let deferredInstallPrompt = null;
+  window.addEventListener("beforeinstallprompt", (e) => {
+    e.preventDefault();
+    deferredInstallPrompt = e;
+    const btn = document.getElementById("pwa-install-btn");
+    if (btn) btn.classList.remove("hidden");
+  });
+  const pwaInstallBtn = document.getElementById("pwa-install-btn");
+  if (pwaInstallBtn) {
+    pwaInstallBtn.addEventListener("click", async () => {
+      if (!deferredInstallPrompt) return;
+      deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice.catch(() => null);
+      deferredInstallPrompt = null;
+      pwaInstallBtn.classList.add("hidden");
+    });
   }
 
   // Service worker: hace instalable la app web en celulares y escritorio

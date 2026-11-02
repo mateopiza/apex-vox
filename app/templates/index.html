@@ -864,29 +864,49 @@
           <div id="bot-alert" class="alert-box hidden" role="status"></div>
         </div>
 
-        <div class="card">
+        <!-- En computador: extensión de Chrome -->
+        <div class="card device-desktop" id="ext-card">
           <div class="card-header">
             <h2 class="card-title">
               <span class="step-badge">EXT</span>
-              <span data-i18n="box_ext_card_title">Extensión de Chrome y celular</span>
+              <span data-i18n="box_ext_card_title">Extensión de Chrome</span>
             </h2>
-            <span class="badge-pill info">CHROME · CELULAR</span>
+            <span class="badge-pill info">CHROME</span>
           </div>
-
-          <p class="card-lead" data-i18n="box_ext_card_desc">
-            Graba también desde la <strong>extensión de Chrome</strong> o desde tu <strong>celular</strong>. Al terminar recibes un enlace con notas, resumen y acta.
-          </p>
-
+          <p class="card-lead" data-i18n="box_ext_card_desc">Graba desde una pestaña fija de Chrome, también tus llamadas de Zoom, Meet o Teams. Al terminar recibes un enlace con notas, resumen y acta.</p>
           <div class="button-row">
             <a href="/api/box/extension/download" class="btn-primary" id="download-extension-zip-btn" rel="nofollow" data-i18n="box_btn_download_ext">Descargar extensión (.zip)</a>
           </div>
-
           <ol class="box-ext-steps">
-            <li>Descomprime el <strong>.zip</strong>.</li>
-            <li>Abre <code>chrome://extensions</code> y activa el <strong>Modo de desarrollador</strong>.</li>
-            <li>Pulsa <strong>Cargar descomprimida</strong> y elige la carpeta.</li>
+            <li data-i18n="ext_step1">Descomprime el <strong>.zip</strong>.</li>
+            <li data-i18n="ext_step2">Abre <code>chrome://extensions</code> y activa el <strong>Modo de desarrollador</strong>.</li>
+            <li data-i18n="ext_step3">Pulsa <strong>Cargar descomprimida</strong> y elige la carpeta.</li>
           </ol>
-          <p class="box-ext-mobile"><strong>En el celular:</strong> abre esta página y pulsa «Agregar a pantalla de inicio».</p>
+        </div>
+
+        <!-- En celular: instalar la app -->
+        <div class="card device-mobile" id="app-install-card">
+          <div class="card-header">
+            <h2 class="card-title">
+              <span class="step-badge">APP</span>
+              <span data-i18n="app_card_title">Instala Apex Vox en tu celular</span>
+            </h2>
+          </div>
+          <p class="card-lead" data-i18n="app_card_desc">Ábrelo como una app desde tu pantalla de inicio y graba tus reuniones presenciales.</p>
+          <div class="button-row">
+            <button type="button" class="btn-primary hidden" id="pwa-install-btn" data-i18n="app_install_btn">Instalar app</button>
+          </div>
+          <ol class="box-ext-steps install-ios">
+            <li data-i18n="ios_step1">Abre esta página en <strong>Safari</strong>.</li>
+            <li data-i18n="ios_step2">Toca <strong>Compartir</strong> (el cuadro con la flecha).</li>
+            <li data-i18n="ios_step3">Elige <strong>Agregar a pantalla de inicio</strong>.</li>
+          </ol>
+          <ol class="box-ext-steps install-android">
+            <li data-i18n="android_step1">Abre esta página en <strong>Chrome</strong>.</li>
+            <li data-i18n="android_step2">Toca el menú <strong>⋮</strong>.</li>
+            <li data-i18n="android_step3">Elige <strong>Instalar app</strong> o <strong>Agregar a pantalla de inicio</strong>.</li>
+          </ol>
+          <p class="field-hint hidden" id="pwa-installed-msg" data-i18n="app_installed">Ya estás usando la app instalada.</p>
         </div>
 
         <div class="card">

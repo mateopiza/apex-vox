@@ -3384,3 +3384,11 @@ dialog.apex-dialog[open] {
 
 .profile-lang-row { display: flex; align-items: center; gap: 10px; }
 .form-control--inline { width: auto; min-width: 140px; padding-top: 6px; padding-bottom: 6px; }
+
+/* Contenido según dispositivo (clase en <html> puesta por app.js) */
+html.is-desktop .device-mobile,
+html.is-mobile .device-desktop { display: none !important; }
+html:not(.is-desktop):not(.is-mobile) .device-mobile { display: none; }
+html:not(.is-ios) .install-ios { display: none; }
+html.is-ios .install-android { display: none; }
+html.is-desktop .install-android { display: none; }
