@@ -63,6 +63,8 @@ def _connect(client: TestClient, profile: dict) -> dict:
               "code_challenge": challenge, "code_challenge_method": "S256", "resource": "http://testserver/mcp"}
     page = client.get("/oauth/authorize", params=params)
     assert page.status_code == 200 and "Apex Vox" in page.text and "Claude" in page.text
+    en_page = client.get("/oauth/authorize", params={**params, "lang": "en"})
+    assert "wants to access your Apex Vox account" in en_page.text and '<html lang="en">' in en_page.text
     decision = client.post("/oauth/authorize/decision", json={"params": params, "approve": True},
                            headers={"Authorization": f"Bearer {profile['access_token']}"})
     assert decision.status_code == 200, decision.text

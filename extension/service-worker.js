@@ -78,7 +78,7 @@ chrome.tabs.onRemoved.addListener(async () => {
     if (!(await findRecorderTab())) {
       await chrome.storage.session.set({ recordingState: "idle" });
       await chrome.action.setBadgeText({ text: "" });
-      await chrome.action.setTitle({ title: "Apex Box · Abrir grabador" });
+      await chrome.action.setTitle({ title: chrome.i18n.getMessage("actionTitle") });
     }
   } catch (err) {
     console.error("Error al restablecer estado del icono:", err);

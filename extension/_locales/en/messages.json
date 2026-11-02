@@ -1,0 +1,11 @@
+{
+  "extName": {
+    "message": "Apex Box — Meeting recorder"
+  },
+  "extDescription": {
+    "message": "Record in-person meetings or video calls in a pinned tab and get the transcript, notes, summary and minutes in Apex Vox."
+  },
+  "actionTitle": {
+    "message": "Apex Box · Open recorder"
+  }
+}

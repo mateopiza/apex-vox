@@ -9,6 +9,66 @@
 
 "use strict";
 
+// Idioma de la interfaz: el del navegador (español o inglés)
+const UI_LANG = String((chrome.i18n && chrome.i18n.getUILanguage()) || navigator.language || "es")
+  .toLowerCase().startsWith("es") ? "es" : "en";
+const L = (es, en) => (UI_LANG === "en" ? en : es);
+const STATIC_EN = {
+  "Apex Box · Grabador": "Apex Box · Recorder",
+  "NO REC": "NO REC",
+  "Tipo de reunión": "Meeting type",
+  "Ejecutiva": "Executive",
+  "Consejo / Junta directiva": "Board of directors",
+  "Comité": "Committee",
+  "Asamblea": "Assembly",
+  "Seguimiento": "Follow-up",
+  "Título": "Title",
+  "Ej. Comité semanal de ventas": "E.g. Weekly sales committee",
+  "Tipo de grabación": "Recording type",
+  "Presencial": "In person",
+  "Virtual": "Virtual",
+  "Modelo": "Model",
+  "Mc-Lewis · Híbrido": "Mc-Lewis · Hybrid",
+  "Mc-Ayrton · Máxima precisión": "Mc-Ayrton · Highest accuracy",
+  "Mc-Norris · Huella vocal": "Mc-Norris · Voiceprint",
+  "Mc-Piastri · Ultra rápido": "Mc-Piastri · Ultra fast",
+  "Sin grabar": "Not recording",
+  "● Grabar": "● Record",
+  "Iniciar sesión en Apex Vox": "Sign in to Apex Vox",
+  "Comprobando sesión…": "Checking session…",
+  "Bloques enviados": "Blocks sent",
+  "Segmentos": "Sentences",
+  "Hablantes": "Speakers",
+  "Pendientes": "Pending",
+  "Reunión lista": "Meeting ready",
+  "Ver notas, resumen y acta ↗": "View notes, summary and minutes ↗",
+  "Copiar": "Copy",
+  "Nueva grabación": "New recording",
+  "Servidor": "Server",
+  "Guardar": "Save",
+  "Nivel de sonido": "Sound level"
+};
+
+// Traduce los textos fijos del HTML (texto, placeholder, aria-label y title)
+function translateStatic() {
+  document.documentElement.lang = UI_LANG;
+  if (UI_LANG !== "en") return;
+  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+  let node;
+  while ((node = walker.nextNode())) {
+    const key = node.nodeValue.replace(/\s+/g, " ").trim();
+    if (key && STATIC_EN[key]) node.nodeValue = node.nodeValue.replace(key, STATIC_EN[key]);
+  }
+  document.querySelectorAll("[placeholder],[aria-label],[title]").forEach((el) => {
+    ["placeholder", "aria-label", "title"].forEach((a) => {
+      const v = el.getAttribute(a);
+      if (v && STATIC_EN[v.trim()]) el.setAttribute(a, STATIC_EN[v.trim()]);
+    });
+  });
+  if (STATIC_EN[document.title]) document.title = STATIC_EN[document.title];
+}
+translateStatic();
+
 (function () {
   const BLOCK_SEC = 180;
   const BITRATE = 48000;
@@ -138,9 +198,9 @@
       st.token = null;
       st.user = null;
       renderAccount();
-      throw new Error("Tu sesión expiró. Inicia sesión en Apex Vox y vuelve a intentarlo.");
+      throw new Error(L("Tu sesión expiró. Inicia sesión en Apex Vox y vuelve a intentarlo.", "Your session expired. Sign in to Apex Vox and try again."));
     }
-    if (!res.ok) throw new Error(data.detail || `El servidor respondió HTTP ${res.status}`);
+    if (!res.ok) throw new Error(data.detail || L(`El servidor respondió HTTP ${res.status}`, `Server answered HTTP ${res.status}`));
     return data;
   }
 
@@ -173,10 +233,10 @@
       const q = st.user.quota || {};
       const plan = q.is_unlimited
         ? "Apex Pro"
-        : `Plan gratis · ${Math.max(0, Math.floor((q.remaining_today_seconds || 0) / 60))} min disponibles hoy`;
+        : L(`Plan gratis · ${Math.max(0, Math.floor((q.remaining_today_seconds || 0) / 60))} min disponibles hoy`, `Free plan · ${Math.max(0, Math.floor((q.remaining_today_seconds || 0) / 60))} min left today`);
       el.account.textContent = `${st.user.email} · ${plan}`;
     } else {
-      el.account.textContent = "Inicia sesión en Apex Vox para grabar. Después vuelve a esta pestaña.";
+      el.account.textContent = L("Inicia sesión en Apex Vox para grabar. Después vuelve a esta pestaña.", "Sign in to Apex Vox to record, then come back to this tab.");
     }
   }
 
@@ -186,17 +246,17 @@
 
   function renderModeHint() {
     if (mode() === "presencial") {
-      el.modeHint.textContent = "Graba el micrófono de este equipo.";
+      el.modeHint.textContent = L("Graba el micrófono de este equipo.", "Records this computer's microphone.");
       el.modeHint.classList.remove("warn");
       return;
     }
     if (st.source) {
       const p = detectPlatform(st.source.url);
-      el.modeHint.textContent = `Graba el audio de «${(p && p.label) || st.source.title || st.source.url}» + tu micrófono.`;
+      el.modeHint.textContent = L(`Graba el audio de «${(p && p.label) || st.source.title || st.source.url}» + tu micrófono.`, `Records the audio of “${(p && p.label) || st.source.title || st.source.url}” + your microphone.`);
       el.modeHint.classList.remove("warn");
     } else {
       el.modeHint.textContent =
-        "Abre la pestaña de la reunión y pulsa el icono de Apex Box para elegirla como fuente.";
+        L("Abre la pestaña de la reunión y pulsa el icono de Apex Box para elegirla como fuente.", "Open the meeting tab and click the Apex Box icon to use it as the source.");
       el.modeHint.classList.add("warn");
     }
   }
@@ -209,10 +269,10 @@
   }
 
   function renderRecordingState() {
-    el.pill.textContent = st.recording ? "REC" : "NO REC";
+    el.pill.textContent = st.recording ? "REC" : L("NO REC", "NOT REC");
     el.pill.classList.toggle("on", st.recording);
     if (!st.recording) el.pill.classList.remove("warn");
-    el.recBtn.textContent = st.recording ? "■ Detener" : "● Grabar";
+    el.recBtn.textContent = st.recording ? L("■ Detener", "■ Stop") : L("● Grabar", "● Record");
     el.recBtn.classList.toggle("stop", st.recording);
     el.recBtn.disabled = st.busy;
     el.form.querySelectorAll("input, select").forEach((n) => (n.disabled = st.recording || st.busy));
@@ -224,17 +284,17 @@
     const sig = signalState();
     const noSound = sig.kind === "warn" || sig.kind === "off";
     el.clock.textContent = hhmmss(sec);
-    document.title = `${noSound ? "⚠ SIN SONIDO" : "● REC"} ${hhmmss(sec)} · Apex Box`;
+    document.title = `${noSound ? L("⚠ SIN SONIDO", "⚠ NO SOUND") : "● REC"} ${hhmmss(sec)} · Apex Box`;
     // Badge: tiempo en rojo si entra sonido; "MUDO" en ámbar si no se está captando nada.
     chrome.action.setBadgeBackgroundColor({ color: noSound ? "#d97706" : "#f43e01" });
-    chrome.action.setBadgeText({ text: noSound ? "MUDO" : badgeTime(sec) });
+    chrome.action.setBadgeText({ text: noSound ? L("MUDO", "MUTE") : badgeTime(sec) });
     chrome.action.setTitle({
       title: `Apex Box · REC ${hhmmss(sec)}${
         sig.kind === "off"
-          ? " · ⚠ fuente desconectada"
+          ? L(" · ⚠ fuente desconectada", " · ⚠ source disconnected")
           : noSound
-          ? ` · ⚠ sin sonido hace ${sig.silentSec} s`
-          : " · captando sonido"
+          ? L(` · ⚠ sin sonido hace ${sig.silentSec} s`, ` · ⚠ no sound for ${sig.silentSec} s`)
+          : L(" · captando sonido", " · picking up sound")
       }`,
     });
     if (document.hidden) return;
@@ -244,7 +304,7 @@
   function setIdleIndicator() {
     document.title = "Apex Box · Grabador";
     chrome.action.setBadgeText({ text: "" });
-    chrome.action.setTitle({ title: "Apex Box · No grabando" });
+    chrome.action.setTitle({ title: L("Apex Box · No grabando", "Apex Box · Not recording") });
   }
 
   // ---------------------------------------------------------------------------
@@ -264,12 +324,12 @@
     st.meterSources = [];
     if (mode() === "presencial") {
       const mic = await getMic();
-      st.meterSources.push({ label: "Micrófono", stream: mic, node: st.audioCtx.createMediaStreamSource(mic) });
+      st.meterSources.push({ label: L("Micrófono", "Microphone"), stream: mic, node: st.audioCtx.createMediaStreamSource(mic) });
       return mic;
     }
 
     if (!st.source) {
-      throw new Error("Elige la pestaña de la reunión: ábrela y pulsa el icono de Apex Box.");
+      throw new Error(L("Elige la pestaña de la reunión: ábrela y pulsa el icono de Apex Box.", "Choose the meeting tab: open it and click the Apex Box icon."));
     }
     const me = await chrome.tabs.getCurrent();
     const streamId = await chrome.tabCapture.getMediaStreamId({
@@ -286,15 +346,15 @@
     const tabSrc = st.audioCtx.createMediaStreamSource(tabStream);
     tabSrc.connect(st.audioCtx.destination); // seguir escuchando la reunión
     tabSrc.connect(out);
-    st.meterSources.push({ label: "Reunión", stream: tabStream, node: tabSrc });
+    st.meterSources.push({ label: L("Reunión", "Meeting"), stream: tabStream, node: tabSrc });
 
     try {
       const mic = await getMic();
       const micSrc = st.audioCtx.createMediaStreamSource(mic);
       micSrc.connect(out);
-      st.meterSources.push({ label: "Micrófono", stream: mic, node: micSrc });
+      st.meterSources.push({ label: L("Micrófono", "Microphone"), stream: mic, node: micSrc });
     } catch (_) {
-      showStatus("Grabando solo el audio de la reunión (sin micrófono).");
+      showStatus(L("Grabando solo el audio de la reunión (sin micrófono).", "Recording only the meeting audio (no microphone)."));
     }
     return out.stream;
   }
@@ -377,15 +437,15 @@
     const sig = signalState();
     el.signal.className = `signal ${sig.kind}`;
     el.signal.textContent = {
-      idle: "Sin grabar",
-      ok: "● Captando sonido",
-      warn: `⚠ No entra sonido hace ${sig.silentSec} s — revisa micrófono o pestaña`,
-      off: "⚠ Fuente de audio desconectada — no se está grabando sonido",
+      idle: L("Sin grabar", "Not recording"),
+      ok: L("● Captando sonido", "● Picking up sound"),
+      warn: L(`⚠ No entra sonido hace ${sig.silentSec} s — revisa micrófono o pestaña`, `⚠ No sound for ${sig.silentSec} s — check the microphone or tab`),
+      off: L("⚠ Fuente de audio desconectada — no se está grabando sonido", "⚠ Audio source disconnected — no sound is being recorded"),
     }[sig.kind];
 
     if (st.recording) {
       const noSound = sig.kind === "warn" || sig.kind === "off";
-      el.pill.textContent = noSound ? "REC · SIN SONIDO" : "REC";
+      el.pill.textContent = noSound ? L("REC · SIN SONIDO", "REC · NO SOUND") : "REC";
       el.pill.classList.toggle("warn", noSound);
     }
 
@@ -394,7 +454,7 @@
       const silent = (now - m.lastSoundAt) / 1000 >= SILENCE_WARN_SEC;
       m.row.className = m.ended ? "off" : silent ? "warn" : "";
       m.row.querySelector("i").style.width = `${Math.round(levelToUnit(m.level) * 100)}%`;
-      m.row.querySelector(".state").textContent = m.ended ? "desconectada" : silent ? "sin señal" : "ok";
+      m.row.querySelector(".state").textContent = m.ended ? L("desconectada", "disconnected") : silent ? L("sin señal", "no signal") : "ok";
     });
 
     drawWave(sig.kind);
@@ -527,7 +587,7 @@
 
     if (!st.token || !st.user) {
       renderAccount();
-      showStatus("Inicia sesión en Apex Vox para grabar.", true);
+      showStatus(L("Inicia sesión en Apex Vox para grabar.", "Sign in to Apex Vox to record."), true);
       return;
     }
 
@@ -537,7 +597,7 @@
     st.busy = true;
     renderRecordingState();
     el.result.classList.add("hidden");
-    showStatus("Preparando grabación…");
+    showStatus(L("Preparando grabación…", "Preparing recording…"));
 
     try {
       const stream = await acquireStream();
@@ -552,7 +612,7 @@
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          title: el.title.value.trim() || "Reunión — Apex Box",
+          title: el.title.value.trim() || L("Reunión — Apex Box", "Meeting — Apex Box"),
           mode: mode(),
           platform: mode() === "virtual" ? (platform && platform.id) || "google_meet" : "in_person",
           meeting_url: mode() === "virtual" && st.source ? st.source.url : null,
@@ -596,7 +656,7 @@
       await chrome.storage.session.set({ recordingState: "idle" });
       await releaseStreams();
       resetMeters();
-      showStatus(`No se pudo iniciar: ${err.message}`, true);
+      showStatus(L(`No se pudo iniciar: ${err.message}`, `Could not start: ${err.message}`), true);
     } finally {
       st.busy = false;
       renderStats();
@@ -614,7 +674,7 @@
     clearInterval(st.rotationTimer);
     clearInterval(st.tickTimer);
     const totalSec = elapsedSec();
-    showStatus("Subiendo el último bloque…");
+    showStatus(L("Subiendo el último bloque…", "Uploading the last block…"));
 
     try {
       if (st.recorder && st.recorder.state !== "inactive") {
@@ -629,7 +689,7 @@
         await retryFailed();
       }
 
-      showStatus("Generando notas, resumen y acta…");
+      showStatus(L("Generando notas, resumen y acta…", "Creating notes, summary and minutes…"));
       const fin = await api(`/api/box/sessions/${encodeURIComponent(st.boxSessionId)}/finalize`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -641,13 +701,13 @@
       el.resultUrl.value = url;
       el.resultMeta.textContent = `${fin.total_duration_formatted || hhmmss(totalSec)} · ${
         fin.total_blocks || st.blocksSent
-      } bloques · ${fin.notes_integrated_count || 0} notas${
-        st.failedBlocks ? ` · ⚠ ${st.failedBlocks} bloque(s) no se pudieron subir` : ""
+      } ${L("bloques", "blocks")} · ${fin.notes_integrated_count || 0} ${L("notas", "notes")}${
+        st.failedBlocks ? L(` · ⚠ ${st.failedBlocks} bloque(s) no se pudieron subir`, ` · ⚠ ${st.failedBlocks} block(s) could not be uploaded`) : ""
       }`;
       el.result.classList.remove("hidden");
       showStatus("");
     } catch (err) {
-      showStatus(`Error al finalizar: ${err.message}`, true);
+      showStatus(L(`Error al finalizar: ${err.message}`, `Could not finish: ${err.message}`), true);
     } finally {
       await chrome.storage.session.set({ recordingState: "idle" });
       st.recording = false;
@@ -675,8 +735,8 @@
 
   el.copyBtn.addEventListener("click", async () => {
     await navigator.clipboard.writeText(el.resultUrl.value);
-    el.copyBtn.textContent = "Copiado";
-    setTimeout(() => (el.copyBtn.textContent = "Copiar"), 1500);
+    el.copyBtn.textContent = L("Copiado", "Copied");
+    setTimeout(() => (el.copyBtn.textContent = L("Copiar", "Copy")), 1500);
   });
 
   el.newBtn.addEventListener("click", () => {
@@ -691,7 +751,7 @@
       st.serverUrl = (el.serverUrl.value || CLOUD_URL).trim().replace(/\/+$/, "");
       el.serverUrl.value = st.serverUrl;
       await chrome.storage.local.set({ serverUrl: st.serverUrl });
-      showStatus(`Servidor: ${st.serverUrl}`);
+      showStatus(L(`Servidor: ${st.serverUrl}`, `Server: ${st.serverUrl}`));
       await loadSession();
     });
   }

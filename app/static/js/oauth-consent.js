@@ -6,6 +6,8 @@
 
 (function () {
   const params = Object.fromEntries(new URLSearchParams(location.search));
+  const EN = document.documentElement.lang === "en";
+  const tr = (es, en) => (EN ? en : es);
   const token = localStorage.getItem("apex_vox_token");
   const $ = (id) => document.getElementById(id);
   const account = $("oauth-account");
@@ -29,7 +31,7 @@
         body: JSON.stringify({ params, approve }),
       });
       const data = await res.json();
-      if (!res.ok || !data.redirect_to) throw new Error(data.error_description || data.detail || "No se pudo completar.");
+      if (!res.ok || !data.redirect_to) throw new Error(data.error_description || data.detail || tr("No se pudo completar.", "Could not complete."));
       location.assign(data.redirect_to);
     } catch (err) {
       showError(err.message);
@@ -40,7 +42,7 @@
 
   function needLogin() {
     sessionStorage.setItem("apex_oauth_next", location.pathname + location.search);
-    account.textContent = "Inicia sesión en Apex Vox para continuar.";
+    account.textContent = tr("Inicia sesión en Apex Vox para continuar.", "Sign in to Apex Vox to continue.");
     loginBtn.classList.remove("hidden");
     allowBtn.classList.add("hidden");
   }
@@ -52,9 +54,9 @@
   fetch("/api/auth/me", { headers: { Authorization: `Bearer ${token}` } })
     .then((r) => (r.ok ? r.json() : Promise.reject()))
     .then((me) => {
-      const plan = me.quota && me.quota.is_unlimited ? "Apex Pro" : "Plan gratis";
+      const plan = me.quota && me.quota.is_unlimited ? "Apex Pro" : tr("Plan gratis", "Free plan");
       account.innerHTML = "";
-      account.append("Conectarás la cuenta ");
+      account.append(tr("Conectarás la cuenta ", "You will connect the account "));
       const b = document.createElement("strong");
       b.textContent = me.email;
       account.append(b, ` · ${plan}`);

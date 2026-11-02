@@ -101,10 +101,10 @@ async def register_client(request: Request) -> JSONResponse:
     return JSONResponse(record, status_code=201, headers={"Cache-Control": "no-store"})
 
 
-def _page(title: str, body: str, script: bool = False) -> HTMLResponse:
+def _page(title: str, body: str, script: bool = False, lang: str = "es") -> HTMLResponse:
     js = '<script src="/static/js/oauth-consent.js" defer></script>' if script else ""
     return HTMLResponse(f"""<!DOCTYPE html>
-<html lang="es">
+<html lang="{lang}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -125,33 +125,63 @@ def _page(title: str, body: str, script: bool = False) -> HTMLResponse:
 </html>""", headers={"Cache-Control": "no-store"})
 
 
+_CONSENT = {
+    "es": {
+        "error_title": "No se pudo conectar", "back": "Volver a Apex Vox", "page": "Conectar app",
+        "wants": "quiere acceder a tu cuenta de Apex Vox",
+        "perms": ["Ver la lista de tus reuniones transcritas.", "Leer y buscar en tus transcripciones.",
+                  "Leer los resúmenes y tareas de Apex Summa (Apex Pro)."],
+        "note": "Solo lectura: no puede borrar, grabar ni pagar nada. Puedes desconectarla cuando quieras en <strong>Mi cuenta</strong>.",
+        "checking": "Comprobando tu sesión…", "allow": "Permitir acceso", "login": "Iniciar sesión para continuar",
+        "cancel": "Cancelar",
+    },
+    "en": {
+        "error_title": "Could not connect", "back": "Back to Apex Vox", "page": "Connect app",
+        "wants": "wants to access your Apex Vox account",
+        "perms": ["See the list of your transcribed meetings.", "Read and search your transcripts.",
+                  "Read Apex Summa summaries and tasks (Apex Pro)."],
+        "note": "Read-only: it cannot delete, record or pay for anything. You can disconnect it anytime in <strong>My account</strong>.",
+        "checking": "Checking your session…", "allow": "Allow access", "login": "Sign in to continue",
+        "cancel": "Cancel",
+    },
+}
+
+
+def _consent_lang(request: Request) -> str:
+    from app.main import _default_language
+
+    forced = request.query_params.get("lang")
+    if forced in ("es", "en"):
+        return forced
+    return _default_language(request.headers.get("accept-language", ""), request.headers.get("cf-ipcountry", ""))
+
+
 @router.get("/oauth/authorize", include_in_schema=False)
 async def authorize(request: Request) -> HTMLResponse:
     params = dict(request.query_params)
+    lang = _consent_lang(request)
+    c = _CONSENT[lang]
     try:
         client = mcp_oauth.validate_authorize_request(params)
     except OAuthError as exc:
-        return _page("No se pudo conectar", f"""
-  <h1 class="oauth-title">No se pudo conectar</h1>
+        return _page(c["error_title"], f"""
+  <h1 class="oauth-title">{c["error_title"]}</h1>
   <p class="oauth-lead">{html.escape(exc.description or exc.error)}</p>
-  <p class="oauth-note"><a class="text-link-strong" href="/">Volver a Apex Vox</a></p>""")
+  <p class="oauth-note"><a class="text-link-strong" href="/">{c["back"]}</a></p>""", lang=lang)
     name = html.escape(client["client_name"])
-    return _page("Conectar app", f"""
-  <p class="overline">Conectar app</p>
-  <h1 class="oauth-title"><span data-client>{name}</span> quiere acceder a tu cuenta de Apex Vox</h1>
-  <ul class="oauth-perms">
-    <li>Ver la lista de tus reuniones transcritas.</li>
-    <li>Leer y buscar en tus transcripciones.</li>
-    <li>Leer los resúmenes y tareas de Apex Summa (Apex Pro).</li>
-  </ul>
-  <p class="oauth-note">Solo lectura: no puede borrar, grabar ni pagar nada. Puedes desconectarla cuando quieras en <strong>Mi cuenta</strong>.</p>
-  <p class="oauth-account" id="oauth-account">Comprobando tu sesión…</p>
+    perms = "".join(f"<li>{x}</li>" for x in c["perms"])
+    return _page(c["page"], f"""
+  <p class="overline">{c["page"]}</p>
+  <h1 class="oauth-title"><span data-client>{name}</span> {c["wants"]}</h1>
+  <ul class="oauth-perms">{perms}</ul>
+  <p class="oauth-note">{c["note"]}</p>
+  <p class="oauth-account" id="oauth-account">{c["checking"]}</p>
   <div class="oauth-actions">
-    <button type="button" class="btn-primary hidden" id="oauth-allow">Permitir acceso</button>
-    <a class="btn-primary hidden" id="oauth-login" href="/?login=1">Iniciar sesión para continuar</a>
-    <button type="button" class="btn-secondary" id="oauth-deny">Cancelar</button>
+    <button type="button" class="btn-primary hidden" id="oauth-allow">{c["allow"]}</button>
+    <a class="btn-primary hidden" id="oauth-login" href="/?login=1">{c["login"]}</a>
+    <button type="button" class="btn-secondary" id="oauth-deny">{c["cancel"]}</button>
   </div>
-  <p class="oauth-error hidden" id="oauth-error" role="alert"></p>""", script=True)
+  <p class="oauth-error hidden" id="oauth-error" role="alert"></p>""", script=True, lang=lang)
 
 
 @router.post("/oauth/authorize/decision", include_in_schema=False)
