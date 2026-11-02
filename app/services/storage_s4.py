@@ -22,7 +22,6 @@ import hmac
 import json
 import logging
 import re
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 from urllib.parse import quote, urlparse
 
@@ -382,8 +381,8 @@ class MegaS4StorageService:
                     local_file.unlink(missing_ok=True)
                     removed_count += 1
                     continue
-            except Exception:
-                pass
+            except (TypeError, ValueError, OSError):
+                logger.debug("Retention index: unreadable expiry for %s, kept", key)  # ante la duda, no se borra
             remaining[key] = meta
 
         if removed_count > 0:

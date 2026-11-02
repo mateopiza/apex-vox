@@ -175,7 +175,8 @@ def test_admin_endpoints_hidden_without_key(monkeypatch) -> None:
 def test_delete_account_removes_data(sent_mail) -> None:
     client = _ip_client("192.0.2.50")
     profile = _register(client)
-    assert client.delete("/api/auth/account").json()["status"] == "deleted"
+    deleted = client.delete("/api/auth/account")
+    assert deleted.json()["status"] == "deleted"
     assert profile["user_id"] not in supabase_service._load_db()["users"]
     assert client.get("/api/auth/me").status_code == 401
 
@@ -281,7 +282,8 @@ def test_telegram_linking_one_chat_per_subscription(monkeypatch) -> None:
     client.post("/api/telegram/webhook", json=update2, headers={"X-Telegram-Bot-Api-Secret-Token": secret})
     assert "otra cuenta" in sent[-1]
 
-    assert client.delete("/api/telegram/link").json()["linked"] is False
+    unlinked = client.delete("/api/telegram/link")
+    assert unlinked.json()["linked"] is False
 
 
 # ---------------------------------------------------------------------------

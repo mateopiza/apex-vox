@@ -29,7 +29,6 @@ import json
 import struct
 import zipfile
 from pathlib import Path
-from typing import Any
 from starlette.testclient import TestClient
 
 from app.main import app

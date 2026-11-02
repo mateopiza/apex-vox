@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hmac
 import ipaddress
+import re
 import threading
 import time
 from typing import Any, Dict, Optional
@@ -255,11 +256,17 @@ def request_language(request: Request) -> str:
     return _default_language(request.headers.get("accept-language", ""), request.headers.get("cf-ipcountry", ""))
 
 
+_SAFE_ORIGIN = re.compile(r"https?://[A-Za-z0-9.-]{1,253}(?::\d{1,5})?")
+
+
 def public_base_url(request: Optional[Request] = None) -> str:
     """Absolute origin of the app, e.g. https://apex-vox.ialabs.app (from the request if not configured)."""
     if settings.PUBLIC_BASE_URL or request is None:
         return settings.PUBLIC_BASE_URL or "https://apex-vox.ialabs.app"
-    return str(request.base_url).rstrip("/")
+    # La cabecera Host la controla el cliente: solo se acepta un origen limpio (sin comillas,
+    # rutas ni caracteres HTML), porque termina en HTML, metadatos OAuth y URLs de webhooks.
+    origin = str(request.base_url).rstrip("/")
+    return origin if _SAFE_ORIGIN.fullmatch(origin) else "https://apex-vox.ialabs.app"
 
 
 _throttle_lock = threading.Lock()

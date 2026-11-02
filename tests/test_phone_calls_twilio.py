@@ -267,3 +267,34 @@ def test_process_recording_builds_meeting_with_notes(twilio, monkeypatch, tmp_pa
     assert result.live_notes and result.live_notes[0]["timestamp_formatted"] == "00:00:03"
     meta = next(r for r in supabase_service.list_user_transcriptions(p["user_id"]) if r["job_id"] == job_id)
     assert meta["source"] == "phone_call" and meta["contact_name"] == "Carlos" and meta["contact_number"] == "+573105552222"
+
+
+def test_webhook_urls_never_come_from_the_host_header(twilio) -> None:
+    """Con `Host: atacante` Twilio sigue pidiendo el TwiML a PUBLIC_BASE_URL (sin fraude telefónico)."""
+    client = TestClient(app)
+    p = _verified(client)
+    r = client.post("/api/calls", json={"to": "+573105553333"}, headers={**_auth(p), "host": "evil.example"})
+    assert r.status_code == 200, r.text
+    sent = dict(twilio[-1][2])
+    assert sent["Url"].startswith(BASE + "/") and sent["StatusCallback"].startswith(BASE + "/")
+    cid = r.json()["call_id"]
+    sid = twilio_service.get_call(cid)["call_sid"]
+    connect = _webhook(client, f"/api/twilio/connect/{cid}", {"CallSid": sid, "Digits": "1"})
+    assert "evil.example" not in connect.text and f"{BASE}/api/twilio/recording/{cid}" in connect.text
+
+
+def test_calling_requires_https_public_base_url(twilio, monkeypatch) -> None:
+    monkeypatch.setattr(settings, "PUBLIC_BASE_URL", "")
+    assert twilio_service.is_configured() is False
+    monkeypatch.setattr(settings, "PUBLIC_BASE_URL", "http://apex.test")
+    assert twilio_service.is_configured() is False
+
+
+def test_high_cost_nanp_prefixes_are_blocked(twilio) -> None:
+    assert twilio_service.is_allowed_destination("+13055551234")
+    for premium in ("+18765551234", "+18095551234", "+19005551234", "+12845551234"):
+        assert not twilio_service.is_allowed_destination(premium), premium
+    client = TestClient(app)
+    p = _user(client)
+    r = client.post("/api/phone/verify/start", json={"phone": "+18765551234"}, headers=_auth(p))
+    assert r.status_code == 400

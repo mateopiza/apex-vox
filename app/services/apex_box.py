@@ -41,6 +41,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from app.logsafe import clean
 from app.config import (
     BASE_DIR,
     get_public_engine_label,
@@ -191,6 +192,11 @@ def calculate_optimal_block_config(
     )
 
 
+_RESERVED_RECORD_KEYS = frozenset({
+    "job_id", "user_id", "session_id", "plan", "expires_at", "retention_policy", "s4_audio_key", "s4_result_key",
+})
+
+
 @dataclass
 class BoxSession:
     """In-memory and disk-backed state for an unlimited Apex Box recording session."""
@@ -316,7 +322,7 @@ class ApexBoxManager:
                 end_sec=max(0.5, duration_sec),
             )
         except Exception as exc:
-            logger.warning("Could not extract MP3 for block %s: %s", block_index, exc)
+            logger.warning("Could not extract MP3 for block %s: %s", clean(block_index), type(exc).__name__)
             chunk_mp3_path = block_path
 
         chunk_info = AudioChunkInfo(
@@ -366,7 +372,7 @@ class ApexBoxManager:
                         )
                     )
             except Exception as exc:
-                logger.debug("Groq live block transcription fallback on block %d: %s", block_index, exc)
+                logger.debug("Groq live block transcription fallback on block %s: %s", clean(block_index), type(exc).__name__)
 
         # Fallback acoustic/voice interval segmentation when running offline or without external API key
         if not raw_whisper_segs:
@@ -847,7 +853,8 @@ class ApexBoxManager:
                 "platform": session.platform,
                 "speakers": unique_speakers,
                 "notes_count": len(session.notes),
-                **(record_extra or {}),
+                # Metadatos extra del origen; nunca pueden cambiar el dueño ni los ids del registro.
+                **{k: v for k, v in (record_extra or {}).items() if k not in _RESERVED_RECORD_KEYS},
             }
         )
 

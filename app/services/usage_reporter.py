@@ -17,7 +17,6 @@ import datetime
 import json
 import logging
 import os
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -183,12 +182,7 @@ def format_report_message(report: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def send_daily_bot_notification(
-    report: Optional[Dict[str, Any]] = None,
-    telegram_bot_token: Optional[str] = None,
-    telegram_chat_id: Optional[str] = None,
-    webhook_url: Optional[str] = None,
-) -> Dict[str, Any]:
+def send_daily_bot_notification(report: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
     Persist the daily report to `outputs/reports/` and dispatch it via configured
     Telegram Bot and/or Webhook (Slack, Discord, n8n, WhatsApp gateway).
@@ -212,9 +206,10 @@ def send_daily_bot_notification(
         "webhook_sent": False,
     }
 
-    tg_token = (telegram_bot_token or os.getenv("TELEGRAM_BOT_TOKEN", "")).strip()
-    tg_chat = (telegram_chat_id or os.getenv("TELEGRAM_CHAT_ID", "")).strip()
-    wh_url = (webhook_url or os.getenv("REPORT_WEBHOOK_URL", "")).strip()
+    # Destinos solo desde la configuración del servidor (nunca desde la petición).
+    tg_token = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    tg_chat = os.getenv("TELEGRAM_CHAT_ID", "").strip()
+    wh_url = os.getenv("REPORT_WEBHOOK_URL", "").strip()
 
     if tg_token and tg_chat:
         try:
@@ -230,8 +225,9 @@ def send_daily_bot_notification(
             )
             delivery_status["telegram_sent"] = r.status_code == 200
             delivery_status["telegram_status_code"] = r.status_code
-        except Exception as exc:
-            delivery_status["telegram_error"] = str(exc)
+        except Exception as exc:  # noqa: BLE001 — el detalle va al log, no a la respuesta
+            logger.warning("Daily report: Telegram delivery failed (%s)", type(exc).__name__)
+            delivery_status["telegram_error"] = "delivery_failed"
 
     if wh_url:
         try:
@@ -242,8 +238,9 @@ def send_daily_bot_notification(
             )
             delivery_status["webhook_sent"] = 200 <= r.status_code < 300
             delivery_status["webhook_status_code"] = r.status_code
-        except Exception as exc:
-            delivery_status["webhook_error"] = str(exc)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Daily report: webhook delivery failed (%s)", type(exc).__name__)
+            delivery_status["webhook_error"] = "delivery_failed"
 
     return {
         "report": rep,

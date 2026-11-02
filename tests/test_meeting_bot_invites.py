@@ -127,8 +127,9 @@ def test_bot_endpoint_requires_pro_and_valid_link(fake_recall) -> None:
     ok = client.post("/api/meetings/bot", json={"meeting_url": url, "title": "Daily"}, headers=auth)
     assert ok.status_code == 200 and ok.json()["status"] == "joining"
     other = _user(client, pro=True)
-    assert client.delete(f"/api/meetings/bot/{ok.json()['bot_id']}",
-                         headers={"Authorization": f"Bearer {other['access_token']}"}).status_code == 404
+    foreign = client.delete(f"/api/meetings/bot/{ok.json()['bot_id']}",
+                            headers={"Authorization": f"Bearer {other['access_token']}"})
+    assert foreign.status_code == 404
 
 
 def test_webhooks_require_valid_signature(monkeypatch, fake_recall) -> None:

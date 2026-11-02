@@ -521,7 +521,6 @@
   const clearQueueBtn = document.getElementById("clear-queue-btn");
 
   const engineSelect = document.getElementById("engine-select");
-  const modelSelect = document.getElementById("model-select");
   const speakersSelect = document.getElementById("speakers-select");
   const languageSelect = document.getElementById("language-select");
   const promptHintInput = document.getElementById("prompt-hint-input");
@@ -828,8 +827,8 @@
     if (viewName === "portal") {
       loadUserPortalSummary();
     } else if (viewName === "box") {
-      if (typeof loadMeetingBots === "function") loadMeetingBots();
-      if (typeof loadCalls === "function") loadCalls();
+      loadMeetingBots();
+      loadCalls();
     }
   }
 
@@ -1052,7 +1051,7 @@
     }
     if (billing === "return" && state.token) {
       switchView("portal");
-      await confirmBoldPayments(true);
+      await confirmBoldPayments();
     }
   }
 
@@ -1238,7 +1237,8 @@
     }
   }
 
-  async function confirmBoldPayments(fromRedirect) {
+  // Se llama al volver de la pasarela de Bold: siempre muestra el resultado.
+  async function confirmBoldPayments() {
     if (!state.token) return;
     try {
       const res = await authFetch("/api/billing/confirm", { method: "POST" });
@@ -1247,29 +1247,15 @@
       const wasPaid = state.plan === "pro";
       storeSession(data);
       await loadUserPortalSummary();
-      if (fromRedirect) {
-        showAlert(
-          data.quota && data.quota.pro_until && data.plan !== "free"
-            ? t("¡Pago recibido! Apex Pro está activo.", "Payment received! Apex Pro is active.")
-            : t("Estamos esperando la confirmación de Bold. Si ya pagaste, se activará en unos minutos.",
-                "Waiting for Bold's confirmation. If you already paid, it will activate in a few minutes."),
-          data.plan !== "free" || wasPaid ? "success" : "error"
-        );
-      }
+      showAlert(
+        data.quota && data.quota.pro_until && data.plan !== "free"
+          ? t("¡Pago recibido! Apex Pro está activo.", "Payment received! Apex Pro is active.")
+          : t("Estamos esperando la confirmación de Bold. Si ya pagaste, se activará en unos minutos.",
+              "Waiting for Bold's confirmation. If you already paid, it will activate in a few minutes."),
+        data.plan !== "free" || wasPaid ? "success" : "error"
+      );
     } catch (err) {
-      if (fromRedirect) showAlert(err.message);
-    }
-  }
-
-  async function refreshSummaAccess() {
-    if (!state.currentResult) return;
-    try {
-      const res = await authFetch(`/api/jobs/${state.currentResult.job_id}/summa?lang=${state.lang}`);
-      if (!res.ok) return;
-      state.currentResult.summa_report = await res.json();
-      renderApexSumma(state.currentResult);
-    } catch (err) {
-      /* keep current report */
+      showAlert(err.message);
     }
   }
 

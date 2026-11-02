@@ -29,7 +29,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from app.api.deps import client_ip, is_paid, public_base_url, require_user, throttle
+from app.api.deps import client_ip, is_paid, require_user, throttle
 from app.services import twilio_service
 from app.services.twilio_service import TwilioError
 
@@ -86,8 +86,8 @@ async def phone_status(user: Dict[str, Any] = Depends(require_user)) -> Dict[str
 
 
 @router.post("/api/phone/verify/start")
-async def phone_verify_start(payload: PhoneStart, request: Request,
-                             user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
+def phone_verify_start(payload: PhoneStart, request: Request,
+                       user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
     _require_calling(user)
     throttle(f"phone-verify:{user['user_id']}", limit=5, window_seconds=3600)
     throttle(f"phone-verify-ip:{client_ip(request)}", limit=10, window_seconds=3600)
@@ -98,7 +98,7 @@ async def phone_verify_start(payload: PhoneStart, request: Request,
 
 
 @router.post("/api/phone/verify/check")
-async def phone_verify_check(payload: PhoneCheck, user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
+def phone_verify_check(payload: PhoneCheck, user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
     _require_calling(user)
     throttle(f"phone-check:{user['user_id']}", limit=10, window_seconds=3600)
     try:
@@ -124,13 +124,11 @@ async def my_calls(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, An
 
 
 @router.post("/api/calls")
-async def start_call(payload: CallRequest, request: Request,
-                     user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
+def start_call(payload: CallRequest, user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
     _require_calling(user)
     throttle(f"call:{user['user_id']}", limit=10, window_seconds=600)
     try:
-        return twilio_service.create_call(user, payload.to, public_base_url(request),
-                                          payload.title or "", payload.contact_name or "")
+        return twilio_service.create_call(user, payload.to, payload.title or "", payload.contact_name or "")
     except TwilioError as exc:
         raise _bad(exc) from exc
 
@@ -152,7 +150,7 @@ async def call_note(call_id: str, payload: CallNote, user: Dict[str, Any] = Depe
 
 
 @router.post("/api/calls/{call_id}/hangup")
-async def call_hangup(call_id: str, user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
+def call_hangup(call_id: str, user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
     _own_call(user, call_id)
     twilio_service.hangup(call_id)
     return twilio_service.public_call(twilio_service.get_call(call_id) or {})
@@ -166,7 +164,7 @@ async def _signed_params(request: Request) -> Dict[str, str]:
     """Parámetros del webhook, solo si la firma de Twilio es válida para la URL pública."""
     form = await request.form()
     params = {k: str(v) for k, v in form.items()}
-    url = public_base_url(request) + request.url.path + (f"?{request.url.query}" if request.url.query else "")
+    url = twilio_service.webhook_base() + request.url.path + (f"?{request.url.query}" if request.url.query else "")
     if not twilio_service.validate_signature(url, params, request.headers.get("x-twilio-signature")):
         raise HTTPException(status_code=403, detail="Firma inválida")
     return params
@@ -191,7 +189,7 @@ async def twilio_voice(call_id: str, request: Request) -> Response:
     rec = _call_for_webhook(call_id, params)
     if not rec or rec.get("status") not in twilio_service.ACTIVE_STATUSES:
         return _xml(twilio_service.twiml_unavailable(rec))
-    return _xml(twilio_service.twiml_owner_answered(rec, public_base_url(request)))
+    return _xml(twilio_service.twiml_owner_answered(rec, twilio_service.webhook_base()))
 
 
 @router.post("/api/twilio/connect/{call_id}", include_in_schema=False)
@@ -201,9 +199,9 @@ async def twilio_connect(call_id: str, request: Request) -> Response:
     if not rec or rec.get("status") not in twilio_service.ACTIVE_STATUSES:
         return _xml(twilio_service.twiml_unavailable(rec))
     if params.get("Digits") != "1":
-        return _xml(twilio_service.twiml_owner_answered(rec, public_base_url(request)))
+        return _xml(twilio_service.twiml_owner_answered(rec, twilio_service.webhook_base()))
     twilio_service.on_owner_pressed(call_id)
-    return _xml(twilio_service.twiml_connect(rec, public_base_url(request)))
+    return _xml(twilio_service.twiml_connect(rec, twilio_service.webhook_base()))
 
 
 @router.post("/api/twilio/notice/{call_id}", include_in_schema=False)

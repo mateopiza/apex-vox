@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from app.logsafe import clean
 from app.config import (
     get_public_engine_label,
     resolve_engine_code,
@@ -685,7 +686,7 @@ class JobManager:
                     self._results[job_id] = res
                 return res
             except Exception as exc:
-                logger.warning("Failed to load persisted result for %s: %s", job_id, exc)
+                logger.warning("Failed to load persisted result for %s: %s", clean(job_id), type(exc).__name__)
         return None
 
     def rename_speakers(

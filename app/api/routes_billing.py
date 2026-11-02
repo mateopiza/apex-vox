@@ -24,7 +24,7 @@ from app.models.schemas import (
     BoldCheckoutResponse,
     UserProfileResponse,
 )
-from app.services import bold_service, email_service
+from app.services import bold_service
 from app.services.supabase_service import supabase_service
 
 logger = logging.getLogger("app.api.billing")

@@ -144,3 +144,36 @@ def test_free_plan_reads_notes_but_not_minutes() -> None:
     assert minutes["isError"] is True and "Apex Pro" in minutes["content"][0]["text"]
     assert _call(client, at, "list_phone_calls", {})["structuredContent"]["calls"] == []
     assert _call(client, at, "list_upcoming_meetings", {})["structuredContent"]["upcoming"] == []
+
+
+def test_batches_are_capped_and_each_message_counts() -> None:
+    client = TestClient(app)
+    owner = _user(client)
+    at = _connect(client, owner)["access_token"]
+    headers = {"Authorization": f"Bearer {at}"}
+    batch = [{"jsonrpc": "2.0", "id": i, "method": "ping"} for i in range(11)]
+    big = client.post("/mcp", json=batch, headers=headers)
+    assert big.status_code == 400
+    ok = client.post("/mcp", json=batch[:10], headers=headers)
+    assert ok.status_code == 200 and len(ok.json()) == 10
+    statuses = [client.post("/mcp", json=batch[:10], headers=headers).status_code for _ in range(12)]
+    assert 429 in statuses  # 120 mensajes por minuto, aunque vengan en lotes
+
+
+def test_record_extra_cannot_change_owner() -> None:
+    from app.services.apex_box import _RESERVED_RECORD_KEYS
+
+    assert {"user_id", "job_id", "plan", "expires_at"} <= _RESERVED_RECORD_KEYS
+
+
+def test_public_base_url_rejects_injected_host(monkeypatch) -> None:
+    from app.api.deps import public_base_url
+    from app.config import settings
+
+    class Req:
+        def __init__(self, base):
+            self.base_url = base
+
+    monkeypatch.setattr(settings, "PUBLIC_BASE_URL", "")
+    assert public_base_url(Req("https://apex.example:8443/")) == "https://apex.example:8443"
+    assert public_base_url(Req('https://x"><script>alert(1)</script>/')) == "https://apex-vox.ialabs.app"

@@ -61,9 +61,19 @@ class TwilioError(Exception):
 # Configuración y API REST
 # ---------------------------------------------------------------------------
 
+def webhook_base() -> str:
+    """Origen público de los webhooks: SOLO de PUBLIC_BASE_URL, nunca de la cabecera Host de la petición.
+
+    Si viniera de la petición, un usuario podría enviar `Host: atacante.com` y Twilio pediría ahí
+    las instrucciones de la llamada (TwiML): el atacante marcaría cualquier número a costa del servicio.
+    """
+    return (settings.PUBLIC_BASE_URL or "").rstrip("/")
+
+
 def is_configured() -> bool:
     return bool(settings.TWILIO_ACCOUNT_SID and settings.TWILIO_AUTH_TOKEN
-                and settings.TWILIO_VERIFY_SERVICE_SID and E164_RE.fullmatch(settings.TWILIO_CALLER_ID or ""))
+                and settings.TWILIO_VERIFY_SERVICE_SID and E164_RE.fullmatch(settings.TWILIO_CALLER_ID or "")
+                and webhook_base().startswith("https://"))
 
 
 def _auth() -> Tuple[str, str]:
@@ -120,6 +130,9 @@ def normalize_phone(raw: str) -> str:
 
 
 def is_allowed_destination(phone: str) -> bool:
+    """Prefijo permitido y no bloqueado (los bloqueados ganan: p. ej. +1-876 Jamaica dentro de +1)."""
+    if any(phone.startswith(p.strip()) for p in settings.CALL_BLOCKED_PREFIXES if p.strip().startswith("+")):
+        return False
     return any(phone.startswith(p.strip()) for p in settings.CALL_ALLOWED_PREFIXES if p.strip().startswith("+"))
 
 
@@ -259,7 +272,7 @@ def _is_stale(rec: Dict[str, Any]) -> bool:
     return _now() - created > dt.timedelta(minutes=settings.CALL_MAX_MINUTES + 15)
 
 
-def create_call(user: Dict[str, Any], raw_to: str, base_url: str, title: str = "", contact_name: str = "") -> Dict[str, Any]:
+def create_call(user: Dict[str, Any], raw_to: str, title: str = "", contact_name: str = "") -> Dict[str, Any]:
     """Llama al celular verificado del usuario; al pulsar 1 se conecta con `raw_to`."""
     own = user.get("phone_e164")
     if not own or not user.get("phone_verified_at"):
@@ -294,7 +307,7 @@ def create_call(user: Dict[str, Any], raw_to: str, base_url: str, title: str = "
         _calls(db)[call_id] = record
         supabase_service._save_db(db)
 
-    base = base_url.rstrip("/")
+    base = webhook_base()
     data: List[Tuple[str, str]] = [
         ("To", own), ("From", settings.TWILIO_CALLER_ID),
         ("Url", f"{base}/api/twilio/voice/{call_id}"), ("Method", "POST"),
@@ -318,9 +331,18 @@ def hangup(call_id: str) -> None:
         try:
             _request("POST", _account_url(f"/Calls/{rec['call_sid']}.json"), [("Status", "completed")])
         except TwilioError:
-            pass
+            logger.info("Call %s already finished when hanging up", call_id)  # Twilio ya la cerró
     if rec.get("status") in ACTIVE_STATUSES and rec.get("status") != "in_call":
         _update(call_id, status="cancelled")
+
+
+def hangup_all(user_id: str) -> None:
+    """Cuelga las llamadas activas de la cuenta (p. ej. antes de borrarla)."""
+    with supabase_service._lock:
+        ids = [c["call_id"] for c in _calls(supabase_service._load_db()).values()
+               if c.get("user_id") == user_id and c.get("status") in ACTIVE_STATUSES]
+    for call_id in ids:
+        hangup(call_id)
 
 
 def add_note(user_id: str, call_id: str, text: str, tag: str = "nota") -> Dict[str, Any]:
@@ -619,6 +641,8 @@ def process_recording(call_id: str) -> Optional[str]:
 
         with supabase_service._lock:
             user = dict(supabase_service._load_db()["users"].get(rec["user_id"]) or {})
+        if not user:
+            raise TwilioError("La cuenta ya no existe: no se guarda la llamada.")
         paid = str(user.get("plan", "free")).lower() in ("pro", "trial")
         owner_label, contact_label = speaker_labels(user, rec)
         session = apex_box_manager.create_session(BoxCreateSessionRequest(
@@ -651,6 +675,9 @@ def process_recording(call_id: str) -> Optional[str]:
                 timestamp_sec=min(total, _note_offset(note, rec_start)), author=owner_label,
             ))
 
+        with supabase_service._lock:  # la cuenta pudo borrarse mientras se transcribía
+            if rec["user_id"] not in supabase_service._load_db()["users"]:
+                raise TwilioError("La cuenta ya no existe: no se guarda la llamada.")
         fin = apex_box_manager.finalize_session(
             session.box_session_id, BoxFinalizeRequest(generate_minutes=True),
             record_extra={

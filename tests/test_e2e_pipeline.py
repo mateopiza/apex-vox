@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import uuid
 
-import json
 from pathlib import Path
 from typing import Any, List
 import pytest
@@ -319,10 +318,7 @@ def test_acoustic_voiceprint_clustering_and_voice_profile_enrollment(
 
 def test_deepgram_utterance_and_hybrid_alignment() -> None:
     """Verify Deepgram response parsing and hybrid temporal overlap alignment onto Groq segments."""
-    from app.models.schemas import WhisperSegment
-    from app.services.audio_engine import AudioChunkInfo
     from app.services.deepgram_service import (
-        align_groq_segments_with_deepgram_diarization,
         extract_deepgram_utterances_and_words,
     )
 

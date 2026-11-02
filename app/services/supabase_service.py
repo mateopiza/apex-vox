@@ -837,7 +837,7 @@ class SupabaseCloudService:
                 try:
                     path.chmod(0o600)
                 except OSError:
-                    pass
+                    logger.debug("Could not restrict permissions of %s", path)  # p. ej. sistemas sin chmod
             return path.read_text(encoding="utf-8").strip().encode("utf-8")
 
     def _digest(self, value: str) -> str:
@@ -975,7 +975,8 @@ class SupabaseCloudService:
     def newsletter_request(self, email: str, lang: str = "es") -> Optional[str]:
         """Store a pending subscription and return the confirmation token (None if already confirmed)."""
         clean = (email or "").strip().lower()
-        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", clean) or len(clean) > 254:
+        # Longitud primero y segmentos sin puntos ambiguos: la validación no puede tardar (ReDoS).
+        if len(clean) > 254 or not re.fullmatch(r"[^@\s]{1,64}@[^@\s.]+(?:\.[^@\s.]+)+", clean):
             raise ValueError("Correo electrónico inválido / Invalid email address.")
         with self._lock:
             db = self._load_db()
@@ -1088,8 +1089,8 @@ class SupabaseCloudService:
                             exp_dt = exp_dt.replace(tzinfo=dt.timezone.utc)
                         if now >= exp_dt:
                             continue
-                    except Exception:
-                        pass
+                    except (TypeError, ValueError):
+                        logger.debug("Transcription %s: unreadable expires_at, kept", jid)  # ante la duda, se muestra
                 items.append(rec)
             items.sort(key=lambda r: r.get("created_at", ""), reverse=True)
             return items

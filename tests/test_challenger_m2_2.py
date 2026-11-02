@@ -13,29 +13,16 @@ Adversarial testing of:
 from __future__ import annotations
 
 import itertools
-import math
 from pathlib import Path
 import pytest
 
 from app.services.audio_engine import (
     AudioChunkInfo,
-    AudioMetadata,
-    ProbedAudio,
     align_whisper_segments,
-    calculate_split_points,
     calculate_timeline_offsets,
-    chunk_audio_file,
-    detect_silences,
-    extract_chunk,
-    find_split_point,
-    format_srt_timestamp,
-    format_timestamp,
     format_timestamp_hhmmss,
     format_timestamp_srt,
     format_timestamp_vtt,
-    format_vtt_timestamp,
-    prepare_audio_sequence,
-    probe_audio,
     process_audio_sequence,
 )
 from tests.fixtures.audio_generator import (
@@ -170,7 +157,6 @@ class TestChunkGlobalBaseAndAlignment:
 
     def test_multi_chunk_continuous_alignment(self) -> None:
         """Verify T_global = T_file_offset + T_chunk_start + t_segment across multiple chunks."""
-        file_offset = 3600.0  # 1 hour file offset
 
         chunk0 = AudioChunkInfo(
             chunk_index=0,

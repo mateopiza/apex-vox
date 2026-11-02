@@ -168,13 +168,30 @@ translateStatic();
     renderModeHint();
   }
 
+  // Solo orígenes http(s) válidos: el valor guardado no puede inyectar HTML ni otro esquema (javascript:).
+  function safeServerUrl(value) {
+    try {
+      const u = new URL(String(value || "").trim());
+      const local = ["localhost", "127.0.0.1", "[::1]"].includes(u.hostname);
+      if (u.protocol === "https:" || (u.protocol === "http:" && local)) return u.origin;
+    } catch (err) {
+      /* valor inválido: se usa el servidor oficial */
+    }
+    return CLOUD_URL;
+  }
+
   function detectPlatform(url) {
-    const u = String(url || "").toLowerCase();
-    if (u.includes("meet.google.com")) return { id: "google_meet", label: "Google Meet" };
-    if (u.includes("zoom.us")) return { id: "zoom", label: "Zoom" };
-    if (u.includes("teams.microsoft.com") || u.includes("teams.live.com"))
-      return { id: "microsoft_teams", label: "Microsoft Teams" };
-    if (u.includes("webex.com")) return { id: "webex", label: "Webex" };
+    let host = "";
+    try {
+      host = new URL(String(url || "")).hostname.toLowerCase();
+    } catch (err) {
+      return null;
+    }
+    const on = (domain) => host === domain || host.endsWith(`.${domain}`);
+    if (on("meet.google.com")) return { id: "google_meet", label: "Google Meet" };
+    if (on("zoom.us")) return { id: "zoom", label: "Zoom" };
+    if (on("teams.microsoft.com") || on("teams.live.com")) return { id: "microsoft_teams", label: "Microsoft Teams" };
+    if (on("webex.com")) return { id: "webex", label: "Webex" };
     return null;
   }
 
@@ -696,7 +713,7 @@ translateStatic();
         body: JSON.stringify({ generate_minutes: true, generate_minutes_template: el.meetingType.value }),
       });
 
-      const url = `${st.serverUrl}/?job=${encodeURIComponent(fin.job_id)}`;
+      const url = new URL(`/?job=${encodeURIComponent(fin.job_id)}`, safeServerUrl(st.serverUrl)).href;
       el.resultLink.href = url;
       el.resultUrl.value = url;
       el.resultMeta.textContent = `${fin.total_duration_formatted || hhmmss(totalSec)} · ${
@@ -748,7 +765,7 @@ translateStatic();
 
   if (el.saveServer && el.serverUrl) {
     el.saveServer.addEventListener("click", async () => {
-      st.serverUrl = (el.serverUrl.value || CLOUD_URL).trim().replace(/\/+$/, "");
+      st.serverUrl = safeServerUrl(el.serverUrl.value || CLOUD_URL);
       el.serverUrl.value = st.serverUrl;
       await chrome.storage.local.set({ serverUrl: st.serverUrl });
       showStatus(L(`Servidor: ${st.serverUrl}`, `Server: ${st.serverUrl}`));
@@ -785,7 +802,7 @@ translateStatic();
   (async () => {
     const saved = await chrome.storage.local.get(["serverUrl", "lastMeetingType", "lastMode", "lastEngine"]);
     if (saved.serverUrl && el.serverUrl) {
-      st.serverUrl = el.serverUrl.value = saved.serverUrl;
+      st.serverUrl = el.serverUrl.value = safeServerUrl(saved.serverUrl);
     } else {
       st.serverUrl = CLOUD_URL;
     }

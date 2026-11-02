@@ -107,12 +107,17 @@
   }
 
   function detectPlatform(url) {
-    const u = String(url || "").toLowerCase();
-    if (u.includes("meet.google.com")) return { id: "google_meet", label: "Google Meet" };
-    if (u.includes("zoom.us")) return { id: "zoom", label: "Zoom" };
-    if (u.includes("teams.microsoft.com") || u.includes("teams.live.com"))
-      return { id: "microsoft_teams", label: "Microsoft Teams" };
-    if (u.includes("webex.com")) return { id: "webex", label: "Webex" };
+    let host = "";
+    try {
+      host = new URL(String(url || "")).hostname.toLowerCase();
+    } catch (err) {
+      return null;
+    }
+    const on = (domain) => host === domain || host.endsWith(`.${domain}`);
+    if (on("meet.google.com")) return { id: "google_meet", label: "Google Meet" };
+    if (on("zoom.us")) return { id: "zoom", label: "Zoom" };
+    if (on("teams.microsoft.com") || on("teams.live.com")) return { id: "microsoft_teams", label: "Microsoft Teams" };
+    if (on("webex.com")) return { id: "webex", label: "Webex" };
     return null;
   }
 

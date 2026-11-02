@@ -33,6 +33,7 @@ from app.services.storage_s4 import mega_s4_storage
 from app.services.supabase_service import supabase_service
 
 _OAUTH_COOKIE = "apx_oauth"
+_PROVIDER_NAMES = {"google": "google", "github": "github"}
 _OAUTH_COOKIE_PATH = "/api/auth/oauth"
 
 router = APIRouter(prefix="/api", tags=["Auth, User Portal & Quotas"])
@@ -122,6 +123,9 @@ async def logout_endpoint(authorization: Optional[str] = Header(default=None)) -
 @router.delete("/auth/account")
 async def delete_account(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
     """Delete the signed-in account and its data (Ley 1581 de 2012: derecho de supresión)."""
+    from app.services import twilio_service
+
+    twilio_service.hangup_all(user["user_id"])  # una llamada en curso no debe seguir grabando
     summary = supabase_service.delete_account(user["user_id"])
     if summary.get("email"):
         email_service.unsubscribe_newsletter_contact(summary["email"])
@@ -274,6 +278,9 @@ async def oauth_callback(request: Request, code: Optional[str] = None, error: Op
 async def oauth_start(provider: str, request: Request) -> RedirectResponse:
     """Start Google / GitHub sign-in through Supabase Auth (PKCE)."""
     if provider not in oauth_service.enabled_providers():
+        return RedirectResponse(url="/?auth_error=provider_disabled", status_code=303)
+    provider = _PROVIDER_NAMES.get(provider, "")  # valor constante, nunca el texto de la URL
+    if not provider:
         return RedirectResponse(url="/?auth_error=provider_disabled", status_code=303)
     verifier, challenge = oauth_service.new_pkce_pair()
     callback = f"{public_base_url(request)}/api/auth/oauth/callback"

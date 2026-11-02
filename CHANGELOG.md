@@ -33,6 +33,11 @@ Preparation of the public open-source release.
 
 ### Security
 
+- Twilio webhooks and TwiML are built only from `PUBLIC_BASE_URL` (an `https://` origin is now required to enable calls). Before, an unset `PUBLIC_BASE_URL` let a client's `Host` header point Twilio at an attacker's server that could dial any number.
+- High-cost `+1` ranges (Caribbean area codes, `+1900`, `+1976`) are blocked by default (`CALL_BLOCKED_PREFIXES`) for verification SMS and calls.
+- MCP: batches capped at 10 messages and 256 KB, each message counted by the rate limit, tools run outside the event loop, and `search_meetings` scans at most the 200 most recent meetings. The consent page lists calls and calendar access.
+- Deleting an account hangs up its active calls, and a call still being processed is discarded if the account no longer exists. `record_extra` can no longer override owner fields of a transcription record.
+- Code scanning: the origin taken from the `Host` header is validated (reflected XSS in legal pages and SEO tags), the admin report endpoint no longer accepts a destination URL or bot token (SSRF), error details are no longer returned to clients, client-supplied values are cleaned before logging, email subjects are no longer logged, Recall paths and region are validated, meeting platforms are detected by hostname, the newsletter email check cannot backtrack (ReDoS), and the extension only accepts `https://` (or local `http://`) server URLs.
 - `.env.example` now contains placeholder values only.
 - Transcription jobs can only be read or changed by their owner (account, or visitor by network). Audio, exports, `.ics` files and upload previews accept a signed read-only token (`?t=`) that expires after 6 hours and is only given to the owner.
 
