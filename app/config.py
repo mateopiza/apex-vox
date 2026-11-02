@@ -271,6 +271,15 @@ class Settings:
     PROMO_IP_COOLDOWN_DAYS: int = field(
         default_factory=lambda: int(os.getenv("PROMO_IP_COOLDOWN_DAYS", "90"))
     )
+    # Bot de reuniones (Recall.ai) e invitaciones por correo (Resend Inbound)
+    RECALL_API_KEY: str = field(default_factory=lambda: os.getenv("RECALL_API_KEY", "").strip())
+    RECALL_REGION: str = field(default_factory=lambda: os.getenv("RECALL_REGION", "us-west-2").strip())
+    RECALL_WEBHOOK_SECRET: str = field(default_factory=lambda: os.getenv("RECALL_WEBHOOK_SECRET", "").strip())
+    BOT_NAME: str = field(default_factory=lambda: os.getenv("BOT_NAME", "Apex Vox · notas").strip())
+    INVITES_ADDRESS: str = field(default_factory=lambda: os.getenv("INVITES_ADDRESS", "agenda@apexbox.ialabs.app").strip())
+    RESEND_INBOUND_WEBHOOK_SECRET: str = field(
+        default_factory=lambda: os.getenv("RESEND_INBOUND_WEBHOOK_SECRET", "").strip()
+    )
     # Aviso por correo antes de que termine el mes pagado (renovación manual).
     RENEWAL_REMINDER_DAYS: int = field(
         default_factory=lambda: int(os.getenv("RENEWAL_REMINDER_DAYS", "3"))

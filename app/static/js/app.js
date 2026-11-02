@@ -548,6 +548,7 @@
     if (viewName === "portal") {
       loadUserPortalSummary();
     } else if (viewName === "box") {
+      if (typeof loadMeetingBots === "function") loadMeetingBots();
       loadBoxOptimalConfig();
     }
   }
@@ -1134,6 +1135,65 @@
       input.value = "";
     } catch (err) {
       if (fb) fb.textContent = err.message;
+    }
+  }
+
+  const BOT_STATUS = {
+    scheduled: "Programado", joining: "Entrando", waiting_room: "En sala de espera", recording: "Grabando",
+    processing: "Procesando", done: "Listo", failed: "Falló", cancelled: "Cancelado",
+  };
+
+  async function loadMeetingBots() {
+    const list = document.getElementById("bot-list");
+    if (!list) return;
+    if (!state.token) {
+      list.innerHTML = `<li class="track-item track-item--static">${t("Inicia sesión para usar el bot.", "Sign in to use the bot.")}</li>`;
+      return;
+    }
+    try {
+      const res = await authFetch("/api/meetings");
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "");
+      const addr = document.getElementById("bot-invite-address");
+      if (addr && data.invites_address) addr.textContent = data.invites_address;
+      const rows = [];
+      (data.events || []).forEach((e) => {
+        if (e.bot_id) return;
+        rows.push(`<li class="track-item"><div class="track-meta"><div class="track-name">${escapeHtml(e.title)}</div>
+          <div class="track-sub"><span>${escapeHtml(new Date(e.start).toLocaleString())}</span><span>${e.meeting_url ? t("Sin bot", "No bot") : t("Sin enlace de reunión", "No meeting link")}</span></div></div></li>`);
+      });
+      (data.bots || []).forEach((b) => {
+        const when = b.join_at ? new Date(b.join_at).toLocaleString() : new Date(b.created_at).toLocaleString();
+        const link = b.job_id ? ` · <a class="text-link-strong" href="/?job=${encodeURIComponent(b.job_id)}">${t("Ver resumen", "View summary")}</a>` : "";
+        rows.push(`<li class="track-item"><div class="track-meta"><div class="track-name">${escapeHtml(b.title)}</div>
+          <div class="track-sub"><span>${escapeHtml(when)}</span><span>${BOT_STATUS[b.status] || escapeHtml(b.status)}${link}</span></div></div></li>`);
+      });
+      list.innerHTML = rows.join("") || `<li class="track-item track-item--static">${t("Aún no has enviado el bot.", "You haven't sent the bot yet.")}</li>`;
+    } catch (err) {
+      list.innerHTML = "";
+    }
+  }
+
+  async function sendMeetingBot() {
+    if (!requireSession(t("Inicia sesión para usar el bot.", "Sign in to use the bot."))) return;
+    const input = document.getElementById("bot-url-input");
+    const alertBox = document.getElementById("bot-alert");
+    const title = (document.getElementById("box-title-input") || {}).value || "";
+    try {
+      const res = await authFetch("/api/meetings/bot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ meeting_url: input.value.trim(), title: title.trim() || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || t("No se pudo enviar el bot.", "Could not send the bot."));
+      alertBox.className = "alert-box alert-success";
+      alertBox.textContent = t("El bot va en camino. Acéptalo en la reunión si te lo pide.", "The bot is on its way. Admit it if asked.");
+      input.value = "";
+      loadMeetingBots();
+    } catch (err) {
+      alertBox.className = "alert-box alert-error";
+      alertBox.textContent = err.message;
     }
   }
 
@@ -2316,6 +2376,11 @@
   if (portalGenerateBoldLinkBtn) {
     portalGenerateBoldLinkBtn.addEventListener("click", startBoldCheckout);
   }
+  const botSendBtn = document.getElementById("bot-send-btn");
+  if (botSendBtn) botSendBtn.addEventListener("click", sendMeetingBot);
+  const navBoxForBots = document.getElementById("nav-box-btn");
+  if (navBoxForBots) navBoxForBots.addEventListener("click", loadMeetingBots);
+  if (new URLSearchParams(location.search).get("view") === "box") setTimeout(loadMeetingBots, 300);
   const mcpCopyBtn = document.getElementById("mcp-copy-btn");
   if (mcpCopyBtn) {
     mcpCopyBtn.addEventListener("click", async () => {

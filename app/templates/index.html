@@ -846,6 +846,21 @@
       </section>
 
       <section aria-label="Extensión de Chrome y transcripción en vivo">
+        <div class="card" id="bot-card">
+          <div class="card-header">
+            <h2 class="card-title"><span class="step-badge">BOT</span> <span>Bot para reuniones virtuales</span></h2>
+            <span class="badge-pill info">APEX PRO</span>
+          </div>
+          <p class="card-lead">El bot entra a tu Zoom, Meet o Teams, graba y te envía la transcripción con resumen y acta.</p>
+          <div class="mcp-url-row">
+            <input type="url" class="form-control" id="bot-url-input" placeholder="Pega el enlace de la reunión" aria-label="Enlace de la reunión" />
+            <button type="button" class="btn-primary" id="bot-send-btn">Enviar bot</button>
+          </div>
+          <p class="field-hint" id="bot-invite-hint">También puedes invitar a <strong id="bot-invite-address">agenda@apexbox.ialabs.app</strong> a tus reuniones: el bot entrará solo a la hora.</p>
+          <ul class="track-list" id="bot-list" aria-live="polite"></ul>
+          <div id="bot-alert" class="alert-box hidden" role="status"></div>
+        </div>
+
         <div class="card">
           <div class="card-header">
             <h2 class="card-title">

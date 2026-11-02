@@ -320,6 +320,25 @@ def render_expired(name: str, lang: str = "es") -> Tuple[str, str, str]:
     return subject, _layout("es", "Tu cuenta volvió al plan gratis.", "Plan", "Tu mes terminó.", body), text
 
 
+def render_meeting_ready(name: str, title: str, duration: str, link: str, lang: str = "es") -> Tuple[str, str, str]:
+    """El bot terminó: enlace con transcripción, notas, resumen y acta."""
+    if lang == "en":
+        subject = f"Your meeting is ready: {title}"
+        body = (
+            _p(f"Hi {_esc(name)}, the Apex Vox bot recorded <strong>{_esc(title)}</strong> ({_esc(duration)}).")
+            + _p("The transcript, summary and minutes are ready.")
+            + _button("Open meeting", link)
+        )
+        return subject, _layout("en", f"{title} is ready.", "Meeting", "Your meeting is ready.", body), f"{title} is ready: {link}"
+    subject = f"Tu reunión está lista: {title}"
+    body = (
+        _p(f"Hola {_esc(name)}, el bot de Apex Vox grabó <strong>{_esc(title)}</strong> ({_esc(duration)}).")
+        + _p("Ya tienes la transcripción, el resumen y el acta.")
+        + _button("Abrir reunión", link)
+    )
+    return subject, _layout("es", f"{title} está lista.", "Reunión", "Tu reunión está lista.", body), f"{title} está lista: {link}"
+
+
 def render_payment_confirmed(name: str, pro_until: Optional[str], amount_display: str, reference: str, lang: str = "es") -> Tuple[str, str, str]:
     url = _app_url("/")
     until = _fmt_date(pro_until, lang)

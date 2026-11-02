@@ -215,6 +215,9 @@ app.include_router(box_router)
 from app.api.routes_mcp import router as mcp_router  # noqa: E402
 
 app.include_router(mcp_router)
+from app.api.routes_meetings import router as meetings_router  # noqa: E402
+
+app.include_router(meetings_router)
 app.include_router(upload_router)
 app.include_router(transcribe_router)
 app.include_router(export_router)
