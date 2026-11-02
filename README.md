@@ -95,7 +95,7 @@ La interfaz usa el lenguaje visual **Groq Web** (referencia no oficial de groq.c
 - Correos con Resend (`hola@ialabs.app`): bienvenida, prueba activada, recibo de pago, restablecer contraseña, confirmación y bienvenida al boletín (doble opt-in, segmento y tema en Resend).
 - Bot de Telegram: el usuario genera un código en *Mi cuenta* y envía `/start CÓDIGO`; el webhook se registra solo al arrancar si `TELEGRAM_BOT_TOKEN` y `PUBLIC_BASE_URL` están definidos. El reporte diario llega a `TELEGRAM_CHAT_ID` a las 23:55 (Bogotá).
 - Políticas: `/legal/privacidad`, `/legal/terminos`, `/legal/seguridad` y `/.well-known/security.txt`.
-- Supabase: `supabase/migrations/20261102120000_security_hardening.sql` (RLS + revocar privilegios) y plantillas de Auth en `supabase/templates/`.
+- Supabase: `supabase/migrations/20261102120000_initial_schema_and_hardening.sql` (RLS + revocar privilegios) y plantillas de Auth en `supabase/templates/`.
 - Marca: imágenes OG en `app/static/og/`, anuncios en `brand/out/` (`bash brand/render.sh` para regenerarlas).
 
 ---
