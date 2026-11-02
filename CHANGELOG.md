@@ -20,9 +20,15 @@ Preparation of the public open-source release.
 - The web interface is fully translated into Spanish and English. The default language follows the device, then the visitor's country. The plan card adapts to the device.
 - The Chrome extension (manifest, recorder and badge) and the OAuth consent page are available in Spanish and English.
 
+### Fixed
+
+- Web recorder ("Record"): the block timer, progress bar, counters, live transcript, block list, notes and alerts were wired to element ids that no longer existed after the redesign. They now update while recording.
+- Web recorder on phones: blocks are recorded one after another with a single `MediaRecorder` (iPhone does not allow two on the same microphone). Block rotation follows the real clock, so a block still closes after the phone froze timers. The screen wake lock and the audio context are requested on the tap itself. When the system cuts off the microphone (screen locked, another app, a call), the recorded audio is saved as a block and recording pauses, with a warning and a "Continue recording" button that resumes the same meeting. On iPhone, MP4 audio is preferred.
+
 ### Security
 
 - `.env.example` now contains placeholder values only.
+- Transcription jobs can only be read or changed by their owner (account, or visitor by network). Audio, exports, `.ics` files and upload previews accept a signed read-only token (`?t=`) that expires after 6 hours and is only given to the owner.
 
 ## [2.0.0] - 2026-11-02
 
