@@ -1970,6 +1970,37 @@ select.form-control {
   text-transform: uppercase;
 }
 
+/* Aviso de código abierto (portada y pie) */
+.oss-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: var(--space-3);
+  padding: 8px 14px;
+  border: 1px solid var(--border, #cecebf);
+  border-radius: 1000px;
+  background: #181717;
+  color: #fafaf8;
+  font-family: var(--font-label);
+  font-size: 13px;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+.oss-pill:hover,
+.oss-pill:focus-visible {
+  background: var(--brand, #f43e01);
+}
+.oss-icon {
+  flex: none;
+}
+.footer-oss {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .hero-title {
   margin: var(--space-3) 0 0;
   max-width: 14ch;
