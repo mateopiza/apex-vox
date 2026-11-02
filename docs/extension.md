@@ -4,6 +4,10 @@
 
 ## Install
 
+**From the Chrome Web Store**
+
+Open [Apex Box on the Chrome Web Store](https://chromewebstore.google.com/detail/hjjecchpiodaefnmdhfkbiejcakojgdo) and click **Add to Chrome**. The extension card in the web app links there.
+
 **From a build of the server**
 
 1. Download the ZIP from `https://<your-host>/api/box/extension/download` (or `/api/box/extension.zip`) and unzip it.
