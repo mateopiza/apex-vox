@@ -248,6 +248,7 @@ class TranscriptionResult(BaseModel):
     s4_object_key: Optional[str] = None
     expires_at: Optional[str] = None
     summa_report: Optional[ApexSummaReport] = None
+    live_notes: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class UploadResponse(BaseModel):
@@ -310,3 +311,154 @@ class VoiceProfile(BaseModel):
     pitch_hz: float = 0.0
     embedding: List[float] = Field(default_factory=list)
     created_at: str = ""
+
+
+# -----------------------------------------------------------------------------
+# Apex Box — Unlimited Block Recorder, Virtual/In-Person Meetings & Live Notes
+# -----------------------------------------------------------------------------
+
+class BoxOptimalConfigResponse(BaseModel):
+    """Calculated optimal block duration and RAM consumption profile for multi-hour recording."""
+    optimal_block_seconds: int = 180
+    optimal_block_minutes: float = 3.0
+    recommended_mime_type: str = "audio/webm;codecs=opus"
+    fallback_mime_types: List[str] = Field(
+        default_factory=lambda: ["audio/webm", "audio/ogg;codecs=opus", "audio/mp4", "audio/wav"]
+    )
+    recommended_bitrate_bps: int = 48000
+    bytes_per_second: int = 6000
+    single_block_size_mb: float = 1.03
+    peak_client_ram_mb: float = 2.06
+    target_hours_analyzed: float = 10.0
+    total_blocks_for_target: int = 200
+    unblocked_ram_10h_mb: float = 540.0
+    ram_savings_pct: float = 99.6
+    rotation_strategy: str = "dual_recorder_zero_gap_ebml"
+    explanation_es: str = ""
+    explanation_en: str = ""
+    presets: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class BoxCreateSessionRequest(BaseModel):
+    """Request payload to start an unlimited block-recording session in Apex Box."""
+    title: str = "Reunión en Vivo — Apex Box"
+    mode: str = "presencial"  # "presencial" (mic/room/mobile) | "virtual" (Zoom, Meet, Teams + mic)
+    platform: str = "in_person"  # "in_person" | "google_meet" | "zoom" | "microsoft_teams" | "webex" | "mobile_pwa"
+    meeting_url: Optional[str] = None
+    block_duration_sec: int = 180
+    language: Optional[str] = "es"
+    diarization_engine: str = "Mc-Lewis"
+    num_speakers: Optional[int] = None
+    prompt_hint: Optional[str] = None
+    user_id: Optional[str] = None
+    plan: str = "pro"
+    device_type: str = "desktop_extension"  # "desktop_extension" | "mobile_webapp" | "desktop_webapp"
+
+
+class BoxNoteRequest(BaseModel):
+    """Request payload to create or update a live timestamped note during a meeting."""
+    text: str
+    tag: str = "nota"  # "nota" | "acuerdo" | "tarea" | "alerta" | "idea" | "pregunta"
+    category: Optional[str] = None
+    timestamp_sec: Optional[float] = None
+    speaker: Optional[str] = None
+    author: Optional[str] = None
+
+
+class BoxNoteItem(BaseModel):
+    """Timestamped note taken live during an Apex Box recording session."""
+    note_id: str
+    box_session_id: str
+    timestamp_sec: float = 0.0
+    timestamp_formatted: str = "00:00:00"
+    tag: str = "nota"
+    category: str = "nota"
+    speaker: str = ""
+    author: str = ""
+    text: str
+    created_at: str = ""
+
+
+class BoxBlockInfo(BaseModel):
+    """Metadata for a single recorded and uploaded audio block in an unlimited session."""
+    block_index: int
+    file_id: str
+    filename: str
+    duration_sec: float
+    start_offset_sec: float
+    end_offset_sec: float
+    timeline_range: str
+    size_bytes: int
+    transcribed: bool = False
+    segments_count: int = 0
+    uploaded_at: str = ""
+
+
+class BoxBlockUploadResponse(BaseModel):
+    """Response returned immediately when a recorded block is uploaded and incrementally processed."""
+    box_session_id: str
+    upload_session_id: str
+    block: BoxBlockInfo
+    new_segments: List[DiarizedSegment] = Field(default_factory=list)
+    total_blocks_received: int = 0
+    total_duration_sec: float = 0.0
+    total_duration_formatted: str = "00:00:00"
+    total_segments_count: int = 0
+    estimated_client_ram_mb: float = 1.05
+    ram_freed_total_mb: float = 0.0
+    status: str = "recording"
+
+
+class BoxSessionStateResponse(BaseModel):
+    """Complete live state of an Apex Box unlimited recording session."""
+    box_session_id: str
+    upload_session_id: str
+    title: str
+    mode: str
+    platform: str
+    meeting_url: Optional[str] = None
+    device_type: str = "desktop_extension"
+    block_duration_sec: int = 180
+    language: str = "es"
+    diarization_engine: str = "Mc-Lewis"
+    engine_brand: str = "Mc-Lewis"
+    status: str = "recording"  # "recording" | "paused" | "finalizing" | "completed"
+    created_at: str = ""
+    updated_at: str = ""
+    total_blocks: int = 0
+    total_duration_sec: float = 0.0
+    total_duration_formatted: str = "00:00:00"
+    estimated_client_ram_mb: float = 1.05
+    ram_freed_total_mb: float = 0.0
+    blocks: List[BoxBlockInfo] = Field(default_factory=list)
+    segments: List[DiarizedSegment] = Field(default_factory=list)
+    notes: List[BoxNoteItem] = Field(default_factory=list)
+    final_job_id: Optional[str] = None
+
+
+class BoxFinalizeRequest(BaseModel):
+    """Request payload to finalize a multi-hour recording session and generate full Apex Summa & Minutes."""
+    api_key: Optional[str] = None
+    deepgram_api_key: Optional[str] = None
+    run_full_pipeline: bool = False
+    generate_minutes: bool = True
+    organization_name: Optional[str] = "Apex Vox Enterprise"
+    generate_minutes_template: Optional[str] = "ejecutiva"
+    minutes_type: Optional[str] = None
+
+
+class BoxFinalizeResponse(BaseModel):
+    """Response returned when an Apex Box session is finalized into a full TranscriptionResult + Summa Report."""
+    box_session_id: str
+    job_id: str
+    upload_session_id: str
+    status: str = "completed"
+    total_blocks_processed: int = 0
+    total_blocks: int = 0
+    total_duration_sec: float = 0.0
+    total_duration_formatted: str = "00:00:00"
+    notes_integrated_count: int = 0
+    result: TranscriptionResult
+    minutes_document: Optional[MinutesDocumentResponse] = None
+    minutes: Optional[MinutesDocumentResponse] = None
+

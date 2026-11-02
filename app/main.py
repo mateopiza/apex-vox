@@ -27,6 +27,7 @@ from starlette.types import Scope
 from app.api import (
     auth_router,
     billing_router,
+    box_router,
     export_router,
     transcribe_router,
     upload_router,
@@ -81,7 +82,7 @@ _CSP = "; ".join(
         "script-src 'self'",
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
         "font-src 'self' https://fonts.gstatic.com data:",
-        "img-src 'self' data: blob:",
+        "img-src 'self' data: blob: https://console.groq.com",
         "media-src 'self' blob: https:",
         "connect-src 'self'",
         "frame-src https://checkout.bold.co",
@@ -102,7 +103,7 @@ async def security_headers(request: Request, call_next):
     headers.setdefault("X-Content-Type-Options", "nosniff")
     headers.setdefault("X-Frame-Options", "DENY")
     headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
-    headers.setdefault("Permissions-Policy", "camera=(), geolocation=(), microphone=(self)")
+    headers.setdefault("Permissions-Policy", "camera=(), geolocation=(), microphone=(self), display-capture=(self)")
     headers.setdefault("Cross-Origin-Opener-Policy", "same-origin-allow-popups")
     if not request.url.path.startswith(_DOCS_PATHS):
         headers.setdefault("Content-Security-Policy", _CSP)
@@ -143,6 +144,7 @@ app.mount("/static", CachedStaticFiles(directory=str(STATIC_DIR)), name="static"
 # Include API Routers
 app.include_router(auth_router)
 app.include_router(billing_router)
+app.include_router(box_router)
 app.include_router(upload_router)
 app.include_router(transcribe_router)
 app.include_router(export_router)
@@ -198,6 +200,32 @@ async def favicon() -> Response:
     if icon.exists():
         return FileResponse(icon, media_type="image/svg+xml", headers={"Cache-Control": "public, max-age=86400"})
     return Response(status_code=204)
+
+
+@app.get("/manifest.webmanifest", include_in_schema=False)
+async def web_app_manifest() -> JSONResponse:
+    """Serve PWA manifest for mobile web app installation (Modo App Web en Celular)."""
+    return JSONResponse(
+        content={
+            "name": "Apex Vox & Apex Box — Grabador Ilimitado por Bloques",
+            "short_name": "Apex Box",
+            "description": "Grabación ilimitada por bloques sin llenar RAM, modo Reunión Presencial y Virtual (Zoom, Meet, Teams), notas en vivo y transcripción continua.",
+            "start_url": "/?view=box",
+            "display": "standalone",
+            "background_color": "#f3f3ee",
+            "theme_color": "#f43e01",
+            "orientation": "any",
+            "icons": [
+                {
+                    "src": "/static/favicon.svg",
+                    "sizes": "any",
+                    "type": "image/svg+xml",
+                    "purpose": "any maskable",
+                }
+            ],
+        },
+        media_type="application/manifest+json",
+    )
 
 
 @app.get("/robots.txt", include_in_schema=False)
@@ -293,7 +321,7 @@ async def health_check() -> JSONResponse:
         "suite": {
             "apex_vox": "ready",
             "apex_summa": "active",
-            "apex_box": "coming_soon",
+            "apex_box": "ready",
         },
         "system": {
             "ffmpeg": ffmpeg_available,

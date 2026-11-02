@@ -11,6 +11,10 @@
   <meta property="og:title" content="Apex Vox — Audio Studio" />
   <meta property="og:description" content="Transcripción multi-audio, separación de voces y analítica ejecutiva. Potenciado por Groq." />
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Apex Box" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&amp;family=Share+Tech+Mono&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" />
@@ -30,9 +34,18 @@
         <span class="powered-badge" data-i18n="powered_by_groq">Potenciado por Groq</span>
       </button>
 
+      <a href="https://groq.com" target="_blank" rel="noopener noreferrer" class="groq-official-badge-link">
+        <img
+          src="https://console.groq.com/powered-by-groq-light.svg"
+          alt="Powered by Groq for fast inference."
+          class="groq-official-badge-img"
+        />
+      </a>
+
       <nav class="main-nav" aria-label="Navegación principal">
         <button type="button" class="nav-tab" data-view="landing" id="nav-landing-btn" data-i18n="nav_landing">Inicio &amp; Planes</button>
         <button type="button" class="nav-tab active" data-view="playground" id="nav-playground-btn" data-i18n="nav_playground">Playground (Apex Vox)</button>
+        <button type="button" class="nav-tab" data-view="box" id="nav-box-btn" data-i18n="nav_box">Apex Box (Grabador 10h+ &amp; App Móvil)</button>
         <button type="button" class="nav-tab" data-view="portal" id="nav-portal-btn" data-i18n="nav_portal">Portal de Usuario</button>
       </nav>
 
@@ -79,6 +92,7 @@
         </p>
         <div class="hero-actions">
           <button type="button" class="btn-primary hero-btn" id="hero-go-playground-btn" data-i18n="hero_cta_playground">Abrir Playground Ahora</button>
+          <button type="button" class="btn-secondary hero-btn-sec" id="hero-go-box-btn" data-goto-view="box" data-i18n="hero_cta_box">Abrir Apex Box (Grabador 10h+ &amp; Extensión)</button>
           <button type="button" class="btn-secondary hero-btn-sec" id="hero-register-btn" data-i18n="hero_cta_register">Regístrate: 2 Horas Gratis / Día</button>
           <button type="button" class="btn-secondary hero-btn-sec" id="hero-trial-btn" data-i18n="hero_cta_trial">Probar 3 Días Gratis (Plan Pro · Bold)</button>
         </div>
@@ -619,6 +633,276 @@
     </section>
   </main>
 
+  <!-- ======================================================================
+       VIEW 4: APEX BOX — UNLIMITED BLOCK RECORDER (CHROME EXT + MOBILE WEB APP)
+       ====================================================================== -->
+  <section id="view-box" class="view-section hidden" aria-label="Apex Box — Grabador Ilimitado por Bloques, Reuniones Virtuales/Presenciales y App Móvil">
+    <div class="main-container">
+      <!-- Left Column: Mode, Block RAM Calculator, Live Recorder & Live Notes -->
+      <section aria-label="Grabador ilimitado por bloques y toma de notas en vivo">
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">
+              <span class="step-badge">BOX</span>
+              <span data-i18n="box_main_title">Apex Box — Grabación Ilimitada por Bloques (10h+ Sin Llenar RAM)</span>
+            </h2>
+            <span class="badge-pill success" id="box-status-pill" data-i18n="box_status_ready">LISTO · 0 MS CORTE</span>
+          </div>
+
+          <p class="card-lead" data-i18n="box_lead_desc">
+            Graba horas y horas sin límite en <strong>bloques óptimos de 3 minutos (~1.03 MB Opus/WebM)</strong>. Cada bloque se envía automáticamente al servidor con su propia cabecera EBML válida, se transcribe en continuo y <strong>se libera de la memoria RAM</strong> para lograr sesiones de <strong>10+ horas continuas</strong> tanto en la <strong>Extensión Chrome</strong> como en <strong>Modo App Web en Celular</strong>.
+          </p>
+
+          <!-- Mode Selector: Reunión Presencial vs Reunión Virtual (Zoom, Meet, Teams) -->
+          <div class="box-mode-selector" role="radiogroup" aria-label="Modo de reunión">
+            <button type="button" class="box-mode-card active" id="box-mode-presencial-btn" data-box-mode="presencial" aria-pressed="true">
+              <span class="meta-tag timeline" data-i18n="box_mode_pres_tag">SALA DE JUNTAS · CELULAR · OFICINA</span>
+              <strong class="box-mode-title" data-i18n="box_mode_pres_title">Modo Reunión Presencial / App Móvil</strong>
+              <span class="box-mode-desc" data-i18n="box_mode_pres_desc">Captura directa con micrófono de alta sensibilidad, supresión de ruido y bloqueo de apagado de pantalla en celular (WakeLock).</span>
+            </button>
+
+            <button type="button" class="box-mode-card" id="box-mode-virtual-btn" data-box-mode="virtual" aria-pressed="false">
+              <span class="meta-tag timeline" data-i18n="box_mode_virt_tag">ZOOM · GOOGLE MEET · MS TEAMS · WEBEX</span>
+              <strong class="box-mode-title" data-i18n="box_mode_virt_title">Modo Reunión Virtual (Llamadas Online)</strong>
+              <span class="box-mode-desc" data-i18n="box_mode_virt_desc">Conéctate a Zoom, Google Meet, Microsoft Teams o Webex capturando el audio de los participantes remotos + tu propio micrófono mezclados en vivo.</span>
+            </button>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="box-title-input" data-i18n="box_lbl_title">Título de la Reunión / Sesión</label>
+              <input type="text" id="box-title-input" class="form-control" value="Sesión Continua — Apex Box" placeholder="Ej. Junta Directiva / Llamada Google Meet..." maxlength="140" />
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="box-platform-select" data-i18n="box_lbl_platform">Plataforma / Entorno</label>
+              <select id="box-platform-select" class="form-control">
+                <option value="in_person" selected>Sala Presencial / App Web en Celular</option>
+                <option value="google_meet">Google Meet (meet.google.com)</option>
+                <option value="zoom">Zoom (zoom.us)</option>
+                <option value="microsoft_teams">Microsoft Teams (teams.microsoft.com)</option>
+                <option value="webex">Cisco Webex</option>
+              </select>
+            </div>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="box-block-duration-select" data-i18n="box_lbl_block_dur">Duración Óptima por Bloque (Anti-Colapso RAM)</label>
+              <select id="box-block-duration-select" class="form-control">
+                <option value="180" selected>3 min (180s) — Óptimo Recomendado (~1.03 MB RAM · 200 bloques en 10h)</option>
+                <option value="60">1 min (60s) — Transcripción Ultra-Rápida (~0.35 MB RAM · 600 bloques en 10h)</option>
+                <option value="300">5 min (300s) — Bloques Extendidos (~1.72 MB RAM · 120 bloques en 10h)</option>
+                <option value="15">15 seg — Modo Demo / Prueba Instantánea (~90 KB RAM)</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="box-engine-select" data-i18n="box_lbl_engine">Motor Serie Mc (Potenciado por Groq)</label>
+              <select id="box-engine-select" class="form-control">
+                <option value="Mc-Lewis" selected>Mc-Lewis (Modo Híbrido · Recomendado)</option>
+                <option value="Mc-Ayrton">Mc-Ayrton (El Mejor · Máxima Precisión)</option>
+                <option value="Mc-Norris">Mc-Norris (Timbre y Huella Vocal)</option>
+                <option value="Mc-Piastri">Mc-Piastri (Velocidad Contextual)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Mathematical RAM & 10-Hour Block Calculation Box -->
+          <div class="box-ram-explainer" id="box-ram-math-panel">
+            <div class="box-ram-head">
+              <strong data-i18n="box_ram_calc_title">Cálculo de Ingeniería Anti-Saturación de RAM (10 Horas = 36,000s):</strong>
+              <span class="meta-tag timeline" id="box-wakelock-badge">WakeLock Móvil: Listo</span>
+            </div>
+            <p id="box-ram-calc-text" class="box-ram-copy">
+              Duración óptima calculada: <strong>180 segundos (3.0 minutos)</strong> por bloque a <strong>48 kbps Opus/WebM</strong> (6 KB/s = <strong>1.03 MB por bloque</strong>). Al rotar el grabador en el mismo <code>MediaStream</code> sin cerrar el micrófono ni la pestaña, no se pierde ni 1 ms de voz y cada bloque enviado se borra de la RAM. En <strong>10 horas (200 bloques)</strong> tu navegador o celular consume solo <strong>~1.05 MB de RAM constante</strong> en vez de los ~540 MB que causarían cierre forzoso.
+            </p>
+          </div>
+
+          <!-- Master 10h+ Clock, Waveform & Live RAM KPIs -->
+          <div class="box-recorder-console">
+            <div class="box-clock-row">
+              <div>
+                <div class="box-clock-label" data-i18n="box_lbl_elapsed">TIEMPO CONTINUO GRABADO (10H+ READY)</div>
+                <div class="box-master-clock" id="box-master-clock">00:00:00</div>
+              </div>
+              <div class="box-block-timer-box">
+                <div class="box-clock-label" id="box-current-block-title">BLOQUE ACTUAL #1</div>
+                <div class="box-block-countdown" id="box-block-countdown">00:00 / 03:00</div>
+              </div>
+            </div>
+
+            <canvas id="box-waveform-canvas" class="box-waveform-canvas" width="560" height="54" aria-label="Monitor de nivel acústico en vivo"></canvas>
+
+            <div class="progress-bar-outer" role="presentation">
+              <div id="box-block-progress-bar" class="progress-bar-inner" style="width: 0%;"></div>
+            </div>
+
+            <div class="kpi-grid box-kpi-grid">
+              <div class="kpi-card">
+                <div class="kpi-label" data-i18n="box_kpi_blocks">Bloques Enviados</div>
+                <div class="kpi-value" id="box-kpi-blocks-count">0</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-label" data-i18n="box_kpi_ram_active">RAM Activa en Uso</div>
+                <div class="kpi-value kpi-value--sm" id="box-kpi-ram-active">0.00 MB</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-label" data-i18n="box_kpi_ram_freed">RAM Liberada (GC)</div>
+                <div class="kpi-value kpi-value--sm" id="box-kpi-ram-freed">0.00 MB</div>
+              </div>
+              <div class="kpi-card">
+                <div class="kpi-label" data-i18n="box_kpi_segments">Segmentos en Vivo</div>
+                <div class="kpi-value" id="box-kpi-segments-count">0</div>
+              </div>
+            </div>
+
+            <div class="box-controls-row">
+              <button type="button" class="btn-primary" id="box-start-rec-btn" data-i18n="box_btn_start">
+                Iniciar Grabación Ilimitada por Bloques
+              </button>
+              <button type="button" class="btn-secondary hidden" id="box-cut-block-btn" data-i18n="box_btn_cut_block">
+                Enviar Bloque Ahora y Liberar RAM
+              </button>
+              <button type="button" class="btn-secondary hidden" id="box-pause-rec-btn" data-i18n="box_btn_pause">
+                Pausar
+              </button>
+              <button type="button" class="btn-primary hidden" id="box-stop-rec-btn" data-i18n="box_btn_stop_finalize">
+                Finalizar y Generar Resumen IA Apex Summa + Acta
+              </button>
+            </div>
+
+            <div id="box-alert-banner" class="alert-box hidden" role="status"></div>
+          </div>
+        </div>
+
+        <!-- Live Timestamped Note-Taking Card -->
+        <div class="card" id="box-notes-card">
+          <div class="card-header">
+            <h2 class="card-title">
+              <span class="step-badge">NOTA</span>
+              <span data-i18n="box_notes_title">Tomar Notas en Vivo sin Problema (Selladas con Timestamp)</span>
+            </h2>
+            <span class="meta-tag timeline" id="box-notes-count-pill">0 notas</span>
+          </div>
+
+          <p class="card-lead" data-i18n="box_notes_desc">
+            Anota acuerdos, tareas, alertas o ideas en cualquier momento de la reunión (presencial o en Zoom/Meet/Teams). Cada nota se sella con el segundo exacto <code>[HH:MM:SS]</code> y se integra automáticamente en <strong>Apex Summa</strong>, el calendario <code>.ICS</code> y el <strong>Acta Oficial</strong>.
+          </p>
+
+          <div class="speaker-tabs box-note-tags" id="box-note-tag-selector" role="group" aria-label="Tipo de nota en vivo">
+            <button type="button" class="speaker-tab active" data-note-tag="nota" data-i18n="tag_note">Nota</button>
+            <button type="button" class="speaker-tab" data-note-tag="acuerdo" data-i18n="tag_agreement">Acuerdo</button>
+            <button type="button" class="speaker-tab" data-note-tag="tarea" data-i18n="tag_task">Tarea Calendario</button>
+            <button type="button" class="speaker-tab" data-note-tag="alerta" data-i18n="tag_Warning">Alerta Crítica</button>
+            <button type="button" class="speaker-tab" data-note-tag="idea" data-i18n="tag_idea">Idea</button>
+            <button type="button" class="speaker-tab" data-note-tag="pregunta" data-i18n="tag_question">Pregunta</button>
+          </div>
+
+          <div class="form-row">
+            <div class="form-group">
+              <label class="form-label" for="box-note-speaker-input" data-i18n="box_lbl_note_speaker">Orador / Responsable (Opcional)</label>
+              <input type="text" id="box-note-speaker-input" class="form-control" placeholder="Ej. Carlos, Dra. Gómez, Equipo..." maxlength="80" />
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="box-note-text-input" data-i18n="box_lbl_note_text">Contenido de la Nota / Acuerdo / Tarea</label>
+              <div class="box-note-input-group">
+                <input type="text" id="box-note-text-input" class="form-control" placeholder="Escribe tu nota y presiona Enter o Anotar..." maxlength="600" />
+                <button type="button" class="btn-primary" id="box-add-note-btn" data-i18n="box_btn_add_note">+ Anotar</button>
+              </div>
+            </div>
+          </div>
+
+          <ul id="box-notes-list" class="track-list" aria-live="polite">
+            <li class="track-item track-item--static" data-i18n="box_notes_empty">Aún no has registrado notas en esta sesión. Escribe arriba en cualquier momento.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- Right Column: Chrome Extension Download, Block Queue Telemetry & Continuous 10h+ Transcript -->
+      <section aria-label="Extensión Chrome MV3, bloques procesados y transcripción continua en vivo">
+        <!-- Chrome Extension MV3 Download & Mobile Web App Card -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">
+              <span class="step-badge">EXT</span>
+              <span data-i18n="box_ext_card_title">Extensión Chrome (Manifest V3) &amp; Modo App Web en Celular</span>
+            </h2>
+            <span class="badge-pill info">MV3 + PWA MÓVIL</span>
+          </div>
+
+          <p class="card-lead" data-i18n="box_ext_card_desc">
+            Usa <strong>Apex Box</strong> directamente aquí en tu navegador de escritorio o en tu <strong>celular como App Web (PWA)</strong>, o instala la <strong>Extensión de Chrome con Panel Lateral (Side Panel) y barra flotante automática dentro de Google Meet, Zoom, Microsoft Teams y Webex</strong>.
+          </p>
+
+          <div class="button-row">
+            <a href="/api/box/extension.zip" download="apex-box-chrome-extension-mv3.zip" class="btn-primary" id="download-extension-zip-btn" data-i18n="box_btn_download_ext">
+              Descargar Extensión Chrome MV3 (.ZIP)
+            </a>
+            <button type="button" class="btn-secondary" id="box-simulate-10h-btn" data-i18n="box_btn_test_block">
+              Simular Bloque de Prueba Instantáneo
+            </button>
+          </div>
+
+          <div class="box-ext-steps">
+            <span class="meta-tag">1. Descarga o usa la carpeta <code>extension/</code></span>
+            <span class="meta-tag">2. Abre <code>chrome://extensions</code> (Modo desarrollador)</span>
+            <span class="meta-tag">3. Clic en &laquo;Cargar descomprimida&raquo;</span>
+            <span class="meta-tag timeline">En Celular: Abre esta página y pulsa &laquo;Agregar a pantalla de inicio&raquo;</span>
+          </div>
+        </div>
+
+        <!-- Continuous Live Transcript & Sent Blocks Log -->
+        <div class="card">
+          <div class="card-header">
+            <h2 class="card-title">
+              <span class="step-badge">LIVE</span>
+              <span data-i18n="box_live_feed_title">Transcripción Continua Bloque a Bloque (10 Horas Sin Romper RAM)</span>
+            </h2>
+            <button type="button" class="btn-secondary btn-small hidden" id="box-view-full-result-btn" data-i18n="box_btn_open_summa">
+              Ver en Estudio Completo + Apex Summa
+            </button>
+          </div>
+
+          <div class="box-blocks-summary-bar">
+            <span id="box-blocks-log-summary" data-i18n="box_blocks_log_empty">Esperando el primer bloque de grabación...</span>
+          </div>
+
+          <ul id="box-blocks-list" class="track-list box-blocks-compact"></ul>
+
+          <div id="box-live-segments" class="segments-container" aria-live="polite">
+            <div class="empty-state empty-state--compact">
+              <h3 class="empty-state-title" data-i18n="box_empty_live_title">Listo para transcribir horas ilimitadas en bloques</h3>
+              <p class="empty-state-desc" data-i18n="box_empty_live_desc">
+                Inicia la grabación a la izquierda (en modo Presencial o Virtual) o presiona <strong>Simular Bloque de Prueba Instantáneo</strong> para ver cómo se envían los bloques, se libera la RAM y se construye la transcripción continua junto con tus notas.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  </section>
+
+  <!-- Mobile Bottom Navigation Bar (Modo App Web en Celular) -->
+  <nav class="mobile-bottom-nav" aria-label="Navegación móvil rápida">
+    <button type="button" class="mobile-nav-item" data-goto-view="box" id="mob-nav-box">
+      <span class="mobile-nav-tag">REC 10H+</span>
+      <strong>Grabador Box</strong>
+    </button>
+    <button type="button" class="mobile-nav-item" data-goto-view="playground" id="mob-nav-playground">
+      <span class="mobile-nav-tag">ESTUDIO</span>
+      <strong>Apex Vox</strong>
+    </button>
+    <button type="button" class="mobile-nav-item" data-goto-view="portal" id="mob-nav-portal">
+      <span class="mobile-nav-tag">CUENTA</span>
+      <strong>Portal</strong>
+    </button>
+    <button type="button" class="mobile-nav-item" data-goto-view="landing" id="mob-nav-landing">
+      <span class="mobile-nav-tag">PLANES</span>
+      <strong>Inicio</strong>
+    </button>
+  </nav>
+
   <!-- Footer -->
   <footer class="app-footer">
     <div class="footer-inner">
@@ -626,6 +910,7 @@
         <p class="footer-statement" data-i18n="footer_statement">Cada audio, en orden. Cada voz, con nombre. Cada reunión, con acta.</p>
         <ul class="footer-links">
           <li><button type="button" data-goto-view="playground" data-i18n="nav_playground">Playground (Apex Vox)</button></li>
+          <li><button type="button" data-goto-view="box" data-i18n="nav_box">Apex Box (Grabador 10h+ &amp; App Móvil)</button></li>
           <li><button type="button" data-goto-view="landing" data-i18n="nav_landing">Inicio &amp; Planes</button></li>
           <li><button type="button" data-goto-view="portal" data-i18n="nav_portal">Portal de Usuario</button></li>
           <li><a href="/api/health" target="_blank" rel="noopener" data-i18n="footer_status">Estado del servicio</a></li>
@@ -634,7 +919,16 @@
       <p class="footer-display" aria-hidden="true">Apex Vox</p>
       <div class="footer-legal">
         <span>&copy; <span id="footer-year">2026</span> Apex Vox · Apex Summa · Apex Box</span>
-        <span data-i18n="powered_by_groq">Potenciado por Groq</span>
+        <div class="row">
+          <span data-i18n="powered_by_groq">Potenciado por Groq</span>
+          <a href="https://groq.com" target="_blank" rel="noopener noreferrer" class="groq-official-badge-link">
+            <img
+              src="https://console.groq.com/powered-by-groq-light.svg"
+              alt="Powered by Groq for fast inference."
+              class="groq-official-badge-img"
+            />
+          </a>
+        </div>
       </div>
     </div>
   </footer>

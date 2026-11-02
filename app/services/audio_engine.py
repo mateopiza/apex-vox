@@ -243,12 +243,49 @@ def probe_audio(file_path: Path | str) -> AudioMetadata:
     raw_fmt = format_info.get("format_name", "")
     fmt = raw_fmt.split(",")[0].strip().lower() if raw_fmt else path.suffix.lstrip(".").lower()
 
-    # Extract duration (format preferred, audio stream fallback)
-    duration_str = format_info.get("duration") or audio_stream.get("duration") or "0.0"
+    # Extract duration (format preferred, audio stream fallback, tags fallback, ffmpeg scan fallback)
+    format_tags = format_info.get("tags") or {}
+    stream_tags = audio_stream.get("tags") or {}
+    duration_str = (
+        format_info.get("duration")
+        or audio_stream.get("duration")
+        or format_tags.get("DURATION")
+        or stream_tags.get("DURATION")
+        or "0.0"
+    )
+    duration_sec = 0.0
     try:
-        duration_sec = float(duration_str)
+        if isinstance(duration_str, str) and ":" in duration_str:
+            parts = duration_str.split(":")
+            if len(parts) == 3:
+                duration_sec = float(parts[0]) * 3600.0 + float(parts[1]) * 60.0 + float(parts[2])
+        else:
+            duration_sec = float(duration_str)
     except (ValueError, TypeError):
         duration_sec = 0.0
+
+    # Browser MediaRecorder WebM/Opus streams often omit container duration ("N/A").
+    # Probe actual packet timestamps via fast remux to null when header duration is missing.
+    if duration_sec <= 0.0 and shutil.which("ffmpeg") is not None:
+        try:
+            scan_res = subprocess.run(
+                ["ffmpeg", "-v", "info", "-i", str(path), "-c", "copy", "-f", "null", "-"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                text=True,
+                check=False,
+                timeout=15.0,
+            )
+            time_matches = re.findall(r"time=(\d{2}):(\d{2}):(\d{2}(?:\.\d+)?)", scan_res.stderr or "")
+            if time_matches:
+                hh, mm, ss = time_matches[-1]
+                duration_sec = int(hh) * 3600.0 + int(mm) * 60.0 + float(ss)
+        except Exception:
+            pass
+
+    if duration_sec <= 0.0 and size_bytes > 0:
+        # Safe fallback estimate (~48 kbps = 6000 bytes/sec) so valid blocks never fail with 0.0s
+        duration_sec = round(max(0.5, size_bytes / 6000.0), 3)
 
     # Extract sample rate
     try:

@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Apex Box — Grabador Ilimitado por Bloques &amp; Notas IA</title>
+  <link rel="stylesheet" href="sidepanel.css" />
+  <script src="sidepanel.js" defer></script>
+</head>
+<body>
+  <header class="sp-header">
+    <div class="sp-brand-row">
+      <div class="sp-brand">
+        <span class="sp-mark" aria-hidden="true">■</span>
+        <div>
+          <h1 class="sp-title">Apex Box</h1>
+          <span class="sp-subtitle">Grabación Ilimitada por Bloques · 10h+ Sin Llenar RAM</span>
+        </div>
+      </div>
+      <a href="https://groq.com" target="_blank" rel="noopener noreferrer" class="groq-official-badge">
+        <img
+          src="https://console.groq.com/powered-by-groq-light.svg"
+          alt="Powered by Groq for fast inference."
+          width="118"
+          height="24"
+        />
+      </a>
+    </div>
+
+    <div class="sp-PlatformBanner" id="meeting-context-banner">
+      <span class="sp-dot" id="meeting-context-dot"></span>
+      <span id="meeting-context-label">Detectando entorno de reunión...</span>
+    </div>
+  </header>
+
+  <main class="sp-main">
+    <!-- 1. Selector de Modo: Reunión Presencial vs Reunión Virtual (Zoom, Meet, Teams) -->
+    <section class="sp-card" aria-label="Modo de Grabación">
+      <div class="sp-card-head">
+        <span class="sp-step">1</span>
+        <h2 class="sp-card-title">Modo de Reunión</h2>
+      </div>
+
+      <div class="mode-grid" role="radiogroup" aria-label="Seleccionar modo de grabación">
+        <button type="button" class="mode-btn active" id="mode-presencial-btn" data-mode="presencial" aria-pressed="true">
+          <span class="mode-tag">SALA / MICRÓFONO</span>
+          <strong>Reunión Presencial</strong>
+          <small>Sala de juntas, oficina, clase o entrevista en persona</small>
+        </button>
+
+        <button type="button" class="mode-btn" id="mode-virtual-btn" data-mode="virtual" aria-pressed="false">
+          <span class="mode-tag">ZOOM · MEET · TEAMS</span>
+          <strong>Reunión Virtual</strong>
+          <small>Captura audio de Zoom, Google Meet, Teams + tu micrófono</small>
+        </button>
+      </div>
+
+      <div class="sp-field-group">
+        <label class="sp-label" for="session-title-input">Título de la Reunión</label>
+        <input
+          type="text"
+          id="session-title-input"
+          class="sp-input"
+          value="Reunión Continua — Apex Box"
+          placeholder="Ej. Consejo Directivo / Llamada Google Meet..."
+          maxlength="140"
+        />
+      </div>
+
+      <div class="sp-row-2">
+        <div class="sp-field-group">
+          <label class="sp-label" for="block-duration-select">Duración Óptima por Bloque (Cálculo RAM)</label>
+          <select id="block-duration-select" class="sp-input">
+            <option value="180" selected>3 min (180s) — Óptimo (~1.03 MB RAM · 10h+ sin corte)</option>
+            <option value="60">1 min (60s) — Transcripción Ultra-Rápida (~0.35 MB RAM)</option>
+            <option value="300">5 min (300s) — Bloques Extendidos (~1.72 MB RAM)</option>
+            <option value="15">15 seg — Modo Demo / Prueba Instantánea (~90 KB RAM)</option>
+          </select>
+        </div>
+
+        <div class="sp-field-group">
+          <label class="sp-label" for="engine-select">Motor Serie Mc (Groq)</label>
+          <select id="engine-select" class="sp-input">
+            <option value="Mc-Lewis" selected>Mc-Lewis (Híbrido)</option>
+            <option value="Mc-Ayrton">Mc-Ayrton (Máxima Precisión)</option>
+            <option value="Mc-Norris">Mc-Norris (Huella Vocal)</option>
+            <option value="Mc-Piastri">Mc-Piastri (Ultra Rápido)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="ram-calc-banner" id="ram-calc-banner">
+        <strong>Cálculo Anti-Colapso RAM (10 Horas = 200 bloques de 3 min):</strong>
+        <span>Cada bloque pesa <strong>~1.03 MB</strong> (Opus 48 kbps), se envía al servidor sin cortar ni un milisegundo y se libera de la memoria RAM. En 10 horas continuas tu navegador usa solo <strong>~1.05 MB de RAM</strong> (99.6% menos memoria).</span>
+      </div>
+    </section>
+
+    <!-- 2. Control de Grabación Ilimitada por Bloques -->
+    <section class="sp-card" aria-label="Control de grabación continua">
+      <div class="sp-card-head">
+        <span class="sp-step">2</span>
+        <h2 class="sp-card-title">Grabación Continua por Bloques</h2>
+        <span class="sp-badge" id="rec-state-badge">LISTO</span>
+      </div>
+
+      <div class="timer-display">
+        <div class="timer-clock" id="live-timer-clock">00:00:00</div>
+        <div class="timer-sub" id="live-timer-sub">Sin límite de horas · Envío automático bloque a bloque</div>
+      </div>
+
+      <div class="block-progress-wrap">
+        <div class="block-progress-labels">
+          <span id="current-block-label">Bloque actual #1</span>
+          <span id="current-block-countdown">00:00 / 03:00</span>
+        </div>
+        <div class="sp-progress-track">
+          <div class="sp-progress-fill" id="block-progress-fill"></div>
+        </div>
+      </div>
+
+      <div class="ram-kpi-grid">
+        <div class="ram-kpi">
+          <span class="ram-kpi-lbl">Bloques Enviados</span>
+          <strong class="ram-kpi-val" id="kpi-blocks-sent">0</strong>
+        </div>
+        <div class="ram-kpi">
+          <span class="ram-kpi-lbl">RAM en Uso (Constante)</span>
+          <strong class="ram-kpi-val ok" id="kpi-ram-active">0.00 MB</strong>
+        </div>
+        <div class="ram-kpi">
+          <span class="ram-kpi-lbl">RAM Liberada (GC)</span>
+          <strong class="ram-kpi-val" id="kpi-ram-freed">0.00 MB</strong>
+        </div>
+      </div>
+
+      <div class="rec-actions">
+        <button type="button" class="sp-btn sp-btn-primary" id="start-rec-btn">
+          Iniciar Grabación Ilimitada por Bloques
+        </button>
+        <button type="button" class="sp-btn sp-btn-secondary hidden" id="flush-block-btn">
+          Cortar y Enviar Bloque Ahora
+        </button>
+        <button type="button" class="sp-btn sp-btn-danger hidden" id="stop-rec-btn">
+          Finalizar y Generar Acta IA (Apex Summa)
+        </button>
+      </div>
+
+      <div id="sp-status-alert" class="sp-alert hidden" role="status"></div>
+    </section>
+
+    <!-- 3. Tomar Notas en Vivo con Marca de Tiempo -->
+    <section class="sp-card" aria-label="Tomar notas en vivo">
+      <div class="sp-card-head">
+        <span class="sp-step">3</span>
+        <h2 class="sp-card-title">Notas en Vivo con Marca de Tiempo</h2>
+        <span class="sp-badge" id="notes-count-badge">0 notas</span>
+      </div>
+
+      <div class="note-tag-bar" role="group" aria-label="Etiqueta de nota">
+        <button type="button" class="note-tag-btn active" data-tag="nota">Nota</button>
+        <button type="button" class="note-tag-btn" data-tag="acuerdo">Acuerdo</button>
+        <button type="button" class="note-tag-btn" data-tag="tarea">Tarea</button>
+        <button type="button" class="note-tag-btn" data-tag="alerta">Alerta</button>
+        <button type="button" class="note-tag-btn" data-tag="idea">Idea</button>
+      </div>
+
+      <div class="note-composer">
+        <input
+          type="text"
+          id="note-speaker-input"
+          class="sp-input sp-input-sm"
+          placeholder="Orador / Responsable (opcional, ej. Carlos)"
+          maxlength="60"
+        />
+        <div class="note-input-row">
+          <input
+            type="text"
+            id="note-text-input"
+            class="sp-input"
+            placeholder="Escribe una nota, acuerdo o tarea sin interrumpir la grabación..."
+            maxlength="500"
+          />
+          <button type="button" class="sp-btn sp-btn-primary sp-btn-compact" id="add-note-btn">
+            + Anotar
+          </button>
+        </div>
+      </div>
+
+      <ul class="notes-list" id="live-notes-list" aria-live="polite">
+        <li class="empty-item">Tus notas se sellarán con el segundo exacto [HH:MM:SS] y se integrarán al Acta y Calendario de Apex Summa.</li>
+      </ul>
+    </section>
+
+    <!-- 4. Transcripción Continua en Vivo (Bloque a Bloque) -->
+    <section class="sp-card" aria-label="Transcripción continua en vivo">
+      <div class="sp-card-head">
+        <span class="sp-step">4</span>
+        <h2 class="sp-card-title">Transcripción Continua (10h+ Ready)</h2>
+        <button type="button" class="sp-link-btn" id="open-webapp-btn">Abrir Estudio Completo ↗</button>
+      </div>
+
+      <div id="live-segments-feed" class="segments-feed" aria-live="polite">
+        <div class="empty-item">
+          A medida que cada bloque se envía, la transcripción acumulada aparece aquí de forma continua sin saturar la memoria RAM.
+        </div>
+      </div>
+    </section>
+
+    <!-- Configuración del Servidor Apex Vox -->
+    <details class="sp-settings">
+      <summary>Configuración de Conexión Apex Vox Server</summary>
+      <div class="sp-settings-body">
+        <label class="sp-label" for="server-url-input">URL del Servidor Apex Vox</label>
+        <div class="note-input-row">
+          <input type="url" id="server-url-input" class="sp-input" value="http://localhost:8000" />
+          <button type="button" class="sp-btn sp-btn-secondary sp-btn-compact" id="save-server-btn">Guardar</button>
+        </div>
+      </div>
+    </details>
+  </main>
+</body>
+</html>

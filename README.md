@@ -1,6 +1,13 @@
 # ⚡ Apex Vox — Audio Studio · Potenciado por Groq | Apex Summa & Apex Box
 
-Plataforma integral de transcripción multi-audio, separación de voces, analítica conversacional y generación de actas corporativas, contenedorizada en **Docker** con **FastAPI**, **FFmpeg**, **MEGA S4 (S3 Object Storage)**, **Supabase Cloud** y **Bold API**.
+<a href="https://groq.com" target="_blank" rel="noopener noreferrer">
+  <img
+    src="https://console.groq.com/powered-by-groq-light.svg"
+    alt="Powered by Groq for fast inference."
+  />
+</a>
+
+Plataforma integral de transcripción multi-audio, separación de voces, grabación ilimitada en bloques (10+ horas con RAM constante), analítica conversacional y generación de actas corporativas, contenedorizada en **Docker** con **FastAPI**, **FFmpeg**, **MEGA S4 (S3 Object Storage)**, **Supabase Cloud** y **Bold API**.
 
 ---
 
@@ -10,7 +17,24 @@ Plataforma integral de transcripción multi-audio, separación de voces, analít
 | :--- | :--- | :--- |
 | **Transcripción (el núcleo)** | **Apex Vox** | ✅ **Producto listo** |
 | **Notas, analítica y resúmenes IA** | **Apex Summa** | 🔥 **Activo en Plan Pro** |
-| **Bot de reuniones / llamadas / estático de grabación** | **Apex Box** | ⏳ **Próximamente** |
+| **Grabador ilimitado en bloques (Extensión Chrome MV3 + App Web Móvil)** | **Apex Box** | 🎙️ **Activo (10h+ RAM Constante · Presencial & Zoom/Meet/Teams)** |
+
+---
+
+## 🎙️ Apex Box — Grabación Ilimitada en Bloques (10+ Horas Sin Romper la RAM)
+
+- **Cálculo Matemático de Bloques Óptimos (`180s` / 3 Minutos)**:
+  - Códec `audio/webm;codecs=opus` a `48 kbps` (`~6 KB/s`) → **`~1.03 MB` por bloque de 3 minutos**.
+  - Rotación continua de doble `MediaRecorder` sobre el mismo `MediaStream` (**0 ms de pérdida de voz** y cabecera EBML/WebM íntegra en cada bloque).
+  - Liberación inmediata del arreglo en memoria (`blockChunks.length = 0`) tras enviar cada bloque (o encolar en `IndexedDB` si cae la red).
+  - **10 horas continuas (`200 bloques`) consumen siempre `~1.05 MB` de RAM constante ($O(1)$)** frente a `~280 MB – 1.2 GB` de una grabación monolítica (**99.6% de ahorro de RAM**).
+- **Dos Modos de Captura**:
+  1. **Modo Reunión Presencial**: Sala de juntas, auditorio, clase o micrófono directo con filtro acústico vocal.
+  2. **Modo Reunión Virtual (Zoom, Google Meet, Microsoft Teams, Webex)**: Mezcla en tiempo real el audio del sistema/pestaña + tu micrófono mediante `AudioContext` + `MediaStreamAudioDestinationNode`.
+- **Notas en Vivo con Marca de Tiempo**: Permite tomar notas (`Nota`, `Acuerdo`, `Tarea`, `Alerta`, `Idea`, `Pregunta`) en cualquier instante de las 10+ horas y las integra automáticamente en **Apex Summa** y en el **Acta Oficial**.
+- **Extensión Chrome (Manifest V3) & App Web Móvil (PWA)**:
+  - Carpeta [`extension/`](extension/) lista para `chrome://extensions` o descarga directa desde `/api/box/extension.zip`.
+  - Misma experiencia en celular (`?view=box` + `WakeLock API` + `/manifest.webmanifest`).
 
 ---
 
