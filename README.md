@@ -9,6 +9,8 @@
 [![CI](https://github.com/mateopiza/apex-vox/actions/workflows/ci.yml/badge.svg)](https://github.com/mateopiza/apex-vox/actions/workflows/ci.yml)
 [![CodeQL](https://github.com/mateopiza/apex-vox/actions/workflows/codeql.yml/badge.svg)](https://github.com/mateopiza/apex-vox/actions/workflows/codeql.yml)
 [![Secret scan](https://github.com/mateopiza/apex-vox/actions/workflows/secret-scan.yml/badge.svg)](https://github.com/mateopiza/apex-vox/actions/workflows/secret-scan.yml)
+[![GitHub public repository](https://img.shields.io/badge/GitHub-public%20repository-181717?logo=github&logoColor=white)](https://github.com/mateopiza/apex-vox)
+[![GitHub stars](https://img.shields.io/github/stars/mateopiza/apex-vox?style=flat&logo=github)](https://github.com/mateopiza/apex-vox/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
