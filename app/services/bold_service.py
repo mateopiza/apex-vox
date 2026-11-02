@@ -161,7 +161,7 @@ def create_payment_link(
         discount_pct=settings.PROMO_DISCOUNT_PCT if promo else 0,
         plan_summary=(
             f"Apex Vox Pro por {settings.PRO_PERIOD_DAYS} días: transcripciones y almacenamiento "
-            f"ilimitados en Mega S4 + Apex Summa IA. Pago único con Bold; no se renueva solo."
+            f"ilimitados + Apex Summa IA. Pago único con Bold; no se renueva solo."
         ),
     )
 

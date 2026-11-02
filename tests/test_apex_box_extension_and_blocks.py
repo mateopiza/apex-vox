@@ -301,8 +301,9 @@ def test_extension_download_link_falls_back_to_local_zip_without_s4(monkeypatch)
     monkeypatch.setattr(type(mega_s4_storage), "is_cloud_configured", property(lambda self: False))
     client = TestClient(app)
     res = client.get("/api/box/extension/download", follow_redirects=False)
-    assert res.status_code == 302
-    assert res.headers["location"] == "/api/box/extension.zip"
+    assert res.status_code == 200  # servida por nuestro dominio, sin redirigir al proveedor
+    assert res.headers["content-type"] == "application/zip"
+    assert "attachment" in res.headers["content-disposition"]
     assert res.headers["cache-control"] == "no-store"
 
     html = client.get("/").text
@@ -383,3 +384,23 @@ def test_apex_box_blocks_count_against_free_daily_quota() -> None:
     )
     assert res.status_code == 402
     assert "Apex Pro" in res.json()["detail"]
+
+
+
+def test_public_api_does_not_reveal_storage_provider(monkeypatch) -> None:
+    """En producción, /api/health no expone proveedor, endpoint, bucket ni modelos."""
+    from app.config import settings as _settings
+    from app.models.schemas import TranscriptionResult
+
+    monkeypatch.setattr(_settings, "ENVIRONMENT", "production")
+    monkeypatch.setattr(_settings, "ADMIN_API_KEY", "adm-test-key")
+    client = TestClient(app)
+    public = client.get("/api/health").json()
+    assert set(public) == {"status", "product", "version"}
+    admin = client.get("/api/health", headers={"X-Admin-Key": "adm-test-key"}).json()
+    assert "storage" in admin and "models" in admin
+
+    dumped = TranscriptionResult(job_id="j", s4_object_key="users/u/jobs/j/result.json").model_dump()
+    assert "s4_object_key" not in dumped and dumped["storage_provider"] == "apex_vox_cloud"
+    html = client.get("/").text.lower()
+    assert "mega s4" not in html and "megas4" not in html

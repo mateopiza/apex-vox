@@ -81,7 +81,7 @@ PRIVACY_ES: List[Section] = [
         "Los registros de pago se conservan el tiempo que exige la ley contable y tributaria.",
     ]),
     ("Con quién los compartimos (encargados)", [
-        "Groq y Deepgram (transcripción y separación de voces), MEGA S4 (almacenamiento de archivos), Supabase (base de datos e inicio de sesión con Google/GitHub), "
+        "Groq y Deepgram (transcripción y separación de voces), un proveedor de almacenamiento de objetos en la Unión Europea (archivos), Supabase (base de datos e inicio de sesión con Google/GitHub), "
         "Bold (pagos), Resend (envío de correos), Telegram (solo si vinculas el bot), Cloudflare (DNS) y Google Fonts (tipografías de la web). "
         "Cada uno trata los datos solo para prestarnos su servicio. Algunos están fuera de Colombia, lo que implica una transferencia internacional de datos.",
     ]),
@@ -119,7 +119,7 @@ PRIVACY_EN: List[Section] = [
         "Payment records are kept as long as accounting and tax law requires.",
     ]),
     ("Processors", [
-        "Groq and Deepgram (transcription and voice separation), MEGA S4 (file storage), Supabase (database and Google/GitHub sign-in), Bold (payments), Resend (email), "
+        "Groq and Deepgram (transcription and voice separation), an object-storage provider in the European Union (files), Supabase (database and Google/GitHub sign-in), Bold (payments), Resend (email), "
         "Telegram (only if you link the bot), Cloudflare (DNS) and Google Fonts (web fonts). Some are outside Colombia, which means an international data transfer.",
     ]),
     ("Your rights", [
@@ -313,7 +313,7 @@ HABEAS_ES: List[Section] = [
         "Solo podrás acudir a la SIC después de agotar este trámite ante nosotros.",
     ]),
     ("11. Encargados y transferencias internacionales", [
-        "Compartimos datos solo con proveedores que los tratan por nuestra cuenta: Groq y Deepgram (transcripción), MEGA S4 (almacenamiento), Supabase (base de datos e inicio de sesión), Bold (pagos), Resend (correos), Telegram (si vinculas el bot), Cloudflare (DNS) y Google Fonts (tipografías). "
+        "Compartimos datos solo con proveedores que los tratan por nuestra cuenta: Groq y Deepgram (transcripción), un proveedor de almacenamiento de objetos en la Unión Europea, Supabase (base de datos e inicio de sesión), Bold (pagos), Resend (correos), Telegram (si vinculas el bot), Cloudflare (DNS) y Google Fonts (tipografías). "
         "Varios están fuera de Colombia (por ejemplo, Estados Unidos y la Unión Europea); la transmisión se hace bajo contratos que exigen confidencialidad y seguridad, conforme a los artículos 25 y 26 de la Ley 1581 de 2012.",
     ]),
     ("12. Seguridad", [
@@ -367,7 +367,7 @@ HABEAS_EN: List[Section] = [
         "Channel: <a href=\"mailto:{contact}\">{contact}</a> with your name, account email and request. Requests are answered within 10 business days (extendable by 5); complaints within 15 business days (extendable by 8). Incomplete complaints must be completed within 5 days; after 2 months without reply they are considered withdrawn. You may go to the SIC after completing this procedure with us.",
     ]),
     ("10. Processors and international transfers", [
-        "We share data only with providers acting on our behalf: Groq and Deepgram (transcription), MEGA S4 (storage), Supabase (database and sign-in), Bold (payments), Resend (email), Telegram (if you link the bot), Cloudflare (DNS) and Google Fonts. Several are outside Colombia (e.g. the US and the EU); transmissions are covered by confidentiality and security obligations under articles 25 and 26 of Law 1581 of 2012.",
+        "We share data only with providers acting on our behalf: Groq and Deepgram (transcription), an object-storage provider in the European Union, Supabase (database and sign-in), Bold (payments), Resend (email), Telegram (if you link the bot), Cloudflare (DNS) and Google Fonts. Several are outside Colombia (e.g. the US and the EU); transmissions are covered by confidentiality and security obligations under articles 25 and 26 of Law 1581 of 2012.",
     ]),
     ("11. Security and retention", [
         "Security measures are described in the <a href=\"/legal/seguridad?lang=en\">Security policy</a>. Without an account, audio is deleted once processed and results are removed after {guest_ttl} minutes; Free plan data is kept {free_retention} hours; Apex Pro data while the account exists or until you delete it; payment records as long as the law requires.",

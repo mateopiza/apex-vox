@@ -239,6 +239,14 @@ class MegaS4StorageService:
         signature = hmac.new(signing_key, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
         return f"{self.endpoint_url}{canonical_uri}?{canonical_query}&X-Amz-Signature={signature}"
 
+    def get_bytes(self, object_key: str) -> bytes:
+        """GET firmado (lado servidor) de un objeto privado."""
+        with httpx.Client(timeout=60.0) as client:
+            resp = client.get(self.presigned_get_url(object_key, 120))
+        if resp.status_code != 200:
+            raise RuntimeError(f"Almacenamiento respondió HTTP {resp.status_code} para {object_key}")
+        return resp.content
+
     def object_exists(self, object_key: str) -> bool:
         """HEAD firmado contra MEGA S4."""
         headers = self.build_s3v4_headers(method="HEAD", object_key=object_key, content_type="")

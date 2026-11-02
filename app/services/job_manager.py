@@ -529,7 +529,7 @@ class JobManager:
                 file_order=ordered_filenames,
                 segments=diarized_segs,
                 full_text=full_text,
-                storage_provider="mega_s4",
+                storage_provider="apex_vox_cloud",
                 s4_object_key=s4_result_key,
                 expires_at=expires_at,
             )
@@ -607,7 +607,7 @@ class JobManager:
                     "total_duration_sec": total_duration,
                     "total_duration_formatted": result.total_duration_formatted,
                     "detected_speakers_count": speaker_count,
-                    "storage_provider": "mega_s4",
+                    "storage_provider": "apex_vox_cloud",
                     "s4_audio_key": s4_audio_key,
                     "s4_result_key": s4_result_key,
                     "retention_policy": "unlimited" if expires_at is None else "24h",

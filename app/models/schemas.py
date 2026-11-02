@@ -149,7 +149,7 @@ class QuotaUsageResponse(BaseModel):
     remaining_today_seconds: Optional[float] = 7200.0
     is_unlimited: bool = False
     retention_hours: Optional[int] = 24  # 24h for free, None for unlimited
-    storage_provider: str = "mega_s4"
+    storage_provider: str = "apex_vox_cloud"
     summa_enabled: bool = False
     trial_active: bool = False
     trial_ends_at: Optional[str] = None
@@ -278,8 +278,8 @@ class TranscriptionResult(BaseModel):
     file_order: List[str] = Field(default_factory=list)
     segments: List[DiarizedSegment] = Field(default_factory=list)
     full_text: str = ""
-    storage_provider: str = "mega_s4"
-    s4_object_key: Optional[str] = None
+    storage_provider: str = "apex_vox_cloud"
+    s4_object_key: Optional[str] = Field(default=None, exclude=True)  # ruta interna: nunca sale en la API
     expires_at: Optional[str] = None
     summa_report: Optional[ApexSummaReport] = None
     live_notes: List[Dict[str, Any]] = Field(default_factory=list)

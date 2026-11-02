@@ -1,6 +1,6 @@
 /**
  * Apex Vox, Apex Summa & Apex Box — Frontend Application Controller
- * Potenciado por Groq · Almacenamiento MEGA S4 · Backend Supabase Cloud · Pagos Bold API
+ * Potenciado por Groq · Pagos Bold API
  *
  * Manages:
  * - Bilingual UI (Español / English)
@@ -56,9 +56,9 @@
       nav_box: "Apex Box (10h+ & Extensión)",
       nav_portal: "Mi cuenta",
       btn_register_login: "Registrarse / Entrar",
-      hero_badge: "POTENCIADO POR GROQ · ALMACENAMIENTO MEGA S4 · SUPABASE CLOUD",
+      hero_badge: "POTENCIADO POR GROQ · ALMACENADO EN APEX-VOX.IALABS.APP",
       hero_title: "Apex Vox: Transcripción Inteligente, Separación de Voces y Analítica Ejecutiva",
-      hero_desc: "Regístrate hoy y obtén <strong>2 horas gratis al día</strong> en 1 o varios audios con almacenamiento por 24 horas, o activa <strong>Apex Pro por USD 10 al mes</strong> (<strong>20% de descuento</strong> si pagas en tus primeras 24 horas): transcripciones y almacenamiento ilimitados en Mega S4 y resúmenes ejecutivos con <strong>Apex Summa</strong>.",
+      hero_desc: "Regístrate hoy y obtén <strong>2 horas gratis al día</strong> en 1 o varios audios con almacenamiento por 24 horas, o activa <strong>Apex Pro por USD 10 al mes</strong> (<strong>20% de descuento</strong> si pagas en tus primeras 24 horas): transcripciones y almacenamiento ilimitados y resúmenes ejecutivos con <strong>Apex Summa</strong>.",
       hero_cta_playground: "Abrir Playground Ahora",
       hero_cta_box: "Grabar Sin Límite (Apex Box 10h+)",
       hero_cta_register: "Regístrate: 2 Horas Gratis / Día",
@@ -89,7 +89,7 @@
       plan_free_title: "Plan Gratis",
       plan_free_period: "/ siempre",
       plan_free_f1: "<strong>2 horas gratis al día</strong> en 1 o varios audios al día",
-      plan_free_f2: "<strong>Almacenamiento de 24 horas</strong> en nube Mega S4",
+      plan_free_f2: "<strong>Almacenado por 24 horas</strong>: descárgalo si lo necesitas",
       plan_free_f3: "Acceso a motores <strong>Mc-Ayrton, Mc-Lewis, Mc-Norris y Mc-Piastri</strong> (Potenciado por Groq)",
       plan_free_f4: "Exportación TXT, SRT, VTT, JSON, CSV y Markdown",
       plan_free_cta: "Registrarse Gratis (2h / día)",
@@ -98,7 +98,7 @@
       per_month: "mes",
       plan_pro_f1: "<strong>USD 8 el primer mes</strong> si pagas dentro de las 24 h siguientes a crear tu cuenta (una promoción por red cada 90 días)",
       plan_pro_f2: "<strong>Transcripciones ilimitadas</strong> (sin límite diario de horas ni archivos)",
-      plan_pro_f3: "<strong>Almacenamiento ilimitado permanente</strong> en <strong>Mega S4</strong> y <strong>Supabase Cloud</strong>",
+      plan_pro_f3: "<strong>Almacenado sin límite de tiempo</strong> en apex-vox.ialabs.app",
       plan_pro_f4: "<strong>Resumen IA Apex Summa completo:</strong> Quién habló más, De qué se habló, Objetivos, Llamados de atención, Calendario de tareas y Gráficas",
       plan_pro_f5: "<strong>Generador de Actas Corporativas:</strong> Actas de Consejo, Junta Directiva, Comité y Asamblea",
       plan_pro_cta: "Activar Apex Pro",
@@ -107,9 +107,9 @@
       lbl_email: "Correo:",
       lbl_storage_retention: "Retención de tus archivos:",
       portal_quota_label: "Consumo de Audio Hoy (1 o varios audios):",
-      portal_quota_hint: "Tienes 2 horas gratis cada día. Tus archivos en el plan gratuito se almacenan por 24 horas en Mega S4.",
+      portal_quota_hint: "Tienes 2 horas gratis cada día. En el plan gratuito lo almacenamos por 24 horas: descárgalo si lo necesitas.",
       portal_billing_title: "Apex Pro — Pagos con Bold",
-      portal_billing_desc: "El pago activa <strong>30 días de Apex Pro</strong>: transcripciones ilimitadas, almacenamiento ilimitado en Mega S4 y <strong>Apex Summa</strong>. Bold no permite suscripciones: <strong>no se cobra nada automáticamente</strong> y cada mes renuevas de forma manual (te avisamos por correo).",
+      portal_billing_desc: "El pago activa <strong>30 días de Apex Pro</strong>: transcripciones ilimitadas, almacenamiento ilimitado y <strong>Apex Summa</strong>. Bold no permite suscripciones: <strong>no se cobra nada automáticamente</strong> y cada mes renuevas de forma manual (te avisamos por correo).",
       lbl_billing_mode: "Modalidad",
       btn_generate_bold_link: "Pagar con Bold",
       portal_cloud_history_title: "Historial de transcripciones",
@@ -120,7 +120,7 @@
       btn_clear_queue: "Limpiar cola",
       btn_play_sequence: "Escuchar en orden",
       dropzone_title: "Arrastra tus archivos de audio aquí o haz clic para seleccionarlos",
-      dropzone_hint: "Soporta MP3, OGG, WAV, M4A, FLAC, WEBM · 1 o varios audios · Almacenamiento en Mega S4",
+      dropzone_hint: "Soporta MP3, OGG, WAV, M4A, FLAC, WEBM · 1 o varios audios · Almacenado en apex-vox.ialabs.app",
       reorder_hint: "Arrastra cualquier tarjeta desde el ícono <strong>⠿</strong> (o usa <strong>↑ / ↓</strong>) para cambiar su posición y presiona <strong>Escuchar</strong> en cada pista para verificar el audio antes de transcribir.",
       step2_title: "Motor Apex Vox (Potenciado por Groq)",
       lbl_engine_select: "Selecciona el Modelo (Potenciado por Groq)",
@@ -141,7 +141,7 @@
       kpi_duration_lbl: "Duración Global",
       kpi_speakers_lbl: "Oradores Detectados",
       kpi_engine_lbl: "Modelo Serie Mc",
-      kpi_storage_lbl: "Almacenamiento Mega S4",
+      kpi_storage_lbl: "Almacenado",
       player_caption: "Reproductor Continuo Sincronizado (Haz clic en cualquier marca de tiempo para saltar al instante exacto)",
       rename_panel_title: "Asignar nombres personalizados a los oradores identificados:",
       btn_save_names: "Guardar Nombres",
@@ -163,7 +163,7 @@
       btn_download_minutes_md: "Descargar Acta (.MD)",
       btn_print_minutes: "Imprimir / Guardar PDF",
       auth_modal_title: "Regístrate en Apex Vox — 2 Horas Gratis al Día",
-      auth_modal_subtitle: "Al registrarte obtienes <strong>2 horas gratis cada día</strong> (en 1 o varios audios) con <strong>almacenamiento de 24 horas en Mega S4</strong>. Y si activas <strong>Apex Pro</strong> en tus primeras 24 horas, tu primer mes tiene <strong>20% de descuento</strong>.",
+      auth_modal_subtitle: "Al registrarte obtienes <strong>2 horas gratis cada día</strong> (en 1 o varios audios). Lo transcrito lo almacenamos por 24 horas: descárgalo si lo necesitas.",
       lbl_full_name: "Nombre Completo",
       lbl_password: "Contraseña",
       btn_create_free_account: "Crear Cuenta (2h Gratis / Día)",
@@ -219,9 +219,9 @@
       nav_box: "Apex Box (10h+ & Extension)",
       nav_portal: "My account",
       btn_register_login: "Sign Up / Log In",
-      hero_badge: "POWERED BY GROQ · MEGA S4 OBJECT STORAGE · SUPABASE CLOUD",
+      hero_badge: "POWERED BY GROQ · STORED ON APEX-VOX.IALABS.APP",
       hero_title: "Apex Vox: Intelligent Transcription, Speaker Separation & Executive Analytics",
-      hero_desc: "Sign up today and get <strong>2 free hours per day</strong> across 1 or multiple audios with 24-hour storage, or activate <strong>Apex Pro for USD 10 a month</strong> (<strong>20% off</strong> if you pay within your first 24 hours): unlimited transcriptions and storage in Mega S4, and executive AI insights with <strong>Apex Summa</strong>.",
+      hero_desc: "Sign up today and get <strong>2 free hours per day</strong> across 1 or multiple audios with 24-hour storage, or activate <strong>Apex Pro for USD 10 a month</strong> (<strong>20% off</strong> if you pay within your first 24 hours): unlimited transcriptions and storage, and executive AI insights with <strong>Apex Summa</strong>.",
       hero_cta_playground: "Open Playground Now",
       hero_cta_box: "Record Unlimited (Apex Box 10h+)",
       hero_cta_register: "Sign Up: 2 Free Hours / Day",
@@ -252,7 +252,7 @@
       plan_free_title: "Free Plan",
       plan_free_period: "/ forever",
       plan_free_f1: "<strong>2 hours free per day</strong> across 1 or multiple audios",
-      plan_free_f2: "<strong>24-hour storage retention</strong> in Mega S4 cloud",
+      plan_free_f2: "<strong>Stored for 24 hours</strong>: download it if you need it",
       plan_free_f3: "Access to <strong>Mc-Ayrton, Mc-Lewis, Mc-Norris & Mc-Piastri</strong> (Powered by Groq)",
       plan_free_f4: "Export to TXT, SRT, VTT, JSON, CSV & Markdown",
       plan_free_cta: "Sign Up Free (2h / day)",
@@ -261,7 +261,7 @@
       per_month: "month",
       plan_pro_f1: "<strong>USD 8 for the first month</strong> if you pay within 24 h of creating your account (one promo per network every 90 days)",
       plan_pro_f2: "<strong>Unlimited transcriptions</strong> (no daily hour or file limit)",
-      plan_pro_f3: "<strong>Unlimited permanent storage</strong> in <strong>Mega S4</strong> & <strong>Supabase Cloud</strong>",
+      plan_pro_f3: "<strong>Stored with no time limit</strong> on apex-vox.ialabs.app",
       plan_pro_f4: "<strong>Full Apex Summa AI Report:</strong> Who spoke most, Topics, Objectives, Callouts, Calendar Tasks & Charts",
       plan_pro_f5: "<strong>Corporate Minutes Generator:</strong> Board of Directors, Committee & Assembly Minutes",
       plan_pro_cta: "Activate Apex Pro",
@@ -270,9 +270,9 @@
       lbl_email: "Email:",
       lbl_storage_retention: "File retention:",
       portal_quota_label: "Audio Usage Today (1 or multiple audios):",
-      portal_quota_hint: "You get 2 free hours every day. Free tier files are retained for 24 hours in Mega S4.",
+      portal_quota_hint: "You get 2 free hours every day. On the free plan we store it for 24 hours: download it if you need it.",
       portal_billing_title: "Apex Pro — Payments with Bold",
-      portal_billing_desc: "Paying activates <strong>30 days of Apex Pro</strong>: unlimited transcriptions, unlimited Mega S4 storage and <strong>Apex Summa</strong>. Bold has no subscriptions: <strong>nothing is charged automatically</strong> and you renew manually each month (we email you a reminder).",
+      portal_billing_desc: "Paying activates <strong>30 days of Apex Pro</strong>: unlimited transcriptions, unlimited storage and <strong>Apex Summa</strong>. Bold has no subscriptions: <strong>nothing is charged automatically</strong> and you renew manually each month (we email you a reminder).",
       lbl_billing_mode: "Billing",
       btn_generate_bold_link: "Pay with Bold",
       portal_cloud_history_title: "Transcription history",
@@ -283,7 +283,7 @@
       btn_clear_queue: "Clear queue",
       btn_play_sequence: "Play in order",
       dropzone_title: "Drag and drop your audio files here or click to browse",
-      dropzone_hint: "Supports MP3, OGG, WAV, M4A, FLAC, WEBM · 1 or multiple audios · Stored in Mega S4",
+      dropzone_hint: "Supports MP3, OGG, WAV, M4A, FLAC, WEBM · 1 or multiple audios · Stored on apex-vox.ialabs.app",
       reorder_hint: "Drag any card by the <strong>⠿</strong> handle (or use <strong>↑ / ↓</strong>) to reorder it, and press <strong>Listen</strong> on each track to verify the audio before transcribing.",
       step2_title: "Apex Vox Engine (Powered by Groq)",
       lbl_engine_select: "Select Engine Model (Powered by Groq)",
@@ -304,7 +304,7 @@
       kpi_duration_lbl: "Total Duration",
       kpi_speakers_lbl: "Detected Speakers",
       kpi_engine_lbl: "Mc-Series Model",
-      kpi_storage_lbl: "Mega S4 Storage",
+      kpi_storage_lbl: "Stored",
       player_caption: "Synchronized Continuous Player (Click any timestamp to jump to that exact moment)",
       rename_panel_title: "Assign custom names to identified speakers:",
       btn_save_names: "Save Names",
@@ -326,7 +326,7 @@
       btn_download_minutes_md: "Download Minutes (.MD)",
       btn_print_minutes: "Print / Save PDF",
       auth_modal_title: "Sign Up for Apex Vox — 2 Free Hours Per Day",
-      auth_modal_subtitle: "Register to get <strong>2 free hours every day</strong> (in 1 or multiple audios) with <strong>24-hour storage in Mega S4</strong>. Activate <strong>Apex Pro</strong> within your first 24 hours and your first month is <strong>20% off</strong>.",
+      auth_modal_subtitle: "Register to get <strong>2 free hours every day</strong> (in 1 or multiple audios). We store your transcripts for 24 hours: download them if you need them.",
       lbl_full_name: "Full Name",
       lbl_password: "Password",
       btn_create_free_account: "Create Account (2h Free / Day)",
@@ -801,8 +801,8 @@
       if (authDialog) authDialog.close();
       showAlert(
         state.lang === "en"
-          ? `Welcome ${data.full_name}! You have 2 free hours/day and 24h storage in Mega S4.`
-          : `¡Bienvenido ${data.full_name}! Tienes 2 horas gratis al día y 24h de almacenamiento en Mega S4.`,
+          ? `Welcome ${data.full_name}! You have 2 free hours/day; we store your work for 24 hours.`
+          : `¡Bienvenido ${data.full_name}! Tienes 2 horas gratis al día; guardamos tu trabajo por 24 horas.`,
         "success"
       );
       loadUserPortalSummary();
@@ -1182,12 +1182,11 @@
               <div class="track-top">
                 <span class="track-order-badge">${escapeHtml(rec.engine_brand || "Mc-Lewis")}</span>
                 <span class="track-name">Job ${escapeHtml(rec.job_id)} — Orador principal: ${escapeHtml(rec.dominant_speaker || "Hablante 1")}</span>
-                <span class="meta-tag timeline">${rec.retention_policy === "unlimited" ? "Mega S4 Ilimitado" : "Mega S4 (24h)"}</span>
+                <span class="meta-tag timeline">${rec.retention_policy === "unlimited" ? "Almacenado · sin límite" : "Almacenado · 24 h"}</span>
               </div>
               <div class="track-meta">
                 <span class="meta-tag">Duración: ${escapeHtml(rec.total_duration_formatted || "00:00:00")}</span>
                 <span class="meta-tag">Oradores: ${rec.detected_speakers_count || 1}</span>
-                <span class="meta-tag">Key: ${escapeHtml(rec.s4_result_key || "mega_s4")}</span>
               </div>
             `;
             li.addEventListener("click", () => {
@@ -1380,7 +1379,7 @@
       const timelineLabel = `${formatSecondsHHMMSS(startOffset)} → ${formatSecondsHHMMSS(endOffset)}`;
       const chunkLabel = file.is_over_25mb
         ? `<span class="meta-tag chunk-warn">Auto-Chunk &lt;25MB</span>`
-        : `<span class="meta-tag">Mega S4 Ready</span>`;
+        : `<span class="meta-tag">Almacenado</span>`;
       const audioSrc = `/api/sessions/${encodeURIComponent(state.sessionId)}/files/${encodeURIComponent(file.file_id)}/audio`;
       const listenLabel = isEn ? "Listen" : "Escuchar";
       const pauseLabel = isEn ? "Pause" : "Pausar";
@@ -1644,7 +1643,7 @@
 
         const chunkInfo =
           statusData.total_chunks > 0
-            ? `Fragmentos procesados: ${statusData.completed_chunks}/${statusData.total_chunks} · Almacenando en Mega S4`
+            ? `Fragmentos procesados: ${statusData.completed_chunks}/${statusData.total_chunks} · Almacenando`
             : "Potenciado por Groq · Procesando audio e inteligencia Apex Summa...";
 
         updateProgressUI(statusData.progress, statusData.current_step, chunkInfo);

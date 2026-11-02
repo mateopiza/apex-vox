@@ -13,9 +13,9 @@ import logging
 import shutil
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Header, Request
 from fastapi.exceptions import HTTPException as FastAPIHTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -371,7 +371,7 @@ async def api_info() -> Dict[str, Any]:
 
 
 @app.get("/api/health", tags=["Health"])
-async def health_check() -> JSONResponse:
+async def health_check(x_admin_key: Optional[str] = Header(default=None)) -> JSONResponse:
     """
     Container and application health check endpoint.
     Verifies system runtime, storage accessibility, ffmpeg binaries,
@@ -451,7 +451,7 @@ async def health_check() -> JSONResponse:
         },
         "storage": {
             "provider": "mega_s4",
-            "endpoint": settings.MEGA_S4_ENDPOINT_URL,
+            "endpoint": settings.MEGA_S4_ENDPOINT_URL,  # solo visible para administradores
             "bucket": settings.MEGA_S4_BUCKET_NAME,
             "uploads_writable": uploads_writable,
             "outputs_writable": outputs_writable,
@@ -469,6 +469,15 @@ async def health_check() -> JSONResponse:
             health_status["system"],
             health_status["storage"],
         )
-        return JSONResponse(status_code=503, content=health_status)
 
-    return JSONResponse(status_code=200, content=health_status)
+    # En producción el público solo ve el estado: sin proveedores, endpoints, bucket ni
+    # modelos (información útil para un atacante). El detalle exige la cabecera X-Admin-Key.
+    import hmac as _hmac
+
+    is_admin = bool(
+        settings.ADMIN_API_KEY and x_admin_key and _hmac.compare_digest(x_admin_key, settings.ADMIN_API_KEY)
+    )
+    if settings.is_production and not is_admin:
+        health_status = {k: health_status[k] for k in ("status", "product", "version")}
+
+    return JSONResponse(status_code=200 if is_healthy else 503, content=health_status)

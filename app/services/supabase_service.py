@@ -523,7 +523,7 @@ class SupabaseCloudService:
                 remaining_today_seconds=round(remaining, 2) if remaining is not None else None,
                 is_unlimited=is_paid,
                 retention_hours=retention,
-                storage_provider="mega_s4",
+                storage_provider="apex_vox_cloud",
                 summa_enabled=is_paid,
                 trial_active=(plan == "trial"),
                 trial_ends_at=user.get("trial_ends_at") if user else None,

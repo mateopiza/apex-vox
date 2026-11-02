@@ -21,7 +21,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from fastapi.responses import RedirectResponse, Response
+from fastapi.responses import Response
 
 from app.api.deps import is_paid, require_user
 from app.models.schemas import (
@@ -240,24 +240,36 @@ async def finalize_box_recording_session(
         raise HTTPException(status_code=500, detail=f"Error al finalizar la sesión: {exc}") from exc
 
 
+_extension_cache: Dict[str, bytes] = {}
+
+
 @router.get("/extension/download")
-async def download_chrome_extension_from_s4() -> RedirectResponse:
+async def download_chrome_extension() -> Response:
     """
-    Enlace estable de descarga de la extensión: redirige a una URL firmada de MEGA S4
-    (caduca en 10 minutos; el bucket sigue privado). Sin MEGA S4 configurado, o si
-    falla, sirve el ZIP directamente desde el servidor.
+    Descarga de la extensión desde nuestro dominio. El archivo vive en el almacenamiento
+    privado; el servidor lo trae y lo entrega, así el cliente nunca ve el proveedor ni
+    URLs firmadas. Sin almacenamiento configurado, o si falla, se arma el ZIP localmente.
     """
-    headers = {"Cache-Control": "no-store"}
+    name = extension_download_name()
+    data: Optional[bytes] = None
     if mega_s4_storage.is_cloud_configured:
         try:
             key = await run_in_threadpool(ensure_extension_published_to_s4)
-            url = mega_s4_storage.presigned_get_url(
-                key, expires_sec=600, download_name=extension_download_name()
-            )
-            return RedirectResponse(url, status_code=302, headers=headers)
+            data = _extension_cache.get(key)
+            if data is None:
+                data = await run_in_threadpool(mega_s4_storage.get_bytes, key)
+                _extension_cache.clear()
+                _extension_cache[key] = data
         except Exception:
-            logger.exception("Descarga de la extensión desde MEGA S4 no disponible; se usa el ZIP local")
-    return RedirectResponse("/api/box/extension.zip", status_code=302, headers=headers)
+            logger.exception("Extensión no disponible en el almacenamiento; se usa el ZIP local")
+            data = None
+    if data is None:
+        data = build_extension_zip_bytes()
+    return Response(
+        content=data,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{name}"', "Cache-Control": "no-store"},
+    )
 
 
 @router.get("/extension.zip")
