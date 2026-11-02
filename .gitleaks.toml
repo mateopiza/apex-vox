@@ -1,0 +1,11 @@
+# gitleaks: reglas por defecto + excepciones explícitas para valores de prueba falsos.
+# No añadas aquí claves reales: si gitleaks encuentra una, rótala y límpiala del historial.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Claves ficticias usadas en los tests"
+regexes = [
+  '''gsk_valid_key_test_123''',
+  '''gsk_test_key_for_e2e_verification''',
+]
