@@ -512,6 +512,7 @@ details > summary::-webkit-details-marker {
 
 .icon-btn {
   display: inline-flex;
+  flex: none;
   align-items: center;
   justify-content: center;
   width: 30px;
@@ -1948,7 +1949,7 @@ select.form-control {
   padding: var(--space-6) 0 var(--space-5);
   overflow: hidden;
 }
-.hero-card > *:not(.hero-pixels) {
+.hero-card > *:not(.hero-pixels):not(.hero-streaks) {
   position: relative;
 }
 .hero-pixels {
@@ -2507,6 +2508,251 @@ dialog.apex-dialog[open] {
   font-size: 11px;
   letter-spacing: var(--label-tracking);
   text-transform: uppercase;
+}
+
+/* ==========================================================================
+   Social sign-in
+   ========================================================================== */
+.oauth-options {
+  display: grid;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+.oauth-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--bdrs-l);
+  background: var(--bg-section);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: border-color var(--trs-time) var(--ease), background-color var(--trs-time) var(--ease);
+}
+.oauth-btn:hover {
+  border-color: var(--text-primary);
+  background: var(--bg-section-98);
+}
+.oauth-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+.oauth-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: var(--space-1);
+  color: var(--text-secondary);
+  font-family: var(--font-label);
+  font-size: 11px;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+}
+.oauth-divider::before,
+.oauth-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+
+/* ==========================================================================
+   Groq badge
+   ========================================================================== */
+.groq-badge {
+  display: inline-flex;
+  align-items: center;
+  line-height: 0;
+}
+.groq-badge img {
+  width: 150px;
+  height: auto;
+}
+
+/* ==========================================================================
+   Speed — the visual promise of Groq inference
+   ========================================================================== */
+@keyframes streak-run {
+  from { transform: translateX(calc(100% + 100vw)); }
+  to { transform: translateX(calc(-100% - 20vw)); }
+}
+@keyframes hero-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes pixel-burst {
+  0%, 12% { background: var(--bg-section-91); }
+  18%, 72% { background: var(--brand); }
+  86%, 100% { background: var(--bg-section-91); }
+}
+@keyframes line-type {
+  0%, 30% { transform: scaleX(0); }
+  46%, 78% { transform: scaleX(1); }
+  92%, 100% { transform: scaleX(0); }
+}
+@keyframes stripes-run {
+  from { background-position: 0 0; }
+  to { background-position: 36px 0; }
+}
+
+/* Hero: fast entrance + pixel streaks crossing the page */
+.hero-badge,
+.hero-title,
+.hero-description,
+.hero-actions {
+  animation: hero-rise 700ms var(--ease-expo-out) both;
+}
+.hero-title { animation-delay: 60ms; }
+.hero-description { animation-delay: 140ms; }
+.hero-actions { animation-delay: 220ms; }
+
+.hero-streaks {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.hero-streak {
+  position: absolute;
+  left: 0;
+  top: calc(var(--row) * 24px + 8px);
+  width: calc(var(--len) * 8px);
+  height: 8px;
+  background: repeating-linear-gradient(90deg, var(--brand) 0 8px, transparent 8px 12px);
+  opacity: 0.55;
+  animation: streak-run var(--dur) cubic-bezier(0.7, 0, 0.3, 1) var(--dly) infinite;
+}
+.hero-streak:nth-child(even) {
+  background: repeating-linear-gradient(90deg, var(--orange-light) 0 8px, transparent 8px 12px);
+}
+
+/* Speed band */
+.speed-band {
+  display: grid;
+  grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+  gap: var(--space-fixed-4);
+  align-items: center;
+  padding: var(--space-5) 0;
+  border-top: 1px solid var(--line);
+}
+.speed-title {
+  margin: var(--space-2) 0 0;
+  max-width: 16ch;
+  font-size: var(--fs-4);
+  line-height: 1.04;
+  letter-spacing: -0.026em;
+}
+.speed-body {
+  margin: var(--space-2) 0 0;
+  max-width: 48ch;
+  color: var(--body);
+  font-family: var(--font-mono);
+  font-size: 15px;
+  line-height: 1.4;
+  letter-spacing: -0.04em;
+}
+
+.speed-demo {
+  position: relative;
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  overflow: hidden;
+  border-radius: var(--bdrs);
+  background: var(--utility-20-blue);
+  color: var(--white);
+  --cycle: 3600ms;
+}
+.speed-row {
+  display: grid;
+  gap: 10px;
+}
+.speed-lbl {
+  color: var(--code-comment);
+  font-family: var(--font-label);
+  font-size: 11px;
+  letter-spacing: var(--label-tracking);
+  text-transform: uppercase;
+}
+
+.speed-wave {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 92px;
+}
+.speed-wave i {
+  flex: 1 1 0;
+  height: calc(var(--h) * 8px);
+  max-height: 100%;
+  background: var(--bg-section-91);
+  animation: pixel-burst var(--cycle) steps(1, end) calc(var(--i) * 22ms) infinite;
+}
+
+.speed-streaks {
+  position: relative;
+  height: 64px;
+}
+.speed-streak {
+  position: absolute;
+  left: 0;
+  top: calc(var(--row) * 8px);
+  width: calc(var(--len) * 6px);
+  height: 4px;
+  background: var(--brand);
+  animation: streak-run var(--dur) cubic-bezier(0.7, 0, 0.3, 1) var(--dly) infinite;
+}
+.speed-streak:nth-child(3n) {
+  background: var(--orange-light);
+}
+
+.speed-lines {
+  display: grid;
+  gap: 8px;
+}
+.speed-line {
+  display: block;
+  width: var(--w);
+  height: 8px;
+  background: var(--white-60);
+  transform-origin: left center;
+  animation: line-type var(--cycle) var(--ease-expo-out) calc(600ms + var(--i) * 70ms) infinite;
+}
+.speed-line:first-child {
+  background: var(--brand);
+}
+
+/* Processing: the progress plate keeps moving */
+.progress-box:not(.hidden) .progress-bar-inner {
+  background-image: repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.45) 0 6px, transparent 6px 18px);
+  background-size: 36px 100%;
+  animation: stripes-run 450ms linear infinite;
+}
+
+@media (max-width: 900px) {
+  .speed-band {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-streaks,
+  .speed-streaks {
+    display: none;
+  }
+  .speed-wave i {
+    background: var(--brand);
+  }
+  .speed-line {
+    transform: none;
+  }
 }
 
 /* ==========================================================================

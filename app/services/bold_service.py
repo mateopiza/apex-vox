@@ -1,129 +1,226 @@
 """
-Bold API Payment & Subscription Service (app/services/bold_service.py)
-----------------------------------------------------------------------
-Integrates Bold API (bold.co) for Apex Vox Pro subscriptions:
-- Monthly Plan: $30.000 COP / $10 USD per month.
-- 3-Day Free Trial ('prueba gratis de 3 días') with automatic recurring charge ('cobro automático').
-- Generates official Bold SHA-256 integrity signature:
-    SHA256(f"{order_id}{amount}{currency}{secret_key}")
-- Handles Bold Webhook notifications (SALE_APPROVED, SUBSCRIPTION_ACTIVE, etc.).
+Bold payments for Apex Vox Pro (app/services/bold_service.py)
+-------------------------------------------------------------
+- Each payment buys PRO_PERIOD_DAYS of Apex Pro: $30.000 COP or $10 USD.
+- Payments are created through Bold's official "API Link de pagos":
+    POST {BOLD_API_BASE_URL}/online/link/v1   (Authorization: x-api-key <llave de identidad>)
+  and the payer is redirected to the returned checkout.bold.co URL.
+- Bold links are one-off charges; there is no automatic recurring billing.
+- Approved payments arrive on the signed webhook (x-bold-signature) and can also be
+  confirmed on demand by querying GET /online/link/v1/{payment_link}.
 """
 
 from __future__ import annotations
 
+import base64
 import hashlib
+import hmac
 import logging
+import re
+import time
 import uuid
 from typing import Any, Dict, Optional
+
+import httpx
 
 from app.config import settings
 from app.models.schemas import BoldCheckoutResponse
 
 logger = logging.getLogger("app.services.bold_service")
 
+ORDER_PREFIX = "APEXVOX"
+_PAID_EVENTS = {"SALE_APPROVED"}
+_BOLD_TIMEOUT = httpx.Timeout(15.0, connect=5.0)
+
+
+class BoldNotConfiguredError(RuntimeError):
+    """BOLD_API_KEY is missing."""
+
+
+class BoldAPIError(RuntimeError):
+    """Bold rejected the request or returned an unexpected payload."""
+
+
+# ---------------------------------------------------------------------------
+# Order references (our id <-> Bold)
+# ---------------------------------------------------------------------------
+
+def build_order_reference(user_id: Optional[str]) -> str:
+    """Reference sent to Bold (max 60 chars, [A-Za-z0-9_-]); embeds our user id."""
+    suffix = f"{int(time.time()):x}{uuid.uuid4().hex[:4]}".upper()
+    uid = (user_id or "").strip()
+    if not uid or uid == "guest_default" or not re.fullmatch(r"[A-Za-z0-9-]{1,40}", uid):
+        return f"{ORDER_PREFIX}-{suffix}"
+    return f"{ORDER_PREFIX}-{uid}-{suffix}"
+
+
+def user_id_from_order_reference(reference: Optional[str]) -> Optional[str]:
+    """Inverse of build_order_reference(); None for anonymous or foreign references."""
+    ref = (reference or "").strip()
+    if not ref.startswith(f"{ORDER_PREFIX}-"):
+        return None
+    body = ref[len(ORDER_PREFIX) + 1 :]
+    if "-" not in body:
+        return None
+    uid = body.rsplit("-", 1)[0]
+    return uid or None
+
 
 def compute_bold_integrity_signature(
     order_id: str,
     amount: int | str,
-    currency: str,
+    currency: str = "COP",
     secret_key: Optional[str] = None,
 ) -> str:
-    """
-    Compute Bold's required SHA-256 integrity hash:
-    SHA256(f"{order_id}{amount}{currency}{secret_key}")
-    """
-    sec = (secret_key if secret_key is not None else settings.BOLD_SECRET_KEY) or "bold_test_secret_key"
+    """Botón de pagos integrity hash: SHA256(f"{order_id}{amount}{currency}{secret_key}")."""
+    sec = secret_key if secret_key is not None else settings.BOLD_SECRET_KEY
     raw = f"{order_id}{amount}{currency.upper()}{sec}"
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def create_bold_checkout_session(
-    user_id: Optional[str] = None,
-    currency: str = "COP",
-    start_trial: bool = True,
-    redirect_url: Optional[str] = None,
-) -> BoldCheckoutResponse:
-    """
-    Build a Bold API Checkout payload for the Apex Pro Plan:
-    $30.000 COP / $10 USD monthly with 3-day free trial and automatic billing.
-    """
+# ---------------------------------------------------------------------------
+# Link de pagos API
+# ---------------------------------------------------------------------------
+
+def _price(currency: str) -> tuple[str, int, str]:
     curr = (currency or "COP").strip().upper()
-    if curr not in ("COP", "USD"):
-        curr = "COP"
+    if curr == "USD":
+        return "USD", int(settings.PRO_PRICE_USD), f"${int(settings.PRO_PRICE_USD)} USD"
+    return "COP", int(settings.PRO_PRICE_COP), f"${settings.PRO_PRICE_COP:,.0f} COP".replace(",", ".")
 
-    amount = settings.PRO_PRICE_COP if curr == "COP" else int(settings.PRO_PRICE_USD)
-    amount_display = "$30.000 COP / mes" if curr == "COP" else "$10 USD / month"
-    order_id = f"APEXVOX-{uuid.uuid4().hex[:10].upper()}"
 
-    signature = compute_bold_integrity_signature(
-        order_id=order_id,
-        amount=amount,
-        currency=curr,
-    )
-    api_key = settings.BOLD_API_KEY or "bold_pk_live_apex_vox"
-    ret_url = redirect_url or "http://localhost:8000/?view=portal&billing=success"
+def _bold_request(method: str, path: str, json_body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Call the Bold integrations API. Isolated so tests can replace it."""
+    if not settings.BOLD_API_KEY:
+        raise BoldNotConfiguredError("BOLD_API_KEY no está configurada.")
+    url = f"{settings.BOLD_API_BASE_URL}{path}"
+    headers = {
+        "Authorization": f"x-api-key {settings.BOLD_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    try:
+        with httpx.Client(timeout=_BOLD_TIMEOUT) as client:
+            resp = client.request(method, url, json=json_body, headers=headers)
+    except httpx.HTTPError as exc:
+        raise BoldAPIError(f"No se pudo contactar a Bold: {exc}") from exc
+    try:
+        data = resp.json()
+    except ValueError as exc:
+        raise BoldAPIError(f"Bold respondió {resp.status_code} sin JSON.") from exc
+    if resp.status_code >= 400 or data.get("errors"):
+        logger.warning("Bold API %s %s -> %s %s", method, path, resp.status_code, data.get("errors"))
+        raise BoldAPIError(f"Bold rechazó la solicitud ({resp.status_code}).")
+    return data
 
-    checkout_url = (
-        f"https://checkout.bold.co/payment/{order_id}"
-        f"?api-key={api_key}"
-        f"&amount={amount}"
-        f"&currency={curr}"
-        f"&integrity-signature={signature}"
-        f"&trial-days={settings.PRO_TRIAL_DAYS if start_trial else 0}"
-        f"&auto-renew=true"
-        f"&redirection-url={ret_url}"
-    )
+
+def create_payment_link(
+    user_id: str,
+    payer_email: Optional[str],
+    currency: str,
+    callback_url: str,
+) -> BoldCheckoutResponse:
+    """Create a closed-amount Bold payment link for one Apex Pro period."""
+    curr, amount, amount_display = _price(currency)
+    reference = build_order_reference(user_id)
+    body: Dict[str, Any] = {
+        "amount_type": "CLOSE",
+        "amount": {"currency": curr, "total_amount": amount, "tip_amount": 0},
+        "reference": reference,
+        "description": f"Apex Vox Pro - {settings.PRO_PERIOD_DAYS} dias",
+        "callback_url": callback_url,
+    }
+    if payer_email and "@" in payer_email and not payer_email.endswith(".local"):
+        body["payer_email"] = payer_email
+
+    data = _bold_request("POST", "/online/link/v1", body)
+    payload = data.get("payload") or {}
+    link_id = payload.get("payment_link")
+    url = payload.get("url")
+    if not link_id or not url:
+        raise BoldAPIError("Bold no devolvió la URL del link de pago.")
 
     return BoldCheckoutResponse(
-        order_id=order_id,
+        order_id=reference,
+        payment_link=link_id,
+        checkout_url=url,
         amount=amount,
         currency=curr,
-        amount_display=amount_display,
-        trial_days=settings.PRO_TRIAL_DAYS if start_trial else 0,
-        auto_billing=True,
-        bold_api_key=api_key,
-        integrity_signature=signature,
-        checkout_url=checkout_url,
+        amount_display=f"{amount_display} / {settings.PRO_PERIOD_DAYS} días",
+        period_days=settings.PRO_PERIOD_DAYS,
         plan_summary=(
-            f"Apex Vox Pro — Prueba gratis de {settings.PRO_TRIAL_DAYS} días, "
-            f"luego cobro automático de $30.000 COP / $10 USD al mes. "
-            f"Transcripciones y almacenamiento ilimitados en Mega S4 + Apex Summa IA."
+            f"Apex Vox Pro por {settings.PRO_PERIOD_DAYS} días: transcripciones y almacenamiento "
+            f"ilimitados en Mega S4 + Apex Summa IA. Pago único con Bold."
         ),
     )
 
 
+def get_payment_link(payment_link: str) -> Dict[str, Any]:
+    """Status of a Bold link: ACTIVE, PROCESSING, PAID, REJECTED, CANCELLED, EXPIRED."""
+    if not re.fullmatch(r"LNK_[A-Za-z0-9]+", payment_link or ""):
+        raise BoldAPIError("Identificador de link inválido.")
+    data = _bold_request("GET", f"/online/link/v1/{payment_link}")
+    return data.get("payload") or data
+
+
+# ---------------------------------------------------------------------------
+# Webhook
+# ---------------------------------------------------------------------------
+
+def _webhook_secret() -> Optional[str]:
+    """Key Bold uses to sign notifications. Empty string = Bold sandbox mode."""
+    secret = settings.BOLD_WEBHOOK_SECRET or settings.BOLD_SECRET_KEY
+    if secret:
+        return secret
+    # Without a key every payload would verify against the sandbox (empty) key:
+    # never allow that in production.
+    return None if settings.is_production else ""
+
+
+def verify_bold_webhook_signature(raw_body: bytes, signature: Optional[str]) -> bool:
+    """Bold signs webhooks as hex(HMAC-SHA256(secret, base64(raw_body))) in `x-bold-signature`."""
+    secret = _webhook_secret()
+    if secret is None or not signature:
+        return False
+    encoded = base64.b64encode(raw_body)
+    expected = hmac.new(secret.encode("utf-8"), encoded, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected, signature.strip().lower())
+
+
 def process_bold_webhook_event(payload: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Process incoming Bold API webhook events (e.g., SALE_APPROVED, SUBSCRIPTION_CREATED)
-    and upgrade the corresponding user in Supabase Cloud.
+    Handle a verified Bold notification (CloudEvents format): SALE_APPROVED grants one
+    Apex Pro period to the account referenced by `data.metadata.reference`.
     """
     from app.services.supabase_service import supabase_service
 
-    event_type = str(payload.get("type") or payload.get("event") or "SALE_APPROVED").upper()
-    data = payload.get("data") or payload
-    order_id = str(data.get("order_id") or data.get("reference") or f"BOLD-{uuid.uuid4().hex[:8]}")
-    user_id = str(data.get("user_id") or data.get("customer_id") or "guest_default")
-    currency = str(data.get("currency") or "COP").upper()
+    event_type = str(payload.get("type") or "").upper()
+    data = payload.get("data") or {}
+    metadata = data.get("metadata") or {}
+    reference = metadata.get("reference") or data.get("reference") or data.get("order_id")
+    amount = data.get("amount") or {}
+    currency = str((amount.get("currency") if isinstance(amount, dict) else None) or "COP").upper()
+    user_id = user_id_from_order_reference(reference)
 
-    if event_type in ("SALE_APPROVED", "SUBSCRIPTION_CREATED", "TRIAL_STARTED", "PAYMENT_SUCCEEDED"):
-        profile = supabase_service.upgrade_user_to_pro(
+    if event_type not in _PAID_EVENTS or not user_id:
+        logger.info("Bold webhook ignored: type=%s reference=%s", event_type or "-", reference)
+        return {"status": "ignored", "event_type": event_type or None, "order_id": reference}
+
+    try:
+        profile = supabase_service.activate_paid_period(
             user_id=user_id,
-            start_trial=(event_type == "TRIAL_STARTED"),
+            reference=str(reference),
             currency=currency,
-            order_id=order_id,
-            auto_billing=True,
+            source="bold_webhook",
         )
-        return {
-            "status": "processed",
-            "event_type": event_type,
-            "order_id": order_id,
-            "user_id": user_id,
-            "upgraded_plan": profile.plan,
-            "auto_billing": True,
-        }
+    except (LookupError, PermissionError) as exc:
+        logger.warning("Bold webhook for %s not applied: %s", reference, exc)
+        return {"status": "ignored", "event_type": event_type, "order_id": reference}
 
     return {
-        "status": "ignored",
+        "status": "processed",
         "event_type": event_type,
-        "order_id": order_id,
+        "order_id": reference,
+        "user_id": user_id,
+        "upgraded_plan": profile.plan,
+        "pro_until": profile.quota.pro_until,
     }

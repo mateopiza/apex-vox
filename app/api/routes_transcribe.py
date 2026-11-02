@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse, Response
 
+from app.api.deps import is_paid, optional_user
 from app.config import resolve_engine_code, settings
 from app.models.schemas import (
     ApexSummaReport,
@@ -51,13 +52,26 @@ router = APIRouter(prefix="/api", tags=["Transcription, Diarization & Voice Prof
 @router.post("/transcribe", response_model=TranscribeResponse)
 async def start_transcription_job(
     payload: TranscribeRequest,
-    sync: bool = Query(default=False, description="Run synchronously before returning"),
+    sync: bool = Query(default=False, description="Run synchronously before returning (non-production only)"),
+    user: Optional[Dict[str, Any]] = Depends(optional_user),
 ) -> TranscribeResponse:
     """
     Queue and launch an end-to-end audio slicing, transcription (Potenciado por Groq),
     speaker diarization (Mc-Ayrton, Mc-Lewis, Mc-Norris, Mc-Piastri), Mega S4 storage,
     and Apex Summa AI intelligence job.
     """
+    # Identity and plan come from the session token, never from the request body.
+    if settings.REQUIRE_LOGIN_TO_TRANSCRIBE and not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Crea tu cuenta gratis (2 horas al día) para transcribir / Sign up free to transcribe.",
+        )
+    payload.user_id = user["user_id"] if user else "guest_default"
+    if not settings.ALLOW_PLAN_SIMULATOR:
+        payload.plan_override = None
+    if settings.is_production:
+        sync = False
+
     raw_engine = (payload.diarization_engine or settings.DEFAULT_DIARIZATION_ENGINE or "Mc-Lewis").strip()
     engine = resolve_engine_code(raw_engine)
     effective_groq = (payload.api_key or settings.GROQ_API_KEY or "").strip()
@@ -243,11 +257,20 @@ async def trigger_daily_bot_report(
 # Apex Summa — AI Intelligence Summary, Charts, Calendar & Minutes ('Actas')
 # -----------------------------------------------------------------------------
 
+def _require_summa_access(result, user: Optional[Dict[str, Any]]) -> None:
+    """Minutes and calendar export are Apex Pro features."""
+    if result.plan == "free" and not is_paid(user):
+        raise HTTPException(
+            status_code=402,
+            detail="Las actas y el calendario de Apex Summa están incluidos en Apex Pro / Included in Apex Pro.",
+        )
+
+
 @router.get("/jobs/{job_id}/summa", response_model=ApexSummaReport)
 async def get_job_apex_summa_report(
     job_id: str,
     lang: str = Query(default="es", description="Language: es or en"),
-    unlock: bool = Query(default=False, description="Unlock full Pro report"),
+    user: Optional[Dict[str, Any]] = Depends(optional_user),
 ) -> ApexSummaReport:
     """
     Retrieve the 7-part Apex Summa AI report for a completed transcription:
@@ -263,7 +286,7 @@ async def get_job_apex_summa_report(
     if not result:
         raise HTTPException(status_code=404, detail=f"Resultado '{job_id}' no encontrado.")
 
-    is_locked = False if unlock else (result.plan == "free")
+    is_locked = result.plan == "free" and not is_paid(user)
     report = generate_apex_summa_report(
         result=result,
         language=lang,
@@ -277,6 +300,7 @@ async def get_job_apex_summa_report(
 async def create_job_meeting_minutes(
     job_id: str,
     payload: MinutesGenerationRequest,
+    user: Optional[Dict[str, Any]] = Depends(optional_user),
 ) -> MinutesDocumentResponse:
     """
     Generate formal meeting minutes ('Acta') in the selected template:
@@ -290,7 +314,8 @@ async def create_job_meeting_minutes(
     if not result:
         raise HTTPException(status_code=404, detail=f"Resultado '{job_id}' no encontrado.")
 
-    report = result.summa_report or generate_apex_summa_report(
+    _require_summa_access(result, user)
+    report = generate_apex_summa_report(
         result=result,
         language=payload.language,
         is_locked=False,
@@ -303,13 +328,17 @@ async def create_job_meeting_minutes(
 
 
 @router.get("/jobs/{job_id}/calendar.ics")
-async def download_job_tasks_calendar_ics(job_id: str) -> Response:
+async def download_job_tasks_calendar_ics(
+    job_id: str,
+    user: Optional[Dict[str, Any]] = Depends(optional_user),
+) -> Response:
     """Download the upcoming tasks ('Próximas tareas') as an iCalendar (.ics) file."""
     result = job_manager.get_job_result(job_id)
     if not result:
         raise HTTPException(status_code=404, detail=f"Resultado '{job_id}' no encontrado.")
 
-    report = result.summa_report or generate_apex_summa_report(
+    _require_summa_access(result, user)
+    report = generate_apex_summa_report(
         result=result,
         language=result.language or "es",
         is_locked=False,
