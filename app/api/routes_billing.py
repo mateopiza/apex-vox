@@ -1,8 +1,10 @@
 """
 Billing routes (app/api/routes_billing.py)
 ------------------------------------------
-- POST /api/billing/subscribe : one-time 3-day Apex Pro trial (signed-in accounts only).
-- POST /api/billing/checkout  : Bold payment link for 30 days of Apex Pro.
+- GET  /api/billing/offer     : current price (USD 10, or USD 8 with the welcome promo).
+- POST /api/billing/checkout  : Bold payment link (USD) for 30 days of Apex Pro.
+  Bold has no subscriptions: each month is paid manually; nothing renews by itself.
+- POST /api/billing/subscribe : retired (the 3-day free trial no longer exists) -> 410.
 - POST /api/billing/confirm   : re-check the account's pending Bold links (after redirect).
 - POST /api/billing/bold/webhook : signed Bold notifications (SALE_APPROVED).
 """
@@ -15,11 +17,11 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
-from app.api.deps import public_base_url, require_user
+from app.api.deps import client_ip, public_base_url, require_user
 from app.models.schemas import (
+    BillingOfferResponse,
     BoldCheckoutRequest,
     BoldCheckoutResponse,
-    SubscribeActionRequest,
     UserProfileResponse,
 )
 from app.services import bold_service, email_service
@@ -29,24 +31,22 @@ logger = logging.getLogger("app.api.billing")
 router = APIRouter(prefix="/api/billing", tags=["Billing & Bold API"])
 
 
-@router.post("/subscribe", response_model=UserProfileResponse)
-async def start_pro_trial(
-    payload: SubscribeActionRequest,
-    user: Dict[str, Any] = Depends(require_user),
-) -> UserProfileResponse:
-    """Activate the 3-day free trial of Apex Pro. Once per account, no card required."""
-    try:
-        profile = supabase_service.start_trial(user["user_id"])
-    except PermissionError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
-    except LookupError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    email_service.send_async(
-        profile.email,
-        email_service.render_trial_started(profile.full_name, profile.quota.trial_ends_at, profile.preferred_language),
-        tags=[{"name": "category", "value": "trial_started"}],
+@router.post("/subscribe", status_code=410)
+async def trial_retired() -> Dict[str, Any]:
+    """The free trial was retired: Apex Pro is activated only by paying."""
+    raise HTTPException(
+        status_code=410,
+        detail=(
+            "La prueba gratis ya no está disponible: Apex Pro se activa con el pago del mes. "
+            "/ The free trial is no longer available: Apex Pro is activated by paying for the month."
+        ),
     )
-    return profile
+
+
+@router.get("/offer", response_model=BillingOfferResponse)
+async def billing_offer(request: Request, user: Dict[str, Any] = Depends(require_user)) -> BillingOfferResponse:
+    """Price this account would pay now, including the first-24-hours welcome promo."""
+    return BillingOfferResponse(**supabase_service.billing_offer(user["user_id"], client_ip(request)))
 
 
 @router.post("/checkout", response_model=BoldCheckoutResponse)
@@ -55,17 +55,20 @@ async def create_checkout(
     request: Request,
     user: Dict[str, Any] = Depends(require_user),
 ) -> BoldCheckoutResponse:
-    """Create a Bold payment link ($30.000 COP or $10 USD) for 30 days of Apex Pro."""
+    """Create a Bold payment link in USD for 30 days of Apex Pro (welcome promo applied server-side)."""
     callback = f"{public_base_url(request)}/?billing=return"
     if not callback.startswith("https://"):
         # Bold only accepts https callbacks; local development returns to the portal manually.
         callback = "https://apex-vox.ialabs.app/?billing=return"
+    ip = client_ip(request)
+    offer = supabase_service.billing_offer(user["user_id"], ip)
     try:
         checkout = bold_service.create_payment_link(
             user_id=user["user_id"],
             payer_email=user.get("email"),
-            currency=payload.currency,
             callback_url=callback,
+            amount_usd=offer["price"],
+            promo=offer["promo_eligible"],
         )
     except bold_service.BoldNotConfiguredError as exc:
         raise HTTPException(status_code=503, detail="Los pagos con Bold no están configurados.") from exc
@@ -78,6 +81,8 @@ async def create_checkout(
         payment_link=checkout.payment_link,
         amount=checkout.amount,
         currency=checkout.currency,
+        promo=checkout.promo_applied,
+        client_ip=ip,
     )
     return checkout
 
@@ -101,7 +106,7 @@ async def confirm_payments(user: Dict[str, Any] = Depends(require_user)) -> User
             supabase_service.activate_paid_period(
                 user_id=user["user_id"],
                 reference=pending["reference"],
-                currency=pending.get("currency", "COP"),
+                currency=pending.get("currency", "USD"),
                 source="bold_link_status",
                 on_activated=bold_service.notify_payment_activated,
             )

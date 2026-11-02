@@ -187,7 +187,7 @@ def test_delete_account_removes_data(sent_mail) -> None:
 def test_welcome_and_password_reset(sent_mail) -> None:
     client = _ip_client("192.0.2.60")
     profile = _register(client)
-    assert sent_mail[-1]["subject"] in ("Bienvenido a Apex Vox", "Welcome to Apex Vox")
+    assert sent_mail[-1]["subject"].startswith(("Bienvenido a Apex Vox", "Welcome to Apex Vox"))
 
     unknown = client.post("/api/auth/password/forgot", json={"email": "nobody@example.com"})
     assert unknown.status_code == 200 and len(sent_mail) == 1  # no enumeration, no mail
@@ -230,9 +230,11 @@ def test_newsletter_double_opt_in(sent_mail) -> None:
 def test_email_templates_render_in_both_languages() -> None:
     for lang in ("es", "en"):
         for rendered in (
-            email_service.render_welcome("Ana", lang),
-            email_service.render_trial_started("Ana", "2026-11-05T00:00:00+00:00", lang),
-            email_service.render_payment_confirmed("Ana", "2026-12-05T00:00:00+00:00", "$30.000 COP", "APEXVOX-1", lang),
+            email_service.render_welcome("Ana", lang, "2026-11-05T00:00:00+00:00"),
+            email_service.render_promo_reminder("Ana", "2026-11-05T00:00:00+00:00", lang),
+            email_service.render_renewal_reminder("Ana", "2026-12-05T00:00:00+00:00", lang),
+            email_service.render_expired("Ana", lang),
+            email_service.render_payment_confirmed("Ana", "2026-12-05T00:00:00+00:00", "USD 8 (-20% bienvenida)", "APEXVOX-1", lang),
             email_service.render_password_reset("Ana", "https://x/?reset_token=t", 60, lang),
             email_service.render_newsletter_confirm("https://x/c", lang),
             email_service.render_newsletter_welcome("https://x/u", lang),
@@ -254,9 +256,9 @@ def test_telegram_linking_one_chat_per_subscription(monkeypatch) -> None:
     monkeypatch.setattr(telegram_service, "handle_update_async", telegram_service.handle_update)
 
     client = _ip_client("192.0.2.80")
-    _register(client)
+    profile = _register(client)
     assert client.post("/api/telegram/link-code").status_code == 403  # free plan
-    client.post("/api/billing/subscribe", json={})
+    supabase_service.activate_paid_period(profile["user_id"], f"TEST-{profile['user_id'][:8]}", "USD", "test")
     code = client.post("/api/telegram/link-code").json()
     assert code["deep_link"] == f"https://t.me/apexvox_bot?start={code['code']}"
 
@@ -272,8 +274,8 @@ def test_telegram_linking_one_chat_per_subscription(monkeypatch) -> None:
 
     # The same chat cannot be linked to another account
     other = _ip_client("192.0.2.81")
-    _register(other)
-    other.post("/api/billing/subscribe", json={})
+    other_profile = _register(other)
+    supabase_service.activate_paid_period(other_profile["user_id"], f"TEST-{other_profile['user_id'][:8]}", "USD", "test")
     other_code = other.post("/api/telegram/link-code").json()["code"]
     update2 = {"message": {"chat": {"id": 555001, "type": "private"}, "text": f"/start {other_code}"}}
     client.post("/api/telegram/webhook", json=update2, headers={"X-Telegram-Bot-Api-Secret-Token": secret})

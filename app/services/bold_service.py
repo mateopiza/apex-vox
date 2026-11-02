@@ -1,7 +1,8 @@
 """
 Bold payments for Apex Vox Pro (app/services/bold_service.py)
 -------------------------------------------------------------
-- Each payment buys PRO_PERIOD_DAYS of Apex Pro: $30.000 COP or $10 USD.
+- Each payment buys PRO_PERIOD_DAYS of Apex Pro: USD 10 (USD 8 with the welcome promo).
+- Bold has no subscriptions: every month is a new, manual payment link.
 - Payments are created through Bold's official "API Link de pagos":
     POST {BOLD_API_BASE_URL}/online/link/v1   (Authorization: x-api-key <llave de identidad>)
   and the payer is redirected to the returned checkout.bold.co URL.
@@ -82,11 +83,15 @@ def compute_bold_integrity_signature(
 # Link de pagos API
 # ---------------------------------------------------------------------------
 
-def _price(currency: str) -> tuple[str, int, str]:
-    curr = (currency or "COP").strip().upper()
-    if curr == "USD":
-        return "USD", int(settings.PRO_PRICE_USD), f"${int(settings.PRO_PRICE_USD)} USD"
-    return "COP", int(settings.PRO_PRICE_COP), f"${settings.PRO_PRICE_COP:,.0f} COP".replace(",", ".")
+def format_usd(amount: float) -> str:
+    """10 -> "USD 10", 8.5 -> "USD 8.50"."""
+    value = float(amount)
+    return f"USD {value:.0f}" if value.is_integer() else f"USD {value:.2f}"
+
+
+def _bold_amount(amount: float) -> int | float:
+    value = round(float(amount), 2)
+    return int(value) if value.is_integer() else value
 
 
 def _bold_request(method: str, path: str, json_body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
@@ -116,17 +121,21 @@ def _bold_request(method: str, path: str, json_body: Optional[Dict[str, Any]] = 
 def create_payment_link(
     user_id: str,
     payer_email: Optional[str],
-    currency: str,
     callback_url: str,
+    amount_usd: float,
+    promo: bool = False,
 ) -> BoldCheckoutResponse:
-    """Create a closed-amount Bold payment link for one Apex Pro period."""
-    curr, amount, amount_display = _price(currency)
+    """Create a closed-amount Bold payment link (USD) for one Apex Pro period."""
+    amount = _bold_amount(amount_usd)
     reference = build_order_reference(user_id)
+    description = f"Apex Vox Pro - {settings.PRO_PERIOD_DAYS} dias"
+    if promo:
+        description += f" (bienvenida -{settings.PROMO_DISCOUNT_PCT}%)"
     body: Dict[str, Any] = {
         "amount_type": "CLOSE",
-        "amount": {"currency": curr, "total_amount": amount, "tip_amount": 0},
+        "amount": {"currency": "USD", "total_amount": amount, "tip_amount": 0},
         "reference": reference,
-        "description": f"Apex Vox Pro - {settings.PRO_PERIOD_DAYS} dias",
+        "description": description,
         "callback_url": callback_url,
     }
     if payer_email and "@" in payer_email and not payer_email.endswith(".local"):
@@ -143,13 +152,16 @@ def create_payment_link(
         order_id=reference,
         payment_link=link_id,
         checkout_url=url,
-        amount=amount,
-        currency=curr,
-        amount_display=f"{amount_display} / {settings.PRO_PERIOD_DAYS} días",
+        amount=float(amount),
+        currency="USD",
+        amount_display=f"{format_usd(amount)} / {settings.PRO_PERIOD_DAYS} días",
         period_days=settings.PRO_PERIOD_DAYS,
+        promo_applied=promo,
+        regular_amount=float(settings.PRO_PRICE_USD),
+        discount_pct=settings.PROMO_DISCOUNT_PCT if promo else 0,
         plan_summary=(
             f"Apex Vox Pro por {settings.PRO_PERIOD_DAYS} días: transcripciones y almacenamiento "
-            f"ilimitados en Mega S4 + Apex Summa IA. Pago único con Bold."
+            f"ilimitados en Mega S4 + Apex Summa IA. Pago único con Bold; no se renueva solo."
         ),
     )
 
@@ -190,8 +202,9 @@ def notify_payment_activated(user: Dict[str, Any], payment: Dict[str, Any]) -> N
     """Receipt e-mail, sent once per approved payment."""
     from app.services import email_service
 
-    currency = str(payment.get("currency") or "COP").upper()
-    _, _, amount_display = _price(currency)
+    amount_display = format_usd(payment.get("amount") or settings.PRO_PRICE_USD)
+    if payment.get("promo"):
+        amount_display += f" (-{settings.PROMO_DISCOUNT_PCT}% bienvenida)"
     email_service.send_async(
         user.get("email", ""),
         email_service.render_payment_confirmed(
@@ -217,7 +230,7 @@ def process_bold_webhook_event(payload: Dict[str, Any]) -> Dict[str, Any]:
     metadata = data.get("metadata") or {}
     reference = metadata.get("reference") or data.get("reference") or data.get("order_id")
     amount = data.get("amount") or {}
-    currency = str((amount.get("currency") if isinstance(amount, dict) else None) or "COP").upper()
+    currency = str((amount.get("currency") if isinstance(amount, dict) else None) or "USD").upper()
     user_id = user_id_from_order_reference(reference)
 
     if event_type not in _PAID_EVENTS or not user_id:

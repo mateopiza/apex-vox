@@ -115,19 +115,24 @@ def test_user_registration_2h_free_quota_and_24h_retention() -> None:
     assert "2 horas gratis al día" in str(exc_info.value)
 
 
-def test_bold_api_checkout_3day_trial_and_unlimited_pro_plan(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_bold_checkout_usd_welcome_promo_and_signed_webhook(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     Verify:
-    - Trial and checkout require a signed-in account (user ids are not credentials).
-    - The 3-day trial is unlimited and can only be used once per account.
-    - Bold checkout uses the official payment-link API ($30.000 COP / $10 USD).
-    - A signed SALE_APPROVED webhook grants a paid Apex Pro period, idempotently.
+    - Checkout requires a signed-in account; the free trial is retired (410).
+    - Only USD: a new account inside its first 24 h pays USD 8 (20% off), the regular price is USD 10.
+    - A signed SALE_APPROVED webhook grants 30 days, idempotently, and consumes the promo.
+    - The same network (IP) cannot get the promo again within 90 days; the next month costs USD 10.
     """
     import base64, hashlib, hmac, json as _json
     from app.config import settings as _settings
     from app.services import bold_service
+    from app.services.supabase_service import supabase_service
 
     client = TestClient(app)
+    db = supabase_service._load_db()
+    db["promo_ips"] = {}
+    supabase_service._save_db(db)
+
     unique_email = f"pro_{uuid.uuid4().hex[:8]}@apexvox.ai"
     reg = client.post(
         "/api/auth/register",
@@ -136,12 +141,15 @@ def test_bold_api_checkout_3day_trial_and_unlimited_pro_plan(monkeypatch: pytest
     uid = reg["user_id"]
     auth = {"Authorization": f"Bearer {reg['access_token']}"}
 
-    # Anonymous or id-only requests are rejected
-    assert client.post("/api/billing/subscribe", json={"user_id": uid}).status_code == 401
-    assert client.post("/api/billing/checkout", json={"currency": "COP"},
-                       headers={"Authorization": uid}).status_code == 401
+    # Anonymous or id-only requests are rejected; the trial no longer exists
+    assert client.post("/api/billing/checkout", json={}, headers={"Authorization": uid}).status_code == 401
+    assert client.post("/api/billing/subscribe", json={}, headers=auth).status_code == 410
 
-    # 1. Checkout through Bold's payment-link API (HTTP layer mocked)
+    offer = client.get("/api/billing/offer", headers=auth).json()
+    assert offer["currency"] == "USD" and offer["regular_price"] == 10
+    assert offer["promo_eligible"] is True and offer["price"] == 8 and offer["discount_pct"] == 20
+    assert offer["auto_renewal"] is False
+
     calls: list = []
 
     def fake_bold(method: str, path: str, json_body=None):
@@ -149,40 +157,22 @@ def test_bold_api_checkout_3day_trial_and_unlimited_pro_plan(monkeypatch: pytest
         return {"payload": {"payment_link": "LNK_TEST123", "url": "https://checkout.bold.co/LNK_TEST123"}, "errors": []}
 
     monkeypatch.setattr(bold_service, "_bold_request", fake_bold)
-    cop_res = client.post("/api/billing/checkout", json={"currency": "COP"}, headers=auth)
-    assert cop_res.status_code == 200, cop_res.text
-    cop_data = cop_res.json()
-    assert cop_data["amount"] == 30000 and cop_data["currency"] == "COP"
-    assert cop_data["checkout_url"] == "https://checkout.bold.co/LNK_TEST123"
+    res = client.post("/api/billing/checkout", json={"currency": "COP"}, headers=auth)  # COP se ignora
+    assert res.status_code == 200, res.text
+    data = res.json()
+    assert data["currency"] == "USD" and data["amount"] == 8 and data["promo_applied"] is True
     method, path, body = calls[-1]
     assert (method, path) == ("POST", "/online/link/v1")
     assert body["amount_type"] == "CLOSE"
-    assert body["amount"]["total_amount"] == 30000
-    assert body["reference"] == cop_data["order_id"] and len(body["reference"]) <= 60
+    assert body["amount"] == {"currency": "USD", "total_amount": 8, "tip_amount": 0}
+    assert body["reference"] == data["order_id"] and len(body["reference"]) <= 60
     assert body["callback_url"].startswith("https://")
 
-    usd_res = client.post("/api/billing/checkout", json={"currency": "USD"}, headers=auth)
-    assert usd_res.json()["amount"] == 10 and usd_res.json()["currency"] == "USD"
-
-    # 2. One-time 3-day trial
-    sub_res = client.post("/api/billing/subscribe", json={"currency": "COP"}, headers=auth)
-    assert sub_res.status_code == 200, sub_res.text
-    sub_data = sub_res.json()
-    assert sub_data["plan"] == "trial"
-    assert sub_data["quota"]["is_unlimited"] is True
-    assert sub_data["quota"]["daily_limit_seconds"] is None
-    assert sub_data["quota"]["retention_hours"] is None
-    assert sub_data["quota"]["trial_available"] is False
-    again = client.post("/api/billing/subscribe", json={"currency": "COP"}, headers=auth)
-    assert again.status_code == 409
-
-    # 3. Bold webhook: unsigned rejected, signed one grants a paid period
     payload = _json.dumps({
         "type": "SALE_APPROVED",
-        "data": {"metadata": {"reference": cop_data["order_id"]}, "amount": {"currency": "COP", "total": 30000}},
+        "data": {"metadata": {"reference": data["order_id"]}, "amount": {"currency": "USD", "total": 8}},
     }).encode()
-    unsigned = client.post("/api/billing/bold/webhook", content=payload,
-                           headers={"Content-Type": "application/json"})
+    unsigned = client.post("/api/billing/bold/webhook", content=payload, headers={"Content-Type": "application/json"})
     assert unsigned.status_code == 401
     original_secret = _settings.BOLD_WEBHOOK_SECRET
     _settings.BOLD_WEBHOOK_SECRET = "test_webhook_secret"
@@ -190,22 +180,33 @@ def test_bold_api_checkout_3day_trial_and_unlimited_pro_plan(monkeypatch: pytest
         sig = hmac.new(b"test_webhook_secret", base64.b64encode(payload), hashlib.sha256).hexdigest()
         wh_res = client.post("/api/billing/bold/webhook", content=payload,
                              headers={"Content-Type": "application/json", "x-bold-signature": sig})
-        tampered = client.post("/api/billing/bold/webhook", content=payload.replace(b"30000", b"1"),
+        tampered = client.post("/api/billing/bold/webhook", content=payload.replace(b'"total": 8', b'"total": 1'),
                                headers={"Content-Type": "application/json", "x-bold-signature": sig})
         assert tampered.status_code == 401
         retry = client.post("/api/billing/bold/webhook", content=payload,
                             headers={"Content-Type": "application/json", "x-bold-signature": sig})
     finally:
         _settings.BOLD_WEBHOOK_SECRET = original_secret
-    assert wh_res.status_code == 200
-    assert wh_res.json()["status"] == "processed"
-    assert wh_res.json()["user_id"] == uid
-    # Webhook retries never stack extra days
-    assert retry.json()["pro_until"] == wh_res.json()["pro_until"]
+    assert wh_res.status_code == 200 and wh_res.json()["status"] == "processed"
+    assert wh_res.json()["user_id"] == uid and wh_res.json()["upgraded_plan"] == "pro"
+    assert retry.json()["pro_until"] == wh_res.json()["pro_until"]  # retries never stack days
 
     me = client.get("/api/auth/me", headers=auth).json()
-    assert me["quota"]["pro_until"] == wh_res.json()["pro_until"]
-    assert me["quota"]["auto_billing_enabled"] is False
+    assert me["plan"] == "pro" and me["quota"]["is_unlimited"] is True
+    assert me["quota"]["auto_billing_enabled"] is False and me["quota"]["trial_available"] is False
+
+    # Second month: regular price (promo is first month only)
+    again = client.get("/api/billing/offer", headers=auth).json()
+    assert again["promo_eligible"] is False and again["price"] == 10 and again["promo_reason"] == "first_month_only"
+
+    # Another new account from the same network: no promo this quarter
+    other = client.post(
+        "/api/auth/register",
+        json={"email": f"pro2_{uuid.uuid4().hex[:8]}@apexvox.ai", "password": "pass12345", "full_name": "Otra"},
+    ).json()
+    other_offer = client.get("/api/billing/offer", headers={"Authorization": f"Bearer {other['access_token']}"}).json()
+    assert other_offer["promo_eligible"] is False and other_offer["promo_reason"] == "ip_used_this_quarter"
+    assert other_offer["price"] == 10
 
 
 def test_mega_s4_storage_signature_and_retention() -> None:

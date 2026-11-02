@@ -87,21 +87,67 @@ def test_free_plan_minutes_and_calendar_are_pro_only() -> None:
     with pytest.raises(Exception) as exc:
         _require_summa_access(Result(), None)
     assert getattr(exc.value, "status_code", None) == 402
-    _require_summa_access(Result(), {"plan": "trial"})  # paid users pass
+    _require_summa_access(Result(), {"plan": "pro"})  # paid users pass
 
 
-def test_trial_expiry_downgrades_to_free() -> None:
+def test_no_trial_and_promo_window_closes_after_24_hours() -> None:
     client = TestClient(app)
     profile = _register(client)
     auth = {"Authorization": f"Bearer {profile['access_token']}"}
-    assert client.post("/api/billing/subscribe", json={}, headers=auth).json()["plan"] == "trial"
+    assert client.post("/api/billing/subscribe", json={}, headers=auth).status_code == 410
 
     db = supabase_service._load_db()
-    db["users"][profile["user_id"]]["trial_ends_at"] = "2020-01-01T00:00:00+00:00"
+    db["promo_ips"] = {}
+    db["users"][profile["user_id"]]["created_at"] = "2020-01-01T00:00:00+00:00"
     supabase_service._save_db(db)
+    offer = client.get("/api/billing/offer", headers=auth).json()
+    assert offer["promo_eligible"] is False and offer["promo_reason"] == "window_expired"
+    assert offer["price"] == 10
     me = client.get("/api/auth/me", headers=auth).json()
-    assert me["plan"] == "free"
-    assert me["quota"]["trial_available"] is False
+    assert me["plan"] == "free" and me["quota"]["trial_available"] is False
+
+
+def test_billing_emails_are_scheduled_once() -> None:
+    import datetime as dt
+
+    client = TestClient(app)
+    profile = _register(client)
+    uid = profile["user_id"]
+    now = dt.datetime.now(dt.timezone.utc)
+    db = supabase_service._load_db()
+    db["promo_ips"] = {}
+    user = db["users"][uid]
+    user["created_at"] = (now - dt.timedelta(hours=20)).isoformat()  # promo ends in 4 h
+    user["pro_until"] = (now + dt.timedelta(days=2)).isoformat()  # month ends in 2 days
+    user["plan"] = "pro"
+    supabase_service._save_db(db)
+
+    kinds = [k for k, u in supabase_service.collect_due_billing_emails() if u["user_id"] == uid]
+    assert sorted(kinds) == ["promo_reminder", "renewal_reminder"]
+    assert [k for k, u in supabase_service.collect_due_billing_emails() if u["user_id"] == uid] == []
+
+    db = supabase_service._load_db()
+    db["users"][uid]["pro_until"] = (now - dt.timedelta(hours=1)).isoformat()
+    supabase_service._save_db(db)
+    assert [k for k, u in supabase_service.collect_due_billing_emails() if u["user_id"] == uid] == ["expired"]
+    assert client.get("/api/auth/me", headers={"Authorization": f"Bearer {profile['access_token']}"}).json()["plan"] == "free"
+
+
+def test_billing_email_templates_state_the_rules() -> None:
+    from app.services import email_service
+
+    subject, html_body, text = email_service.render_welcome("Ana", "es", "2026-11-03T10:00:00+00:00")
+    assert "20%" in subject
+    for fragment in ("USD 8", "USD 10", "24 horas", "90 días", "no se cobra nada automáticamente"):
+        assert fragment in html_body
+    assert "03/11/2026 05:00" in html_body  # hora de Colombia
+    assert "prueba" not in html_body.lower()
+    _, html_en, _ = email_service.render_promo_reminder("Ann", "2026-11-03T10:00:00+00:00", "en")
+    assert "USD 8" in html_en and "90 days" in html_en
+    _, renew, _ = email_service.render_renewal_reminder("Ana", "2026-12-03T10:00:00+00:00", "es")
+    assert "Bold no cobra automáticamente" in renew
+    _, expired, _ = email_service.render_expired("Ana", "es")
+    assert "plan gratis" in expired
 
 
 def test_oauth_start_redirects_to_supabase_with_pkce(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -167,3 +213,20 @@ def test_page_language_follows_browser() -> None:
     assert '<html lang="es" data-default-lang="es"' in es
     assert '<html lang="en" data-default-lang="en"' in en
     assert '<html lang="en"' in other
+
+
+def test_legal_pages_terms_and_habeas_data() -> None:
+    client = TestClient(app)
+    habeas = client.get("/legal/habeas-data?lang=es")
+    assert habeas.status_code == 200
+    for fragment in ("Ley Estatutaria 1581 de 2012", "Decreto 1377 de 2013", "datos biométricos",
+                     "10 días hábiles", "15 días hábiles", "Superintendencia de Industria y Comercio"):
+        assert fragment in habeas.text
+    terms = client.get("/legal/terminos?lang=es")
+    assert terms.status_code == 200
+    for fragment in ("Términos y Condiciones", "USD 10", "USD 8", "artículo 47 de la Ley 1480 de 2011",
+                     "Sin suscripción ni cobros automáticos", "no hay prueba gratis"):
+        assert fragment.lower() in terms.text.lower()
+    assert client.get("/legal/habeas-data?lang=en").status_code == 200
+    home = client.get("/").text
+    assert 'href="/legal/habeas-data"' in home

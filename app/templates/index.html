@@ -104,13 +104,13 @@
         <div class="hero-badge" data-i18n="hero_badge">POTENCIADO POR GROQ · ALMACENAMIENTO MEGA S4 · SUPABASE CLOUD</div>
         <h2 class="hero-title" data-i18n="hero_title">Apex Vox: Transcripción Inteligente, Separación de Voces y Analítica Ejecutiva</h2>
         <p class="hero-description" data-i18n="hero_desc">
-          Regístrate hoy y obtén <strong>2 horas gratis al día</strong> en 1 o varios audios con almacenamiento por 24 horas, o activa <strong>Apex Pro</strong> con 3 días de prueba gratis, transcripciones y almacenamiento ilimitados en Mega S4 y resúmenes ejecutivos con <strong>Apex Summa</strong>.
+          Regístrate hoy y obtén <strong>2 horas gratis al día</strong> en 1 o varios audios con almacenamiento por 24 horas, o activa <strong>Apex Pro por USD 10 al mes</strong> (<strong>20% de descuento</strong> si pagas en tus primeras 24 horas): transcripciones y almacenamiento ilimitados en Mega S4 y resúmenes ejecutivos con <strong>Apex Summa</strong>.
         </p>
         <div class="hero-actions">
           <button type="button" class="btn-primary hero-btn" id="hero-go-playground-btn" data-i18n="hero_cta_playground">Abrir Playground Ahora</button>
           <button type="button" class="btn-secondary hero-btn-sec" id="hero-go-box-btn" data-goto-view="box" data-i18n="hero_cta_box">Abrir Apex Box (Grabador 10h+ &amp; Extensión)</button>
           <button type="button" class="btn-secondary hero-btn-sec" id="hero-register-btn" data-i18n="hero_cta_register">Regístrate: 2 Horas Gratis / Día</button>
-          <button type="button" class="btn-secondary hero-btn-sec" id="hero-trial-btn" data-i18n="hero_cta_trial">Probar Apex Pro 3 días gratis</button>
+          <button type="button" class="btn-secondary hero-btn-sec" id="hero-trial-btn" data-i18n="hero_cta_trial">Activar Apex Pro</button>
         </div>
       </div>
 
@@ -242,19 +242,19 @@
 
         <div class="pricing-card featured">
           <div class="pricing-header">
-            <span class="pricing-badge pro" data-i18n="plan_pro_badge">3 DÍAS DE PRUEBA GRATIS AL REGISTRARTE</span>
+            <span class="pricing-badge pro" data-i18n="plan_pro_badge">20% DE DESCUENTO SI PAGAS EN TUS PRIMERAS 24 H</span>
             <h3 data-i18n="plan_pro_title">Plan Apex Pro</h3>
-            <div class="pricing-price">$30.000 COP <span class="pricing-period">/ $10 USD <span data-i18n="per_month">mes</span></span></div>
+            <div class="pricing-price">USD 10 <span class="pricing-period">/ <span data-i18n="per_month">mes</span></span></div>
           </div>
           <ul class="pricing-features">
-            <li data-i18n="plan_pro_f1"><strong>Prueba gratis de 3 días</strong> para cuentas registradas, sin tarjeta</li>
+            <li data-i18n="plan_pro_f1"><strong>USD 8 el primer mes</strong> si pagas dentro de las 24 h siguientes a crear tu cuenta (una promoción por red cada 90 días)</li>
             <li data-i18n="plan_pro_f2"><strong>Transcripciones ilimitadas</strong> (sin límite diario de horas ni archivos)</li>
             <li data-i18n="plan_pro_f3"><strong>Almacenamiento ilimitado permanente</strong> en <strong>Mega S4</strong> y <strong>Supabase Cloud</strong></li>
             <li data-i18n="plan_pro_f4"><strong>Resumen IA Apex Summa completo:</strong> Quién habló más, De qué se habló, Objetivos, Llamados de atención, Calendario de tareas y Gráficas</li>
             <li data-i18n="plan_pro_f5"><strong>Generador de Actas Corporativas:</strong> Actas de Consejo, Junta Directiva, Comité y Asamblea</li>
             <li data-i18n="plan_pro_f6"><strong>Bot de Telegram:</strong> envía notas de voz y recibe la transcripción en tu chat (1 por suscripción)</li>
           </ul>
-          <button type="button" class="btn-primary" id="pricing-pro-btn" data-i18n="plan_pro_cta">Empezar prueba gratis de 3 días</button>
+          <button type="button" class="btn-primary" id="pricing-pro-btn" data-i18n="plan_pro_cta">Activar Apex Pro</button>
         </div>
       </div>
     </div>
@@ -295,27 +295,16 @@
         <div class="card">
           <div class="card-header">
             <h2 class="card-title" data-i18n="portal_billing_title">Apex Pro — Pagos con Bold</h2>
-            <span class="meta-tag timeline">$30.000 COP / $10 USD</span>
+            <span class="meta-tag timeline">USD 10 / 30 días</span>
           </div>
-          <p class="card-lead" data-i18n="portal_billing_desc">Activa <strong>3 días de prueba gratis</strong> (una vez por cuenta). Después, cada pago de <strong>$30.000 COP o $10 USD</strong> con Bold te da <strong>30 días de Apex Pro</strong>: transcripciones ilimitadas, almacenamiento ilimitado en Mega S4 y <strong>Apex Summa</strong>. Sin renovaciones automáticas.</p>
+          <p class="card-lead" data-i18n="portal_billing_desc">El pago activa <strong>30 días de Apex Pro</strong>: transcripciones ilimitadas, almacenamiento ilimitado en Mega S4 y <strong>Apex Summa</strong>. Bold no permite suscripciones: <strong>no se cobra nada automáticamente</strong> y cada mes renuevas de forma manual (te avisamos por correo).</p>
 
-          <div class="form-row">
-            <div class="form-group">
-              <label class="form-label" for="bold-currency-select" data-i18n="lbl_currency">Moneda de Cobro (Bold)</label>
-              <select id="bold-currency-select" class="form-control">
-                <option value="COP" selected>Pesos colombianos — $30.000 COP / mes</option>
-                <option value="USD">Dólares — $10 USD / month</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label class="form-label" for="bold-mode-input" data-i18n="lbl_billing_mode">Modalidad</label>
-              <input type="text" id="bold-mode-input" class="form-control" value="Pago único · 30 días por pago" readonly />
-            </div>
+          <div id="billing-offer-box" class="billing-offer" aria-live="polite">
+            <div class="billing-offer-price">USD 10 <span>/ 30 días</span></div>
           </div>
 
           <div class="button-row">
-            <button type="button" class="btn-primary" id="portal-activate-pro-btn" data-i18n="btn_start_trial_bold">Iniciar prueba gratis de 3 días</button>
-            <button type="button" class="btn-secondary" id="portal-generate-bold-link-btn" data-i18n="btn_generate_bold_link">Pagar 30 días con Bold</button>
+            <button type="button" class="btn-primary" id="portal-generate-bold-link-btn" data-i18n="btn_generate_bold_link">Pagar con Bold</button>
           </div>
 
           <div id="bold-checkout-preview" class="bold-checkout-preview hidden" aria-live="polite"></div>
@@ -608,8 +597,8 @@
             </div>
 
             <div id="summa-locked-banner" class="summa-locked-notice hidden">
-              <p data-i18n="summa_locked_msg">El Resumen IA completo de Apex Summa, las Gráficas y el Generador de Actas están incluidos en el Plan Apex Pro ($30.000 COP / $10 USD mes · 3 días de prueba gratis).</p>
-              <button type="button" id="summa-activate-trial-btn" class="btn-primary">Activar Prueba Gratis de 3 Días</button>
+              <p data-i18n="summa_locked_msg">El Resumen IA completo de Apex Summa, las Gráficas y el Generador de Actas están incluidos en Apex Pro (USD 10 / mes · 20% de descuento si pagas en tus primeras 24 horas).</p>
+              <button type="button" id="summa-activate-trial-btn" class="btn-primary">Activar Apex Pro</button>
             </div>
 
             <div id="summa-content-body">
@@ -973,7 +962,8 @@
           <li><button type="button" data-goto-view="box" data-i18n="nav_box">Apex Box (Grabador 10h+ &amp; App Móvil)</button></li>
           <li><button type="button" data-goto-view="landing" data-i18n="nav_landing">Inicio &amp; Planes</button></li>
           <li><a href="/legal/privacidad" data-i18n="footer_privacy">Privacidad</a></li>
-          <li><a href="/legal/terminos" data-i18n="footer_terms">Términos</a></li>
+          <li><a href="/legal/terminos" data-i18n="footer_terms">Términos y Condiciones</a></li>
+          <li><a href="/legal/habeas-data" data-i18n="footer_habeas">Habeas Data</a></li>
           <li><a href="/legal/seguridad" data-i18n="footer_security">Seguridad</a></li>
         </ul>
       </div>
@@ -1009,7 +999,7 @@
         <h3 id="auth-dialog-title" data-i18n="auth_modal_title">Regístrate en Apex Vox — 2 Horas Gratis al Día</h3>
         <button type="button" class="icon-btn" id="close-auth-dialog-btn" aria-label="Cerrar">×</button>
       </div>
-      <p class="dialog-lead" data-i18n="auth_modal_subtitle">Al registrarte obtienes <strong>2 horas gratis cada día</strong> (en 1 o varios audios) con <strong>almacenamiento de 24 horas en Mega S4</strong>. O inicia tu prueba gratis de 3 días en <strong>Apex Pro</strong>.</p>
+      <p class="dialog-lead" data-i18n="auth_modal_subtitle">Al registrarte obtienes <strong>2 horas gratis cada día</strong> (en 1 o varios audios) con <strong>almacenamiento de 24 horas en Mega S4</strong>. Y si activas <strong>Apex Pro</strong> en tus primeras 24 horas, tu primer mes tiene <strong>20% de descuento</strong>.</p>
 
       <div id="oauth-options" class="oauth-options hidden">
         <a class="oauth-btn hidden" data-oauth-provider="google" href="/api/auth/oauth/google">
@@ -1052,7 +1042,7 @@
       <p class="dialog-foot">
         <button type="button" class="text-link-strong" id="forgot-password-btn" data-i18n="forgot_link">¿Olvidaste tu contraseña?</button>
       </p>
-      <p class="dialog-legal" data-i18n="auth_legal">Al continuar aceptas los <a href="/legal/terminos" target="_blank">Términos</a> y la <a href="/legal/privacidad" target="_blank">Política de privacidad</a>.</p>
+      <p class="dialog-legal" data-i18n="auth_legal">Al continuar aceptas los <a href="/legal/terminos" target="_blank">Términos y Condiciones</a> y autorizas el tratamiento de tus datos, incluida tu voz, según la <a href="/legal/habeas-data" target="_blank">Política de Tratamiento de Datos (Habeas Data)</a>.</p>
     </form>
   </dialog>
 </body>

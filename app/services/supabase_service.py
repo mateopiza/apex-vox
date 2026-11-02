@@ -10,9 +10,11 @@ Business Rules Enforced:
 1. Free Plan ('free'):
    - Registration grants 2 hours free per day (7,200 seconds/day) across 1 or multiple audios.
    - Storage retention is 24 hours (expires_at = created_at + 24h).
-2. Paid Plan ('trial' / 'pro'):
-   - $30,000 COP / $10 USD per month via Bold API.
-   - Includes 3-day free trial with automatic recurring billing.
+2. Paid Plan ('pro'):
+   - USD 10 per 30 days via a one-off Bold payment link (Bold has no subscriptions:
+     every month is paid manually; nothing is charged automatically). No free trial.
+   - Welcome promo: 20% off the first month if paid within 24 h of creating the account,
+     at most one promo per network (IP) per 90 days.
    - Unlimited daily audio transcriptions and unlimited storage retention.
    - Unlocks Apex Summa AI intelligence report & formal Minutes ('Actas') generator.
 """
@@ -136,7 +138,7 @@ class SupabaseCloudService:
             self._ensure_seed_state()
             try:
                 db = json.loads(self._db_file.read_text(encoding="utf-8"))
-                for key in ("users", "tokens", "daily_usage", "subscriptions", "transcriptions", "payments", "handoffs"):
+                for key in ("users", "tokens", "daily_usage", "subscriptions", "transcriptions", "payments", "handoffs", "promo_ips"):
                     db.setdefault(key, {})
                 return db
             except Exception:
@@ -148,6 +150,7 @@ class SupabaseCloudService:
                     "transcriptions": {},
                     "payments": {},
                     "handoffs": {},
+                    "promo_ips": {},
                 }
 
     def _save_db(self, db: Dict[str, Any]) -> None:
@@ -504,8 +507,8 @@ class SupabaseCloudService:
             remaining = None if is_paid else max(0.0, float(settings.FREE_DAILY_SECONDS) - used_sec)
             retention = None if is_paid else settings.FREE_RETENTION_HOURS
 
-            if plan == "trial":
-                display_name = "Apex Pro (Prueba Gratis 3 Días)"
+            if plan == "trial":  # cuentas antiguas con prueba en curso
+                display_name = "Apex Pro"
             elif plan == "pro":
                 display_name = "Apex Pro (Ilimitado)"
             else:
@@ -526,7 +529,7 @@ class SupabaseCloudService:
                 trial_ends_at=user.get("trial_ends_at") if user else None,
                 auto_billing_enabled=False,
                 pro_until=user.get("pro_until") if user else None,
-                trial_available=bool(user) and not user.get("trial_used") and plan == "free",
+                trial_available=False,
             )
 
     def check_and_consume_quota(
@@ -583,33 +586,73 @@ class SupabaseCloudService:
 
         return self.get_user_quota(uid)
 
-    def start_trial(self, user_id: str) -> UserProfileResponse:
-        """Start the one-time 3-day Apex Pro trial for a registered account."""
+    # -------------------------------------------------------------------------
+    # Precio y promoción de bienvenida
+    # -------------------------------------------------------------------------
+
+    def _ip_hash(self, client_ip: str) -> str:
+        return self._digest(f"ip:{client_ip}")[:20]
+
+    @staticmethod
+    def _has_paid(db: Dict[str, Any], user_id: str) -> bool:
+        return any(
+            p.get("user_id") == user_id and p.get("status") == "paid" for p in db["payments"].values()
+        )
+
+    @staticmethod
+    def _promo_ip_blocked(db: Dict[str, Any], ip_hash: str, now: dt.datetime) -> bool:
+        used = _parse_iso((db.get("promo_ips") or {}).get(ip_hash, {}).get("used_at"))
+        return bool(used and now - used < dt.timedelta(days=settings.PROMO_IP_COOLDOWN_DAYS))
+
+    def promo_ends_at(self, user: Dict[str, Any]) -> Optional[dt.datetime]:
+        created = _parse_iso(user.get("created_at"))
+        return created + dt.timedelta(hours=settings.PROMO_WINDOW_HOURS) if created else None
+
+    def billing_offer(self, user_id: str, client_ip: str) -> Dict[str, Any]:
+        """
+        Precio que pagaría ahora la cuenta: USD 10, o USD 10 menos el 20 % si está dentro de
+        las primeras 24 h desde su creación, nunca ha pagado y su red no usó la promoción
+        en los últimos 90 días.
+        """
+        regular = round(float(settings.PRO_PRICE_USD), 2)
+        promo_price = round(regular * (100 - settings.PROMO_DISCOUNT_PCT) / 100, 2)
+        now = _now()
         with self._lock:
             db = self._load_db()
             user = db["users"].get(user_id)
             if not user:
                 raise LookupError("Cuenta no encontrada.")
-            self._refresh_plan_expiry(user)
-            if user.get("trial_used"):
-                raise PermissionError("La prueba gratis de 3 días ya fue utilizada en esta cuenta.")
-            if user.get("plan") in ("pro", "trial"):
-                raise PermissionError("Tu cuenta ya tiene Apex Pro activo.")
-            now = _now()
-            user["plan"] = "trial"
-            user["trial_used"] = True
-            user["trial_started_at"] = now.isoformat()
-            user["trial_ends_at"] = (now + dt.timedelta(days=settings.PRO_TRIAL_DAYS)).isoformat()
-            self._save_db(db)
-        return self._profile_response(user_id)
+            ends = self.promo_ends_at(user)
+            reason = None
+            if user.get("promo_used") or self._has_paid(db, user_id):
+                reason = "first_month_only"
+            elif not ends or now >= ends:
+                reason = "window_expired"
+            elif client_ip and self._promo_ip_blocked(db, self._ip_hash(client_ip), now):
+                reason = "ip_used_this_quarter"
+        eligible = reason is None
+        return {
+            "currency": "USD",
+            "regular_price": regular,
+            "price": promo_price if eligible else regular,
+            "promo_eligible": eligible,
+            "promo_price": promo_price,
+            "discount_pct": settings.PROMO_DISCOUNT_PCT,
+            "promo_ends_at": ends.isoformat() if ends and eligible else None,
+            "promo_reason": reason,
+            "period_days": settings.PRO_PERIOD_DAYS,
+            "auto_renewal": False,
+        }
 
     def record_pending_payment(
         self,
         user_id: str,
         reference: str,
         payment_link: str,
-        amount: int,
+        amount: float,
         currency: str,
+        promo: bool = False,
+        client_ip: str = "",
     ) -> None:
         with self._lock:
             db = self._load_db()
@@ -619,6 +662,8 @@ class SupabaseCloudService:
                 "user_id": user_id,
                 "amount": amount,
                 "currency": currency,
+                "promo": bool(promo),
+                "ip_hash": self._ip_hash(client_ip) if client_ip else None,
                 "status": "pending",
                 "created_at": _now().isoformat(),
             }
@@ -636,7 +681,7 @@ class SupabaseCloudService:
         self,
         user_id: str,
         reference: str,
-        currency: str = "COP",
+        currency: str = "USD",
         source: str = "bold",
         on_activated: Optional[Callable[[Dict[str, Any], Dict[str, Any]], None]] = None,
     ) -> UserProfileResponse:
@@ -667,14 +712,17 @@ class SupabaseCloudService:
 
             now = _now()
             self._refresh_plan_expiry(user)
-            # Stack on top of whatever access is still running (trial or paid period).
+            # Cada pago suma un mes sobre el acceso que siga vigente (renovación anticipada).
             candidates = [_parse_iso(user.get("pro_until"))]
-            if user.get("plan") == "trial":
+            if user.get("plan") == "trial":  # cuentas antiguas con prueba en curso
                 candidates.append(_parse_iso(user.get("trial_ends_at")))
             start = max([d for d in candidates if d and d > now] or [now])
             user["pro_until"] = (start + dt.timedelta(days=settings.PRO_PERIOD_DAYS)).isoformat()
-            if user.get("plan") != "trial":
-                user["plan"] = "pro"
+            user["plan"] = "pro"
+            if payment.get("promo"):
+                user["promo_used"] = True
+                if payment.get("ip_hash"):
+                    db["promo_ips"][payment["ip_hash"]] = {"used_at": now.isoformat(), "user_id": user_id}
             payment.update(
                 {"status": "paid", "paid_at": now.isoformat(), "source": source, "currency": currency.upper()}
             )
@@ -683,7 +731,8 @@ class SupabaseCloudService:
                 "user_id": user_id,
                 "plan": "pro",
                 "status": "active",
-                "amount": settings.PRO_PRICE_COP if currency.upper() == "COP" else int(settings.PRO_PRICE_USD),
+                "amount": payment.get("amount", settings.PRO_PRICE_USD),
+                "promo": bool(payment.get("promo")),
                 "currency": currency.upper(),
                 "period_days": settings.PRO_PERIOD_DAYS,
                 "pro_until": user["pro_until"],
@@ -697,6 +746,60 @@ class SupabaseCloudService:
             except Exception as exc:  # notifications must never undo a payment
                 logger.warning("Payment activation hook failed: %s", exc)
         return self._profile_response(user_id)
+
+    # -------------------------------------------------------------------------
+    # Correos de facturación programados (promo por vencer, renovación, vencido)
+    # -------------------------------------------------------------------------
+
+    def collect_due_billing_emails(self) -> List[Tuple[str, Dict[str, Any]]]:
+        """
+        Devuelve los correos que tocan ahora y los marca como enviados (una sola vez):
+        - "promo_reminder": faltan 6 h o menos para que termine la promoción y la cuenta es elegible.
+        - "renewal_reminder": faltan RENEWAL_REMINDER_DAYS días o menos para que termine el mes pagado.
+        - "expired": el mes pagado terminó hace menos de 7 días.
+        """
+        now = _now()
+        due: List[Tuple[str, Dict[str, Any]]] = []
+        with self._lock:
+            db = self._load_db()
+            changed = False
+            for user_id, user in db["users"].items():
+                if not user.get("email") or user.get("email", "").endswith(".local"):
+                    continue
+                sent = user.setdefault("billing_emails", {})
+                ends = self.promo_ends_at(user)
+                if (
+                    ends and now < ends <= now + dt.timedelta(hours=6)
+                    and "promo_reminder" not in sent
+                    and not user.get("promo_used") and not self._has_paid(db, user_id)
+                    and not any(
+                        self._promo_ip_blocked(db, h, now)
+                        for hashes in (user.get("ip_months") or {}).values() for h in hashes
+                    )
+                ):
+                    due.append(("promo_reminder", {**user, "promo_ends_at": ends.isoformat()}))
+                    sent["promo_reminder"] = now.isoformat()
+                    changed = True
+
+                pro_until = _parse_iso(user.get("pro_until"))
+                if pro_until:
+                    key = pro_until.isoformat()[:19]
+                    renewal_key, expired_key = f"renewal_reminder:{key}", f"expired:{key}"
+                    if (
+                        now < pro_until <= now + dt.timedelta(days=settings.RENEWAL_REMINDER_DAYS)
+                        and renewal_key not in sent
+                    ):
+                        due.append(("renewal_reminder", dict(user)))
+                        sent[renewal_key] = now.isoformat()
+                        changed = True
+                    elif pro_until <= now < pro_until + dt.timedelta(days=7) and expired_key not in sent:
+                        self._refresh_plan_expiry(user)
+                        due.append(("expired", dict(user)))
+                        sent[expired_key] = now.isoformat()
+                        changed = True
+            if changed:
+                self._save_db(db)
+        return due
 
     # -------------------------------------------------------------------------
     # Secrets & one-time tokens

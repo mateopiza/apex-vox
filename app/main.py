@@ -154,6 +154,32 @@ async def start_background_services() -> None:
         _daily_report_loop()
 
     threading.Thread(target=boot, name="background-services", daemon=True).start()
+    threading.Thread(target=_billing_email_loop, name="billing-emails", daemon=True).start()
+    if not settings.is_email_configured:
+        logger.warning("RESEND_API_KEY no está configurada: no se enviará ningún correo.")
+
+
+def _billing_email_loop() -> None:
+    """Cada 15 min: promoción por vencer, aviso de renovación y mes vencido (una vez cada uno)."""
+    import time
+
+    from app.services import email_service
+    from app.services.supabase_service import supabase_service
+
+    while True:
+        try:
+            for kind, user in supabase_service.collect_due_billing_emails():
+                name, lang = user.get("full_name", ""), user.get("preferred_language", "es")
+                if kind == "promo_reminder":
+                    rendered = email_service.render_promo_reminder(name, user.get("promo_ends_at"), lang)
+                elif kind == "renewal_reminder":
+                    rendered = email_service.render_renewal_reminder(name, user.get("pro_until"), lang)
+                else:
+                    rendered = email_service.render_expired(name, lang)
+                email_service.send_email(user["email"], rendered, tags=[{"name": "category", "value": kind}])
+        except Exception as exc:
+            logger.warning("Billing email sweep failed: %s", exc)
+        time.sleep(900)
 
 
 def _daily_report_loop() -> None:
@@ -411,6 +437,7 @@ async def health_check() -> JSONResponse:
         "supabase_configured": settings.is_supabase_configured,
         "mega_s4_configured": settings.is_mega_s4_configured,
         "bold_configured": settings.is_bold_configured,
+        "email_configured": settings.is_email_configured,
         "default_diarization_engine": settings.DEFAULT_DIARIZATION_ENGINE,
         "engines_lineup": ["Mc-Ayrton", "Mc-Lewis", "Mc-Norris", "Mc-Piastri"],
         "suite": {

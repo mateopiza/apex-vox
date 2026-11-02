@@ -155,7 +155,7 @@ class QuotaUsageResponse(BaseModel):
     trial_ends_at: Optional[str] = None
     auto_billing_enabled: bool = False  # Bold payment links are one-off; renewals are manual
     pro_until: Optional[str] = None  # end of the paid Apex Pro period
-    trial_available: bool = False  # True while the one-time 3-day trial is unused
+    trial_available: bool = False  # sin prueba gratis: siempre False (compatibilidad)
 
 
 class UserProfileResponse(BaseModel):
@@ -171,8 +171,8 @@ class UserProfileResponse(BaseModel):
 
 
 class BoldCheckoutRequest(BaseModel):
-    """Create a Bold payment link for 30 days of Apex Pro ($30,000 COP / $10 USD)."""
-    currency: str = "COP"  # COP (30000) or USD (10)
+    """Create a Bold payment link for 30 days of Apex Pro (USD 10; USD 8 with the welcome promo)."""
+    currency: str = "USD"  # solo USD; se ignora cualquier otro valor
 
 
 class BoldCheckoutResponse(BaseModel):
@@ -180,16 +180,33 @@ class BoldCheckoutResponse(BaseModel):
     order_id: str  # our reference, echoed back by Bold in the webhook
     payment_link: str  # Bold link id (LNK_...)
     checkout_url: str  # https://checkout.bold.co/... — redirect the payer here
-    amount: int
+    amount: float
     currency: str
     amount_display: str
     period_days: int = 30
+    promo_applied: bool = False
+    regular_amount: float = 10.0
+    discount_pct: int = 0
     plan_summary: str = ""
 
 
+class BillingOfferResponse(BaseModel):
+    """Precio actual de Apex Pro para la cuenta (con o sin promoción de bienvenida)."""
+    currency: str = "USD"
+    regular_price: float
+    price: float
+    promo_eligible: bool
+    promo_price: float
+    discount_pct: int
+    promo_ends_at: Optional[str] = None
+    promo_reason: Optional[str] = None  # first_month_only | window_expired | ip_used_this_quarter
+    period_days: int = 30
+    auto_renewal: bool = False
+
+
 class SubscribeActionRequest(BaseModel):
-    """Start the one-time 3-day Apex Pro trial (registered accounts only)."""
-    currency: str = "COP"
+    """Obsoleto: la prueba gratis fue retirada (POST /api/billing/subscribe responde 410)."""
+    currency: str = "USD"
 
 
 class PasswordForgotRequest(BaseModel):

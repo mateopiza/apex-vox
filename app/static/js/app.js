@@ -5,7 +5,7 @@
  * Manages:
  * - Bilingual UI (Español / English)
  * - Landing Page, User Portal & Playground navigation
- * - User Registration (2h free/day + 24h retention) & Bold API Pro Subscription ($30.000 COP / $10 USD, 3-day trial)
+ * - User Registration (2h free/day + 24h retention) & Apex Pro via Bold (USD 10 / 30 days, manual renewal; 20% off within 24 h)
  * - Multi-audio upload, drag-and-drop sequence ordering, and Mc-Series engines (Mc-Ayrton, Mc-Lewis, Mc-Norris, Mc-Piastri)
  * - Apex Summa 7-Part Post-Transcription Intelligence Suite (Who spoke most, Topics, Objectives, Callouts, Calendar, Charts, Minutes)
  */
@@ -30,7 +30,7 @@
     user: JSON.parse(localStorage.getItem("apex_vox_user") || "null"),
     token: localStorage.getItem("apex_vox_token") || null,
     plan: "free",
-    config: { oauth_providers: [], trial_days: 3, pro_period_days: 30, guest_max_audios: 3, guest_max_minutes: 30, guest_audios_remaining: 3, newsletter_enabled: true },
+    config: { oauth_providers: [], pro_period_days: 30, pro_price_usd: 10, promo_discount_pct: 20, promo_window_hours: 24, promo_ip_cooldown_days: 90, guest_max_audios: 3, guest_max_minutes: 30, guest_audios_remaining: 3, newsletter_enabled: true },
     sessionId: null,
     files: [],
     voiceProfiles: [],
@@ -58,11 +58,11 @@
       btn_register_login: "Registrarse / Entrar",
       hero_badge: "POTENCIADO POR GROQ · ALMACENAMIENTO MEGA S4 · SUPABASE CLOUD",
       hero_title: "Apex Vox: Transcripción Inteligente, Separación de Voces y Analítica Ejecutiva",
-      hero_desc: "Regístrate hoy y obtén <strong>2 horas gratis al día</strong> en 1 o varios audios con almacenamiento por 24 horas, o activa <strong>Apex Pro</strong> con 3 días de prueba gratis, transcripciones y almacenamiento ilimitados en Mega S4 y resúmenes ejecutivos con <strong>Apex Summa</strong>.",
+      hero_desc: "Regístrate hoy y obtén <strong>2 horas gratis al día</strong> en 1 o varios audios con almacenamiento por 24 horas, o activa <strong>Apex Pro por USD 10 al mes</strong> (<strong>20% de descuento</strong> si pagas en tus primeras 24 horas): transcripciones y almacenamiento ilimitados en Mega S4 y resúmenes ejecutivos con <strong>Apex Summa</strong>.",
       hero_cta_playground: "Abrir Playground Ahora",
       hero_cta_box: "Grabar Sin Límite (Apex Box 10h+)",
       hero_cta_register: "Regístrate: 2 Horas Gratis / Día",
-      hero_cta_trial: "Probar Apex Pro 3 días gratis",
+      hero_cta_trial: "Activar Apex Pro",
       suite_heading: "Ecosistema del Producto Apex",
       suite_vox_status: "Producto Listo",
       suite_vox_part: "Transcripción (el núcleo)",
@@ -93,15 +93,15 @@
       plan_free_f3: "Acceso a motores <strong>Mc-Ayrton, Mc-Lewis, Mc-Norris y Mc-Piastri</strong> (Potenciado por Groq)",
       plan_free_f4: "Exportación TXT, SRT, VTT, JSON, CSV y Markdown",
       plan_free_cta: "Registrarse Gratis (2h / día)",
-      plan_pro_badge: "3 DÍAS DE PRUEBA GRATIS AL REGISTRARTE",
+      plan_pro_badge: "20% DE DESCUENTO SI PAGAS EN TUS PRIMERAS 24 H",
       plan_pro_title: "Plan Apex Pro",
       per_month: "mes",
-      plan_pro_f1: "<strong>Prueba gratis de 3 días</strong> para cuentas registradas, sin tarjeta",
+      plan_pro_f1: "<strong>USD 8 el primer mes</strong> si pagas dentro de las 24 h siguientes a crear tu cuenta (una promoción por red cada 90 días)",
       plan_pro_f2: "<strong>Transcripciones ilimitadas</strong> (sin límite diario de horas ni archivos)",
       plan_pro_f3: "<strong>Almacenamiento ilimitado permanente</strong> en <strong>Mega S4</strong> y <strong>Supabase Cloud</strong>",
       plan_pro_f4: "<strong>Resumen IA Apex Summa completo:</strong> Quién habló más, De qué se habló, Objetivos, Llamados de atención, Calendario de tareas y Gráficas",
       plan_pro_f5: "<strong>Generador de Actas Corporativas:</strong> Actas de Consejo, Junta Directiva, Comité y Asamblea",
-      plan_pro_cta: "Empezar prueba gratis de 3 días",
+      plan_pro_cta: "Activar Apex Pro",
       portal_profile_title: "Mi cuenta",
       lbl_name: "Nombre:",
       lbl_email: "Correo:",
@@ -109,11 +109,9 @@
       portal_quota_label: "Consumo de Audio Hoy (1 o varios audios):",
       portal_quota_hint: "Tienes 2 horas gratis cada día. Tus archivos en el plan gratuito se almacenan por 24 horas en Mega S4.",
       portal_billing_title: "Apex Pro — Pagos con Bold",
-      portal_billing_desc: "Activa <strong>3 días de prueba gratis</strong> (una vez por cuenta). Después, cada pago de <strong>$30.000 COP o $10 USD</strong> con Bold te da <strong>30 días de Apex Pro</strong>: transcripciones ilimitadas, almacenamiento ilimitado en Mega S4 y <strong>Apex Summa</strong>. Sin renovaciones automáticas.",
-      lbl_currency: "Moneda de Cobro (Bold)",
+      portal_billing_desc: "El pago activa <strong>30 días de Apex Pro</strong>: transcripciones ilimitadas, almacenamiento ilimitado en Mega S4 y <strong>Apex Summa</strong>. Bold no permite suscripciones: <strong>no se cobra nada automáticamente</strong> y cada mes renuevas de forma manual (te avisamos por correo).",
       lbl_billing_mode: "Modalidad",
-      btn_start_trial_bold: "Iniciar prueba gratis de 3 días",
-      btn_generate_bold_link: "Pagar 30 días con Bold",
+      btn_generate_bold_link: "Pagar con Bold",
       portal_cloud_history_title: "Historial de transcripciones",
       btn_refresh: "Actualizar",
       kpi_retention_policy: "Política de Retención",
@@ -149,7 +147,7 @@
       btn_save_names: "Guardar Nombres",
       btn_cancel: "Cancelar",
       summa_main_title: "Resumen Inteligente, Gráficas, Calendario de Tareas y Generador de Actas",
-      summa_locked_msg: "El Resumen IA completo de Apex Summa, las Gráficas y el Generador de Actas están incluidos en el Plan Apex Pro ($30.000 COP / $10 USD mes · 3 días de prueba gratis).",
+      summa_locked_msg: "El Resumen IA completo de Apex Summa, las Gráficas y el Generador de Actas están incluidos en Apex Pro (USD 10 / mes · 20% de descuento si pagas en tus primeras 24 horas).",
       summa_sec1_who: "1. ¿Quién Habló Más?",
       summa_sec6_charts: "6. Gráficas de la Transcripción",
       summa_timeline_chart_lbl: "Densidad de Palabras por Tramo de Tiempo:",
@@ -165,7 +163,7 @@
       btn_download_minutes_md: "Descargar Acta (.MD)",
       btn_print_minutes: "Imprimir / Guardar PDF",
       auth_modal_title: "Regístrate en Apex Vox — 2 Horas Gratis al Día",
-      auth_modal_subtitle: "Al registrarte obtienes <strong>2 horas gratis cada día</strong> (en 1 o varios audios) con <strong>almacenamiento de 24 horas en Mega S4</strong>. O inicia tu prueba gratis de 3 días en <strong>Apex Pro</strong>.",
+      auth_modal_subtitle: "Al registrarte obtienes <strong>2 horas gratis cada día</strong> (en 1 o varios audios) con <strong>almacenamiento de 24 horas en Mega S4</strong>. Y si activas <strong>Apex Pro</strong> en tus primeras 24 horas, tu primer mes tiene <strong>20% de descuento</strong>.",
       lbl_full_name: "Nombre Completo",
       lbl_password: "Contraseña",
       btn_create_free_account: "Crear Cuenta (2h Gratis / Día)",
@@ -187,7 +185,8 @@
       vp_guest: "Inicia sesión para registrar perfiles de voz privados.",
       guest_result_cta: "Este resultado no se guarda y desaparece en 60 minutos. Crea tu cuenta para conservar tu historial y obtener el análisis de Apex Summa.",
       footer_privacy: "Privacidad",
-      footer_terms: "Términos",
+      footer_terms: "Términos y Condiciones",
+      footer_habeas: "Habeas Data",
       footer_security: "Seguridad",
       news_label: "Boletín de Apex Vox: lanzamientos y guías, sin spam.",
       news_btn: "Suscribirme",
@@ -195,7 +194,7 @@
       btn_back: "Volver",
       btn_save_password: "Guardar nueva contraseña",
       forgot_link: "¿Olvidaste tu contraseña?",
-      auth_legal: "Al continuar aceptas los <a href=\"/legal/terminos\" target=\"_blank\">Términos</a> y la <a href=\"/legal/privacidad\" target=\"_blank\">Política de privacidad</a>.",
+      auth_legal: "Al continuar aceptas los <a href=\"/legal/terminos\" target=\"_blank\">Términos y Condiciones</a> y autorizas el tratamiento de tus datos, incluida tu voz, según la <a href=\"/legal/habeas-data\" target=\"_blank\">Política de Tratamiento de Datos (Habeas Data)</a>.",
       lbl_billing_mode_value: "Pago único · 30 días por pago",
       oauth_google: "Continuar con Google",
       oauth_github: "Continuar con GitHub",
@@ -222,11 +221,11 @@
       btn_register_login: "Sign Up / Log In",
       hero_badge: "POWERED BY GROQ · MEGA S4 OBJECT STORAGE · SUPABASE CLOUD",
       hero_title: "Apex Vox: Intelligent Transcription, Speaker Separation & Executive Analytics",
-      hero_desc: "Sign up today and get <strong>2 free hours per day</strong> across 1 or multiple audios with 24-hour storage, or activate <strong>Apex Pro</strong> with a 3-day free trial, unlimited transcriptions and storage in Mega S4, and executive AI insights with <strong>Apex Summa</strong>.",
+      hero_desc: "Sign up today and get <strong>2 free hours per day</strong> across 1 or multiple audios with 24-hour storage, or activate <strong>Apex Pro for USD 10 a month</strong> (<strong>20% off</strong> if you pay within your first 24 hours): unlimited transcriptions and storage in Mega S4, and executive AI insights with <strong>Apex Summa</strong>.",
       hero_cta_playground: "Open Playground Now",
       hero_cta_box: "Record Unlimited (Apex Box 10h+)",
       hero_cta_register: "Sign Up: 2 Free Hours / Day",
-      hero_cta_trial: "Try Apex Pro free for 3 days",
+      hero_cta_trial: "Activate Apex Pro",
       suite_heading: "Apex Product Ecosystem",
       suite_vox_status: "Product Ready",
       suite_vox_part: "Transcription (the core)",
@@ -257,15 +256,15 @@
       plan_free_f3: "Access to <strong>Mc-Ayrton, Mc-Lewis, Mc-Norris & Mc-Piastri</strong> (Powered by Groq)",
       plan_free_f4: "Export to TXT, SRT, VTT, JSON, CSV & Markdown",
       plan_free_cta: "Sign Up Free (2h / day)",
-      plan_pro_badge: "3-DAY FREE TRIAL FOR REGISTERED USERS",
+      plan_pro_badge: "20% OFF IF YOU PAY IN YOUR FIRST 24 H",
       plan_pro_title: "Apex Pro Plan",
       per_month: "month",
-      plan_pro_f1: "<strong>3-day free trial</strong> for registered accounts, no card required",
+      plan_pro_f1: "<strong>USD 8 for the first month</strong> if you pay within 24 h of creating your account (one promo per network every 90 days)",
       plan_pro_f2: "<strong>Unlimited transcriptions</strong> (no daily hour or file limit)",
       plan_pro_f3: "<strong>Unlimited permanent storage</strong> in <strong>Mega S4</strong> & <strong>Supabase Cloud</strong>",
       plan_pro_f4: "<strong>Full Apex Summa AI Report:</strong> Who spoke most, Topics, Objectives, Callouts, Calendar Tasks & Charts",
       plan_pro_f5: "<strong>Corporate Minutes Generator:</strong> Board of Directors, Committee & Assembly Minutes",
-      plan_pro_cta: "Start the 3-day free trial",
+      plan_pro_cta: "Activate Apex Pro",
       portal_profile_title: "My account",
       lbl_name: "Name:",
       lbl_email: "Email:",
@@ -273,11 +272,9 @@
       portal_quota_label: "Audio Usage Today (1 or multiple audios):",
       portal_quota_hint: "You get 2 free hours every day. Free tier files are retained for 24 hours in Mega S4.",
       portal_billing_title: "Apex Pro — Payments with Bold",
-      portal_billing_desc: "Start a <strong>3-day free trial</strong> (once per account). After that, each <strong>$30,000 COP or $10 USD</strong> payment with Bold gives you <strong>30 days of Apex Pro</strong>: unlimited transcriptions, unlimited Mega S4 storage and <strong>Apex Summa</strong>. No automatic renewals.",
-      lbl_currency: "Billing Currency (Bold)",
+      portal_billing_desc: "Paying activates <strong>30 days of Apex Pro</strong>: unlimited transcriptions, unlimited Mega S4 storage and <strong>Apex Summa</strong>. Bold has no subscriptions: <strong>nothing is charged automatically</strong> and you renew manually each month (we email you a reminder).",
       lbl_billing_mode: "Billing",
-      btn_start_trial_bold: "Start 3-day free trial",
-      btn_generate_bold_link: "Pay 30 days with Bold",
+      btn_generate_bold_link: "Pay with Bold",
       portal_cloud_history_title: "Transcription history",
       btn_refresh: "Refresh",
       kpi_retention_policy: "Retention Policy",
@@ -313,7 +310,7 @@
       btn_save_names: "Save Names",
       btn_cancel: "Cancel",
       summa_main_title: "AI Executive Summary, Charts, Tasks Calendar & Minutes Generator",
-      summa_locked_msg: "The full Apex Summa AI Summary, Charts, and Minutes Generator are included in the Apex Pro Plan ($30,000 COP / $10 USD mo · 3-day free trial).",
+      summa_locked_msg: "The full Apex Summa AI Summary, Charts, and Minutes Generator are included in Apex Pro (USD 10 / month · 20% off if you pay within your first 24 hours).",
       summa_sec1_who: "1. Who Spoke the Most?",
       summa_sec6_charts: "6. Transcription Charts",
       summa_timeline_chart_lbl: "Word Density Across Timeline:",
@@ -329,7 +326,7 @@
       btn_download_minutes_md: "Download Minutes (.MD)",
       btn_print_minutes: "Print / Save PDF",
       auth_modal_title: "Sign Up for Apex Vox — 2 Free Hours Per Day",
-      auth_modal_subtitle: "Register to get <strong>2 free hours every day</strong> (in 1 or multiple audios) with <strong>24-hour storage in Mega S4</strong>. Or start your 3-day free trial of <strong>Apex Pro</strong>.",
+      auth_modal_subtitle: "Register to get <strong>2 free hours every day</strong> (in 1 or multiple audios) with <strong>24-hour storage in Mega S4</strong>. Activate <strong>Apex Pro</strong> within your first 24 hours and your first month is <strong>20% off</strong>.",
       lbl_full_name: "Full Name",
       lbl_password: "Password",
       btn_create_free_account: "Create Account (2h Free / Day)",
@@ -351,7 +348,8 @@
       vp_guest: "Sign in to enrol private voice profiles.",
       guest_result_cta: "This result is not saved and disappears in 60 minutes. Create an account to keep your history and get the Apex Summa analysis.",
       footer_privacy: "Privacy",
-      footer_terms: "Terms",
+      footer_terms: "Terms and Conditions",
+      footer_habeas: "Habeas Data",
       footer_security: "Security",
       news_label: "Apex Vox newsletter: launches and guides, no spam.",
       news_btn: "Subscribe",
@@ -359,7 +357,7 @@
       btn_back: "Back",
       btn_save_password: "Save new password",
       forgot_link: "Forgot your password?",
-      auth_legal: "By continuing you accept the <a href=\"/legal/terminos?lang=en\" target=\"_blank\">Terms</a> and the <a href=\"/legal/privacidad?lang=en\" target=\"_blank\">Privacy policy</a>.",
+      auth_legal: "By continuing you accept the <a href=\"/legal/terminos?lang=en\" target=\"_blank\">Terms and Conditions</a> and authorize the processing of your data, including your voice, under the <a href=\"/legal/habeas-data?lang=en\" target=\"_blank\">Personal Data Processing Policy (Habeas Data)</a>.",
       lbl_billing_mode_value: "One-off payment · 30 days each",
       oauth_google: "Continue with Google",
       oauth_github: "Continue with GitHub",
@@ -667,12 +665,7 @@
   }
 
   function updateBillingButtons() {
-    const trialBtn = document.getElementById("portal-activate-pro-btn");
-    const quota = state.user && state.user.quota;
-    if (trialBtn) {
-      const trialUsed = quota && !quota.trial_available;
-      trialBtn.classList.toggle("hidden", Boolean(state.user) && trialUsed);
-    }
+    loadBillingOffer();
   }
 
   function requireSession(message) {
@@ -851,44 +844,67 @@
     }
   }
 
-  async function activateBoldProTrial() {
+  // Abre la sección de pago de "Mi cuenta" (sin prueba gratis: Apex Pro se activa pagando).
+  function openProCheckout() {
     if (!requireSession(t(
-      "Crea tu cuenta gratis para activar la prueba de 3 días de Apex Pro.",
-      "Create your free account to start the 3-day Apex Pro trial."
+      "Crea tu cuenta o inicia sesión para activar Apex Pro. Si pagas en tus primeras 24 horas, tu primer mes tiene 20% de descuento.",
+      "Create your account or sign in to activate Apex Pro. Pay within your first 24 hours and your first month is 20% off."
     ))) return;
-
-    try {
-      const res = await authFetch("/api/billing/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currency: currencyChoice() }),
-      });
-      const data = await res.json();
-      if (res.status === 409) {
-        showAlert(t(
-          `${data.detail} Puedes continuar con Apex Pro pagando ${state.config.pro_period_days} días con Bold.`,
-          `${data.detail} You can keep Apex Pro by paying ${state.config.pro_period_days} days with Bold.`
-        ));
-        switchView("portal");
-        return;
-      }
-      if (!res.ok) throw new Error(data.detail || t("No se pudo activar la prueba gratis.", "Could not start the free trial."));
-
-      storeSession(data);
-      await refreshSummaAccess();
-      await loadUserPortalSummary();
-      showAlert(t(
-        "¡Prueba gratis de 3 días de Apex Pro activada! Transcripciones ilimitadas, Mega S4 ilimitado y Apex Summa desbloqueados.",
-        "Your 3-day Apex Pro trial is on! Unlimited transcriptions, unlimited Mega S4 storage and Apex Summa unlocked."
-      ), "success");
-    } catch (err) {
-      showAlert(err.message);
-    }
+    switchView("portal");
+    loadBillingOffer();
+    const card = document.getElementById("billing-offer-box");
+    if (card) card.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 
-  function currencyChoice() {
-    const currencyEl = document.getElementById("bold-currency-select");
-    return currencyEl ? currencyEl.value : "COP";
+  function formatUsd(value) {
+    const n = Number(value) || 0;
+    return Number.isInteger(n) ? `USD ${n}` : `USD ${n.toFixed(2)}`;
+  }
+
+  let promoCountdownTimer = null;
+
+  async function loadBillingOffer() {
+    const box = document.getElementById("billing-offer-box");
+    const payBtn = document.getElementById("portal-generate-bold-link-btn");
+    if (!box) return;
+    if (!state.token) {
+      box.innerHTML = `<div class="billing-offer-price">${formatUsd(state.config.pro_price_usd || 10)} <span>/ ${state.config.pro_period_days || 30} ${t("días", "days")}</span></div>
+        <p class="billing-offer-note">${t("Inicia sesión para ver tu precio. Si pagas en tus primeras 24 horas, el primer mes tiene 20% de descuento.", "Sign in to see your price. Pay within your first 24 hours and the first month is 20% off.")}</p>`;
+      return;
+    }
+    try {
+      const res = await authFetch("/api/billing/offer");
+      const offer = await res.json();
+      if (!res.ok) throw new Error(offer.detail || "");
+      if (promoCountdownTimer) clearInterval(promoCountdownTimer);
+      if (offer.promo_eligible) {
+        box.innerHTML = `
+          <div class="billing-offer-badge">${t(`${offer.discount_pct}% de descuento · primer mes`, `${offer.discount_pct}% off · first month`)}</div>
+          <div class="billing-offer-price">${formatUsd(offer.price)} <s>${formatUsd(offer.regular_price)}</s> <span>/ ${offer.period_days} ${t("días", "days")}</span></div>
+          <p class="billing-offer-note">${t("La promoción termina en", "The promo ends in")} <strong id="promo-countdown">—</strong>. ${t(`Después, ${formatUsd(offer.regular_price)} al mes.`, `After that, ${formatUsd(offer.regular_price)} a month.`)}</p>`;
+        const ends = new Date(offer.promo_ends_at).getTime();
+        const tick = () => {
+          const el = document.getElementById("promo-countdown");
+          const left = Math.max(0, Math.floor((ends - Date.now()) / 1000));
+          if (el) el.textContent = `${String(Math.floor(left / 3600)).padStart(2, "0")}:${String(Math.floor((left % 3600) / 60)).padStart(2, "0")}:${String(left % 60).padStart(2, "0")}`;
+          if (left === 0) { clearInterval(promoCountdownTimer); loadBillingOffer(); }
+        };
+        tick();
+        promoCountdownTimer = setInterval(tick, 1000);
+      } else {
+        const why = {
+          first_month_only: t("La promoción aplica solo al primer mes.", "The promo applies to the first month only."),
+          window_expired: t("La promoción de las primeras 24 horas ya terminó.", "The first-24-hours promo has ended."),
+          ip_used_this_quarter: t("Esta red ya usó una promoción en los últimos 90 días.", "This network already used a promo in the last 90 days."),
+        }[offer.promo_reason] || "";
+        box.innerHTML = `
+          <div class="billing-offer-price">${formatUsd(offer.price)} <span>/ ${offer.period_days} ${t("días", "days")}</span></div>
+          <p class="billing-offer-note">${escapeHtml(why)}</p>`;
+      }
+      if (payBtn) payBtn.textContent = t(`Pagar ${formatUsd(offer.price)} con Bold`, `Pay ${formatUsd(offer.price)} with Bold`);
+    } catch (err) {
+      box.innerHTML = `<p class="billing-offer-note">${escapeHtml(err.message || t("No se pudo cargar el precio.", "Could not load the price."))}</p>`;
+    }
   }
 
   async function startBoldCheckout() {
@@ -901,7 +917,7 @@
       const res = await authFetch("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currency: currencyChoice() }),
+        body: JSON.stringify({ currency: "USD" }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || t("No se pudo crear el link de pago.", "Could not create the payment link."));
@@ -985,7 +1001,7 @@
       } else if (st.linked) {
         statusEl.textContent = t(`Vinculado a @${st.telegram_username || "tu chat"}. Envíale audios al bot.`, `Linked to @${st.telegram_username || "your chat"}. Send audio to the bot.`);
       } else if (!st.eligible) {
-        statusEl.textContent = t("Disponible con Apex Pro (prueba gratis o pago).", "Available with Apex Pro (free trial or paid).");
+        statusEl.textContent = t("Disponible con Apex Pro.", "Available with Apex Pro.");
       } else {
         statusEl.textContent = t("Sin vincular.", "Not linked.");
       }
@@ -2256,19 +2272,9 @@
   }
 
   const heroTrialBtn = document.getElementById("hero-trial-btn");
-  if (heroTrialBtn) {
-    heroTrialBtn.addEventListener("click", () => {
-      switchView("portal");
-      activateBoldProTrial();
-    });
-  }
+  if (heroTrialBtn) heroTrialBtn.addEventListener("click", openProCheckout);
   const pricingProBtn = document.getElementById("pricing-pro-btn");
-  if (pricingProBtn) {
-    pricingProBtn.addEventListener("click", () => {
-      switchView("portal");
-      activateBoldProTrial();
-    });
-  }
+  if (pricingProBtn) pricingProBtn.addEventListener("click", openProCheckout);
 
   const submitRegisterBtn = document.getElementById("submit-register-btn");
   if (submitRegisterBtn) submitRegisterBtn.addEventListener("click", handleRegisterUser);
@@ -2276,10 +2282,6 @@
   const submitLoginBtn = document.getElementById("submit-login-btn");
   if (submitLoginBtn) submitLoginBtn.addEventListener("click", handleLoginUser);
 
-  const portalActivateProBtn = document.getElementById("portal-activate-pro-btn");
-  if (portalActivateProBtn) {
-    portalActivateProBtn.addEventListener("click", activateBoldProTrial);
-  }
   const portalGenerateBoldLinkBtn = document.getElementById("portal-generate-bold-link-btn");
   if (portalGenerateBoldLinkBtn) {
     portalGenerateBoldLinkBtn.addEventListener("click", startBoldCheckout);
@@ -2290,9 +2292,9 @@
   }
 
   const unlockSummaBtn = document.getElementById("unlock-summa-pro-btn");
-  if (unlockSummaBtn) unlockSummaBtn.addEventListener("click", activateBoldProTrial);
+  if (unlockSummaBtn) unlockSummaBtn.addEventListener("click", openProCheckout);
   const summaTrialBtn = document.getElementById("summa-activate-trial-btn");
-  if (summaTrialBtn) summaTrialBtn.addEventListener("click", activateBoldProTrial);
+  if (summaTrialBtn) summaTrialBtn.addEventListener("click", openProCheckout);
 
   const generateMinutesBtn = document.getElementById("generate-minutes-btn");
   if (generateMinutesBtn) generateMinutesBtn.addEventListener("click", handleGenerateMinutes);

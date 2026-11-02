@@ -57,10 +57,20 @@ async def register_user_endpoint(payload: UserRegisterRequest, request: Request)
     enforce_ip_limit(request, profile.user_id)
     email_service.send_async(
         profile.email,
-        email_service.render_welcome(profile.full_name, profile.preferred_language),
+        email_service.render_welcome(profile.full_name, profile.preferred_language, _promo_ends(profile)),
         tags=[{"name": "category", "value": "welcome"}],
     )
     return profile
+
+
+def _promo_ends(profile: UserProfileResponse) -> str | None:
+    import datetime as _dt
+
+    try:
+        created = _dt.datetime.fromisoformat(str(profile.created_at).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return (created + _dt.timedelta(hours=settings.PROMO_WINDOW_HOURS)).isoformat()
 
 
 @router.post("/auth/login", response_model=UserProfileResponse)
@@ -116,8 +126,11 @@ async def auth_config(request: Request, user: Optional[Dict[str, Any]] = Depends
     guest_remaining = None if user else supabase_service.guest_audios_remaining(requester_key(request, user))
     return {
         "oauth_providers": oauth_service.enabled_providers(),
-        "trial_days": settings.PRO_TRIAL_DAYS,
         "pro_period_days": settings.PRO_PERIOD_DAYS,
+        "pro_price_usd": settings.PRO_PRICE_USD,
+        "promo_discount_pct": settings.PROMO_DISCOUNT_PCT,
+        "promo_window_hours": settings.PROMO_WINDOW_HOURS,
+        "promo_ip_cooldown_days": settings.PROMO_IP_COOLDOWN_DAYS,
         "billing_configured": settings.is_bold_configured,
         "guest_max_audios": settings.GUEST_MAX_AUDIOS_PER_DAY,
         "guest_max_minutes": settings.GUEST_MAX_AUDIO_MINUTES,
@@ -236,7 +249,7 @@ async def oauth_callback(request: Request, code: Optional[str] = None, error: Op
     if is_new:
         email_service.send_async(
             profile.email,
-            email_service.render_welcome(profile.full_name, profile.preferred_language),
+            email_service.render_welcome(profile.full_name, profile.preferred_language, _promo_ends(profile)),
             tags=[{"name": "category", "value": "welcome"}],
         )
     handoff = supabase_service.create_handoff_code(profile.access_token)

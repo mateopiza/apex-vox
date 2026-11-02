@@ -133,59 +133,191 @@ def _fmt_date(iso_value: Optional[str], lang: str) -> str:
     return str(iso_value)[:10]
 
 
-def render_welcome(name: str, lang: str = "es") -> Tuple[str, str, str]:
-    url = _app_url("/")
+def _fmt_datetime(iso_value: Optional[str], lang: str) -> str:
+    """Fecha y hora en hora de Colombia (UTC-5), p. ej. "02/11/2026 18:30 (hora de Colombia)"."""
+    import datetime as _dt
+
+    if not iso_value:
+        return ""
+    try:
+        value = _dt.datetime.fromisoformat(str(iso_value).replace("Z", "+00:00"))
+    except ValueError:
+        return str(iso_value)[:16]
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=_dt.timezone.utc)
+    local = value.astimezone(_dt.timezone(_dt.timedelta(hours=-5)))
     if lang == "en":
-        subject = "Welcome to Apex Vox"
+        return local.strftime("%b %d, %Y %H:%M") + " (Colombia time, UTC-5)"
+    return local.strftime("%d/%m/%Y %H:%M") + " (hora de Colombia)"
+
+
+def _usd(amount: float) -> str:
+    value = float(amount)
+    return f"USD {value:.0f}" if value.is_integer() else f"USD {value:.2f}"
+
+
+def _prices() -> Tuple[str, str, int]:
+    regular = float(settings.PRO_PRICE_USD)
+    promo = round(regular * (100 - settings.PROMO_DISCOUNT_PCT) / 100, 2)
+    return _usd(regular), _usd(promo), settings.PROMO_DISCOUNT_PCT
+
+
+def _rules_note(lang: str) -> str:
+    """Reglas de la promoción y del cobro, iguales en todos los correos de facturación."""
+    regular, promo, pct = _prices()
+    days, hours, cooldown = settings.PRO_PERIOD_DAYS, settings.PROMO_WINDOW_HOURS, settings.PROMO_IP_COOLDOWN_DAYS
+    if lang == "en":
+        items = [
+            f"Apex Pro costs <strong>{regular}</strong> for {days} days. Paying activates the month.",
+            f"Welcome promo: <strong>{pct}% off the first month ({promo})</strong> if you pay within the first {hours} hours after creating your account.",
+            f"One promo per network (IP) every {cooldown} days (one quarter). It applies only to the first month.",
+            "Bold does not support subscriptions: nothing is charged automatically. Each month you renew manually from your account.",
+        ]
+    else:
+        items = [
+            f"Apex Pro cuesta <strong>{regular}</strong> por {days} días. El pago activa el mes.",
+            f"Promoción de bienvenida: <strong>{pct}% de descuento en el primer mes ({promo})</strong> si pagas dentro de las primeras {hours} horas desde que creaste tu cuenta.",
+            f"Una sola promoción por red (IP) cada {cooldown} días (un trimestre). Aplica solo al primer mes.",
+            "Bold no permite suscripciones: no se cobra nada automáticamente. Cada mes renuevas de forma manual desde tu cuenta.",
+        ]
+    lis = "".join(
+        f'<li style="margin:0 0 8px;font-family:{MONO};font-size:13px;line-height:1.5;color:{TEXT};">{i}</li>'
+        for i in items
+    )
+    return (
+        f'<div style="margin:22px 0 4px;padding:14px 16px;border:1px solid {LINE};border-radius:8px;background:{PAPER};">'
+        + _label("Cómo funciona" if lang != "en" else "How it works")
+        + f'<ul style="margin:0;padding-left:18px;">{lis}</ul></div>'
+    )
+
+
+def _rules_text(lang: str) -> str:
+    regular, promo, pct = _prices()
+    days, hours, cooldown = settings.PRO_PERIOD_DAYS, settings.PROMO_WINDOW_HOURS, settings.PROMO_IP_COOLDOWN_DAYS
+    if lang == "en":
+        return (f"- Apex Pro: {regular} for {days} days; paying activates the month.\n"
+                f"- {pct}% off the first month ({promo}) if you pay within {hours} h of creating your account.\n"
+                f"- One promo per network (IP) every {cooldown} days.\n"
+                "- Bold has no subscriptions: nothing is charged automatically; renew manually each month.")
+    return (f"- Apex Pro: {regular} por {days} días; el pago activa el mes.\n"
+            f"- {pct}% de descuento en el primer mes ({promo}) si pagas dentro de las {hours} h siguientes a crear tu cuenta.\n"
+            f"- Una promoción por red (IP) cada {cooldown} días.\n"
+            "- Bold no permite suscripciones: no se cobra nada automáticamente; renuevas manualmente cada mes.")
+
+
+def render_welcome(name: str, lang: str = "es", promo_ends_at: Optional[str] = None) -> Tuple[str, str, str]:
+    """Bienvenida: plan gratis + promoción de las primeras 24 horas."""
+    url = _app_url("/?view=portal")
+    regular, promo, pct = _prices()
+    ends = _fmt_datetime(promo_ends_at, lang)
+    if lang == "en":
+        subject = f"Welcome to Apex Vox: {pct}% off Apex Pro for 24 hours"
         body = (
             _p(f"Hi {_esc(name)}, your account is ready.")
             + _p("You have <strong>2 hours of transcription per day</strong>, ordered multi-audio uploads, "
                  "speaker identification and exports to TXT, SRT, VTT, JSON, CSV and Markdown.")
-            + _p("Want the full Apex Summa report — who spoke most, topics, objectives, tasks and minutes? "
-                 "Start your <strong>3-day Apex Pro trial</strong> from your account, no card required.")
-            + _button("Open Apex Vox", url)
+            + _p(f"Want the full Apex Summa report, minutes and unlimited transcriptions? Activate "
+                 f"<strong>Apex Pro for {promo}</strong> instead of {regular} if you pay before "
+                 f"<strong>{_esc(ends)}</strong>.")
+            + _button(f"Activate Apex Pro for {promo}", url)
+            + _rules_note("en")
         )
-        text = (f"Hi {name}, your Apex Vox account is ready.\n\n2 hours of transcription per day. "
-                f"Start your 3-day Apex Pro trial from your account.\n\n{url}")
-        return subject, _layout("en", "Your account is ready: 2 hours of transcription per day.", "Welcome", "Your account is ready.", body), text
-    subject = "Bienvenido a Apex Vox"
+        text = (f"Hi {name}, your Apex Vox account is ready: 2 hours of transcription per day.\n\n"
+                f"Apex Pro for {promo} (instead of {regular}) if you pay before {ends}.\n\n{_rules_text('en')}\n\n{url}")
+        return subject, _layout("en", f"{pct}% off your first month until {ends}.", "Welcome", "Your account is ready.", body), text
+    subject = f"Bienvenido a Apex Vox: {pct}% de descuento en Apex Pro por 24 horas"
     body = (
         _p(f"Hola {_esc(name)}, tu cuenta está lista.")
         + _p("Tienes <strong>2 horas de transcripción al día</strong>, subida de varios audios en orden, "
              "identificación de oradores y exportación a TXT, SRT, VTT, JSON, CSV y Markdown.")
-        + _p("¿Quieres el informe completo de Apex Summa: quién habló más, temas, objetivos, tareas y actas? "
-             "Activa tu <strong>prueba de 3 días de Apex Pro</strong> desde tu cuenta, sin tarjeta.")
-        + _button("Abrir Apex Vox", url)
+        + _p(f"¿Quieres el informe completo de Apex Summa, actas y transcripciones ilimitadas? Activa "
+             f"<strong>Apex Pro por {promo}</strong> en lugar de {regular} si pagas antes del "
+             f"<strong>{_esc(ends)}</strong>.")
+        + _button(f"Activar Apex Pro por {promo}", url)
+        + _rules_note("es")
     )
-    text = (f"Hola {name}, tu cuenta de Apex Vox está lista.\n\n2 horas de transcripción al día. "
-            f"Activa tu prueba de 3 días de Apex Pro desde tu cuenta.\n\n{url}")
-    return subject, _layout("es", "Tu cuenta está lista: 2 horas de transcripción al día.", "Bienvenida", "Tu cuenta está lista.", body), text
+    text = (f"Hola {name}, tu cuenta de Apex Vox está lista: 2 horas de transcripción al día.\n\n"
+            f"Apex Pro por {promo} (en lugar de {regular}) si pagas antes del {ends}.\n\n{_rules_text('es')}\n\n{url}")
+    return subject, _layout("es", f"{pct}% de descuento en tu primer mes hasta el {ends}.", "Bienvenida", "Tu cuenta está lista.", body), text
 
 
-def render_trial_started(name: str, ends_at: Optional[str], lang: str = "es") -> Tuple[str, str, str]:
-    url = _app_url("/")
-    end = _fmt_date(ends_at, lang)
+def render_promo_reminder(name: str, promo_ends_at: Optional[str], lang: str = "es") -> Tuple[str, str, str]:
+    """La promoción de bienvenida termina en pocas horas."""
+    url = _app_url("/?view=portal")
+    regular, promo, pct = _prices()
+    ends = _fmt_datetime(promo_ends_at, lang)
     if lang == "en":
-        subject = "Your Apex Pro trial is active"
+        subject = f"Last hours: Apex Pro for {promo} ends soon"
         body = (
-            _p(f"Hi {_esc(name)}, Apex Pro is on until <strong>{_esc(end)}</strong>.")
-            + _p("Unlimited transcriptions, unlimited Mega S4 storage, the full Apex Summa report and the minutes generator.")
-            + _p(f"When the trial ends your account returns to the free plan. To keep Apex Pro, pay "
-                 f"{settings.PRO_PERIOD_DAYS} days with Bold from your account — nothing is charged automatically.")
-            + _button("Use Apex Pro", url)
+            _p(f"Hi {_esc(name)}, your welcome promo ends on <strong>{_esc(ends)}</strong>.")
+            + _p(f"Pay now and your first month of Apex Pro costs <strong>{promo}</strong> instead of {regular} "
+                 f"({pct}% off). After that the price is {regular} per month.")
+            + _button(f"Pay {promo} now", url)
+            + _rules_note("en")
         )
-        text = f"Hi {name}, your Apex Pro trial is active until {end}. Nothing is charged automatically.\n\n{url}"
-        return subject, _layout("en", f"Apex Pro is on until {end}.", "Trial", "Apex Pro is on.", body), text
-    subject = "Tu prueba de Apex Pro está activa"
+        text = f"Hi {name}, your promo ends on {ends}: Apex Pro for {promo} instead of {regular}.\n\n{_rules_text('en')}\n\n{url}"
+        return subject, _layout("en", f"{pct}% off ends on {ends}.", "Promo", "Your promo ends soon.", body), text
+    subject = f"Últimas horas: Apex Pro por {promo} termina pronto"
     body = (
-        _p(f"Hola {_esc(name)}, Apex Pro está activo hasta el <strong>{_esc(end)}</strong>.")
-        + _p("Transcripciones ilimitadas, almacenamiento ilimitado en Mega S4, el informe completo de Apex Summa y el generador de actas.")
-        + _p(f"Al terminar la prueba tu cuenta vuelve al plan gratis. Para seguir con Apex Pro, paga "
-             f"{settings.PRO_PERIOD_DAYS} días con Bold desde tu cuenta: no se cobra nada automáticamente.")
-        + _button("Usar Apex Pro", url)
+        _p(f"Hola {_esc(name)}, tu promoción de bienvenida termina el <strong>{_esc(ends)}</strong>.")
+        + _p(f"Paga ahora y tu primer mes de Apex Pro cuesta <strong>{promo}</strong> en lugar de {regular} "
+             f"({pct}% de descuento). Después, el precio es {regular} al mes.")
+        + _button(f"Pagar {promo} ahora", url)
+        + _rules_note("es")
     )
-    text = f"Hola {name}, tu prueba de Apex Pro está activa hasta el {end}. No se cobra nada automáticamente.\n\n{url}"
-    return subject, _layout("es", f"Apex Pro activo hasta el {end}.", "Prueba gratis", "Apex Pro está activo.", body), text
+    text = f"Hola {name}, tu promoción termina el {ends}: Apex Pro por {promo} en lugar de {regular}.\n\n{_rules_text('es')}\n\n{url}"
+    return subject, _layout("es", f"El {pct}% de descuento termina el {ends}.", "Promoción", "Tu promoción termina pronto.", body), text
+
+
+def render_renewal_reminder(name: str, pro_until: Optional[str], lang: str = "es") -> Tuple[str, str, str]:
+    """El mes pagado está por terminar: la renovación es manual."""
+    url = _app_url("/?view=portal")
+    regular, _, _ = _prices()
+    until = _fmt_datetime(pro_until, lang)
+    if lang == "en":
+        subject = "Your Apex Pro month ends soon — renew manually"
+        body = (
+            _p(f"Hi {_esc(name)}, your Apex Pro access ends on <strong>{_esc(until)}</strong>.")
+            + _p(f"Bold does not charge automatically. To keep Apex Pro, pay <strong>{regular}</strong> for "
+                 f"{settings.PRO_PERIOD_DAYS} more days; if you pay early, the days are added to the current period.")
+            + _button(f"Renew for {regular}", url)
+        )
+        text = f"Hi {name}, Apex Pro ends on {until}. Nothing is charged automatically: renew for {regular}.\n\n{url}"
+        return subject, _layout("en", f"Apex Pro ends on {until}.", "Renewal", "Your month ends soon.", body), text
+    subject = "Tu mes de Apex Pro termina pronto: renueva manualmente"
+    body = (
+        _p(f"Hola {_esc(name)}, tu acceso a Apex Pro termina el <strong>{_esc(until)}</strong>.")
+        + _p(f"Bold no cobra automáticamente. Para seguir con Apex Pro, paga <strong>{regular}</strong> por "
+             f"{settings.PRO_PERIOD_DAYS} días más; si pagas antes, los días se suman al periodo actual.")
+        + _button(f"Renovar por {regular}", url)
+    )
+    text = f"Hola {name}, Apex Pro termina el {until}. No se cobra automáticamente: renueva por {regular}.\n\n{url}"
+    return subject, _layout("es", f"Apex Pro termina el {until}.", "Renovación", "Tu mes termina pronto.", body), text
+
+
+def render_expired(name: str, lang: str = "es") -> Tuple[str, str, str]:
+    """El mes pagado terminó: la cuenta vuelve al plan gratis."""
+    url = _app_url("/?view=portal")
+    regular, _, _ = _prices()
+    if lang == "en":
+        subject = "Your Apex Pro month has ended"
+        body = (
+            _p(f"Hi {_esc(name)}, your Apex Pro month has ended and your account is back on the free plan "
+               "(2 hours per day, 24-hour storage).")
+            + _p(f"Reactivate Apex Pro whenever you want: <strong>{regular}</strong> for {settings.PRO_PERIOD_DAYS} days, no automatic charges.")
+            + _button(f"Reactivate for {regular}", url)
+        )
+        text = f"Hi {name}, your Apex Pro month has ended. Reactivate for {regular}.\n\n{url}"
+        return subject, _layout("en", "Your account is back on the free plan.", "Plan", "Your month has ended.", body), text
+    subject = "Tu mes de Apex Pro terminó"
+    body = (
+        _p(f"Hola {_esc(name)}, tu mes de Apex Pro terminó y tu cuenta volvió al plan gratis "
+           "(2 horas al día y almacenamiento de 24 horas).")
+        + _p(f"Reactiva Apex Pro cuando quieras: <strong>{regular}</strong> por {settings.PRO_PERIOD_DAYS} días, sin cobros automáticos.")
+        + _button(f"Reactivar por {regular}", url)
+    )
+    text = f"Hola {name}, tu mes de Apex Pro terminó. Reactívalo por {regular}.\n\n{url}"
+    return subject, _layout("es", "Tu cuenta volvió al plan gratis.", "Plan", "Tu mes terminó.", body), text
 
 
 def render_payment_confirmed(name: str, pro_until: Optional[str], amount_display: str, reference: str, lang: str = "es") -> Tuple[str, str, str]:
@@ -209,11 +341,19 @@ def render_payment_confirmed(name: str, pro_until: Optional[str], amount_display
     )
     if lang == "en":
         subject = "Payment received — Apex Pro is active"
-        body = _p(f"Thanks, {_esc(name)}. We received your Bold payment.") + table + _button("Open Apex Vox", url)
+        body = (
+            _p(f"Thanks, {_esc(name)}. We received your Bold payment.") + table
+            + _p("Nothing renews automatically: we will email you a few days before your month ends.")
+            + _button("Open Apex Vox", url)
+        )
         text = f"Thanks {name}. Payment {reference} received ({amount_display}). Apex Pro until {until}.\n\n{url}"
         return subject, _layout("en", f"Apex Pro until {until}.", "Receipt", "Payment received.", body), text
     subject = "Pago recibido — Apex Pro activo"
-    body = _p(f"Gracias, {_esc(name)}. Recibimos tu pago con Bold.") + table + _button("Abrir Apex Vox", url)
+    body = (
+        _p(f"Gracias, {_esc(name)}. Recibimos tu pago con Bold.") + table
+        + _p("Nada se renueva automáticamente: te escribiremos unos días antes de que termine tu mes.")
+        + _button("Abrir Apex Vox", url)
+    )
     text = f"Gracias {name}. Pago {reference} recibido ({amount_display}). Apex Pro hasta el {until}.\n\n{url}"
     return subject, _layout("es", f"Apex Pro activo hasta el {until}.", "Recibo", "Pago recibido.", body), text
 

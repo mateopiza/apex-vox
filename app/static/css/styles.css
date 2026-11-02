@@ -3311,3 +3311,45 @@ dialog.apex-dialog[open] {
     break-inside: avoid;
   }
 }
+
+/* Oferta de Apex Pro (precio + promoción de bienvenida) */
+.billing-offer {
+  margin: var(--space-2) 0;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--bdrs-control);
+  background: var(--bg-card);
+}
+.billing-offer-badge {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--brand);
+  color: #fff;
+  font-family: var(--font-label);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.billing-offer-price {
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.billing-offer-price s {
+  margin-left: 6px;
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+.billing-offer-price span {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+.billing-offer-note {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}

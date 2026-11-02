@@ -196,6 +196,12 @@ class Settings:
     LEGAL_ENTITY_NAME: str = field(
         default_factory=lambda: os.getenv("LEGAL_ENTITY_NAME", "IA Labs (ialabs.app)").strip()
     )
+    # Identificación del responsable (Decreto 1377 de 2013, art. 13): se muestran en la
+    # Política de Tratamiento de Datos cuando están definidos.
+    LEGAL_ENTITY_ID: str = field(default_factory=lambda: os.getenv("LEGAL_ENTITY_ID", "").strip())  # NIT o C.C.
+    LEGAL_ADDRESS: str = field(default_factory=lambda: os.getenv("LEGAL_ADDRESS", "").strip())
+    LEGAL_CITY: str = field(default_factory=lambda: os.getenv("LEGAL_CITY", "Colombia").strip())
+    LEGAL_PHONE: str = field(default_factory=lambda: os.getenv("LEGAL_PHONE", "").strip())
     CONTACT_EMAIL: str = field(
         default_factory=lambda: os.getenv("CONTACT_EMAIL", "hola@ialabs.app").strip()
     )
@@ -248,14 +254,26 @@ class Settings:
     FREE_RETENTION_HOURS: int = field(
         default_factory=lambda: int(os.getenv("FREE_RETENTION_HOURS", "24"))
     )
-    PRO_PRICE_COP: int = field(
-        default_factory=lambda: int(os.getenv("PRO_PRICE_COP", "30000"))
-    )
+    # Apex Pro: solo USD, pago manual (Bold no cobra suscripciones): cada pago activa
+    # PRO_PERIOD_DAYS días. Sin prueba gratis.
     PRO_PRICE_USD: float = field(
         default_factory=lambda: float(os.getenv("PRO_PRICE_USD", "10.0"))
     )
-    PRO_TRIAL_DAYS: int = field(
-        default_factory=lambda: int(os.getenv("PRO_TRIAL_DAYS", "3"))
+    # Promoción de bienvenida: % de descuento en el primer mes si se paga dentro de las
+    # primeras PROMO_WINDOW_HOURS horas desde que se creó la cuenta.
+    PROMO_DISCOUNT_PCT: int = field(
+        default_factory=lambda: int(os.getenv("PROMO_DISCOUNT_PCT", "20"))
+    )
+    PROMO_WINDOW_HOURS: int = field(
+        default_factory=lambda: int(os.getenv("PROMO_WINDOW_HOURS", "24"))
+    )
+    # Una sola promoción por red (IP) cada PROMO_IP_COOLDOWN_DAYS días (un trimestre).
+    PROMO_IP_COOLDOWN_DAYS: int = field(
+        default_factory=lambda: int(os.getenv("PROMO_IP_COOLDOWN_DAYS", "90"))
+    )
+    # Aviso por correo antes de que termine el mes pagado (renovación manual).
+    RENEWAL_REMINDER_DAYS: int = field(
+        default_factory=lambda: int(os.getenv("RENEWAL_REMINDER_DAYS", "3"))
     )
     BOLD_API_KEY: str = field(
         default_factory=lambda: os.getenv("BOLD_API_KEY", "").strip()
