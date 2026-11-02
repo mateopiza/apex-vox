@@ -62,7 +62,8 @@ Spanish (Español) / English
 | `storage` | permissions | Stores user preferences (server URL, last meeting type, recording mode and model). |
 | `tabs` | permissions | Finds and focuses the pinned recorder tab and reads the meeting tab URL to detect Google Meet, Zoom, Microsoft Teams or Webex. |
 | `tabCapture` | permissions | Captures the audio of the meeting tab (where the user clicked the extension icon) in Virtual mode so remote participants can be transcribed. No offscreen document is used: recording runs in the extension's own pinned tab. |
-| `http://localhost:8000/*`, `http://127.0.0.1:8000/*` | host_permissions | Uploads recorded 3-minute audio blocks to the user's Apex Vox transcription server and finalizes the session. |
+| `https://apex-vox.ialabs.app/*` | host_permissions | Uploads recorded 3-minute audio blocks to the Apex Vox cloud service and finalizes the session (default server). |
+| `http://localhost:8000/*`, `http://127.0.0.1:8000/*` | host_permissions | Optional self-hosted/local Apex Vox server, selectable under "Servidor". |
 
 ## Privacy & Data Use
 
@@ -109,11 +110,12 @@ soporte@apexvox.ai
 mailto:soporte@apexvox.ai
 
 **Homepage URL** [RECOMMENDED]
-http://localhost:8000
+https://apex-vox.ialabs.app
 
 ## Version History
 
 | Version | Date | Changes | Status |
 |---------|------|---------|--------|
+| 3.1.0 | 2026-11-02 | Connects to the cloud service (https://apex-vox.ialabs.app) by default; live sound waves and no-sound warning ("MUDO" badge). | Draft |
 | 3.0.0 | 2026-11-02 | Simplified: recording moves to a pinned extension tab (no side panel/offscreen/content scripts); four fields (meeting type, title, recording type, model), REC + time badge, final results link. | Draft |
 | 2.0.0 | 2026-11-02 | Initial release of Apex Box MV3 extension with 3-minute zero-RAM block rotation (10h+ continuous recording), Presencial & Virtual meeting modes (Meet, Zoom, Teams, Webex), live timestamped notes, and Apex Summa integration. | Draft |

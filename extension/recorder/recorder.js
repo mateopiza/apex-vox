@@ -13,6 +13,7 @@
   const BLOCK_SEC = 180;
   const BITRATE = 48000;
   const MAX_RETRIES = 3;
+  const CLOUD_URL = "https://apex-vox.ialabs.app";
   const SOUND_RMS = 0.006; // ~ -44 dBFS: por encima se considera que hay sonido
   const SILENCE_WARN_SEC = 15; // aviso tras este silencio continuo
   const WAVE_POINTS = 160;
@@ -46,7 +47,7 @@
   };
 
   const st = {
-    serverUrl: "http://localhost:8000",
+    serverUrl: CLOUD_URL,
     source: null, // { id, url, title } pestaña de la reunión virtual
     recording: false,
     busy: false,
@@ -590,7 +591,7 @@
   });
 
   el.saveServer.addEventListener("click", async () => {
-    st.serverUrl = (el.serverUrl.value || "http://localhost:8000").trim().replace(/\/+$/, "");
+    st.serverUrl = (el.serverUrl.value || CLOUD_URL).trim().replace(/\/+$/, "");
     el.serverUrl.value = st.serverUrl;
     await chrome.storage.local.set({ serverUrl: st.serverUrl });
     showStatus(`Servidor: ${st.serverUrl}`);

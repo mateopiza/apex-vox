@@ -9,6 +9,16 @@
 "use strict";
 
 const RECORDER_PATH = "recorder/recorder.html";
+const CLOUD_URL = "https://apex-vox.ialabs.app";
+
+// Al instalar/actualizar: usar la versión en la nube. Si había guardado un servidor
+// local (versiones anteriores), se migra a la nube; se puede volver a cambiar en "Servidor".
+chrome.runtime.onInstalled.addListener(async () => {
+  const { serverUrl } = await chrome.storage.local.get("serverUrl");
+  if (!serverUrl || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(serverUrl)) {
+    await chrome.storage.local.set({ serverUrl: CLOUD_URL });
+  }
+});
 
 async function findRecorderTab() {
   const url = chrome.runtime.getURL(RECORDER_PATH);
