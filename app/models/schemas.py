@@ -192,6 +192,24 @@ class SubscribeActionRequest(BaseModel):
     currency: str = "COP"
 
 
+class PasswordForgotRequest(BaseModel):
+    """Ask for a password-reset link."""
+    email: str
+    lang: str = "es"
+
+
+class PasswordResetRequest(BaseModel):
+    """Set a new password with the token from the reset e-mail."""
+    token: str
+    password: str
+
+
+class NewsletterSubscribeRequest(BaseModel):
+    """Newsletter sign-up (double opt-in)."""
+    email: str
+    lang: str = "es"
+
+
 class OAuthExchangeRequest(BaseModel):
     """One-time code returned to the browser after a Google / GitHub sign-in."""
     code: str
@@ -273,8 +291,8 @@ class TranscribeRequest(BaseModel):
     prompt_hint: Optional[str] = None
     api_key: Optional[str] = None  # Optional Groq API key override
     deepgram_api_key: Optional[str] = None  # Optional Deepgram API key override
-    user_id: Optional[str] = None
-    plan_override: Optional[str] = None  # Optional 'free' | 'trial' | 'pro' for playground testing
+    user_id: Optional[str] = None  # set by the server from the session token
+    guest_key: Optional[str] = None  # set by the server for visitors without an account
 
 
 class TranscribeResponse(BaseModel):
@@ -310,6 +328,7 @@ class VoiceProfile(BaseModel):
     pitch_hz: float = 0.0
     embedding: List[float] = Field(default_factory=list)
     created_at: str = ""
+    owner_id: Optional[str] = None  # account that enrolled this voice
 
 
 # -----------------------------------------------------------------------------

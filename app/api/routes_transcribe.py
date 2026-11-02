@@ -12,10 +12,10 @@ import logging
 import threading
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, Response
 
-from app.api.deps import is_paid, optional_user
+from app.api.deps import is_paid, optional_user, require_admin, require_user, requester_key
 from app.config import resolve_engine_code, settings
 from app.models.schemas import (
     ApexSummaReport,
@@ -39,6 +39,7 @@ from app.services.apex_summa import (
     generate_meeting_minutes,
 )
 from app.services.job_manager import job_manager
+from app.services.supabase_service import supabase_service
 from app.services.usage_reporter import (
     compute_usage_report,
     format_report_message,
@@ -52,6 +53,7 @@ router = APIRouter(prefix="/api", tags=["Transcription, Diarization & Voice Prof
 @router.post("/transcribe", response_model=TranscribeResponse)
 async def start_transcription_job(
     payload: TranscribeRequest,
+    request: Request,
     sync: bool = Query(default=False, description="Run synchronously before returning (non-production only)"),
     user: Optional[Dict[str, Any]] = Depends(optional_user),
 ) -> TranscribeResponse:
@@ -60,36 +62,35 @@ async def start_transcription_job(
     speaker diarization (Mc-Ayrton, Mc-Lewis, Mc-Norris, Mc-Piastri), Mega S4 storage,
     and Apex Summa AI intelligence job.
     """
-    # Identity and plan come from the session token, never from the request body.
-    if settings.REQUIRE_LOGIN_TO_TRANSCRIBE and not user:
-        raise HTTPException(
-            status_code=401,
-            detail="Crea tu cuenta gratis (2 horas al día) para transcribir / Sign up free to transcribe.",
-        )
-    payload.user_id = user["user_id"] if user else "guest_default"
-    if not settings.ALLOW_PLAN_SIMULATOR:
-        payload.plan_override = None
+    # Identity, plan and API keys come from the server, never from the request body.
+    owner = requester_key(request, user)
+    payload.user_id = user["user_id"] if user else None
+    payload.guest_key = None if user else owner
+    payload.api_key = None
+    payload.deepgram_api_key = None
     if settings.is_production:
         sync = False
 
+    if not job_manager.session_owned_by(payload.session_id, owner):
+        raise HTTPException(status_code=404, detail=f"Sesión '{payload.session_id}' no encontrada.")
+
     raw_engine = (payload.diarization_engine or settings.DEFAULT_DIARIZATION_ENGINE or "Mc-Lewis").strip()
     engine = resolve_engine_code(raw_engine)
-    effective_groq = (payload.api_key or settings.GROQ_API_KEY or "").strip()
-    effective_dg = (payload.deepgram_api_key or settings.DEEPGRAM_API_KEY or "").strip()
+    if not (settings.GROQ_API_KEY or "").strip() and not (engine == "deepgram" and settings.DEEPGRAM_API_KEY):
+        raise HTTPException(status_code=503, detail="El servicio de transcripción no está disponible en este momento.")
 
-    if engine == "deepgram" and not effective_dg and not effective_groq:
-        raise HTTPException(
-            status_code=400,
-            detail="Clave API no configurada. Agréguela en .env o en la interfaz web.",
-        )
-    if engine != "deepgram" and not effective_groq:
-        raise HTTPException(
-            status_code=400,
-            detail=(
-                "GROQ_API_KEY no configurada. Agréguela en el archivo .env "
-                "o ingrésela en el campo 'Groq API Key' de la interfaz."
-            ),
-        )
+    if not user:
+        tracks = job_manager.get_session_files(payload.session_id)
+        too_long = [t.filename for t in tracks if t.duration_sec > settings.GUEST_MAX_AUDIO_SECONDS]
+        if too_long:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Sin cuenta cada audio puede durar hasta {settings.GUEST_MAX_AUDIO_MINUTES:.0f} minutos.",
+            )
+        try:
+            supabase_service.consume_guest_audios(owner, len(tracks))
+        except PermissionError as exc:
+            raise HTTPException(status_code=403, detail=str(exc)) from exc
 
     try:
         job_status = job_manager.create_job(payload)
@@ -187,9 +188,11 @@ async def stream_merged_job_audio(job_id: str) -> FileResponse:
 # -----------------------------------------------------------------------------
 
 @router.get("/voice-profiles", response_model=List[VoiceProfile])
-async def get_enrolled_voice_profiles() -> List[VoiceProfile]:
-    """List all enrolled speaker voice profiles."""
-    return list_voice_profiles()
+async def get_enrolled_voice_profiles(
+    user: Optional[Dict[str, Any]] = Depends(optional_user),
+) -> List[VoiceProfile]:
+    """Voice profiles enrolled by the signed-in account (empty for visitors)."""
+    return list_voice_profiles(user["user_id"]) if user else []
 
 
 @router.post("/voice-profiles", response_model=VoiceProfile)
@@ -197,6 +200,7 @@ async def create_voice_profile(
     name: str = Form(..., description="Speaker name, e.g. 'Carlos' or 'Dra. Gómez'"),
     role: Optional[str] = Form(default="", description="Optional role description"),
     file: UploadFile = File(..., description="Short audio sample (5-30s) of this speaker's voice"),
+    user: Dict[str, Any] = Depends(require_user),
 ) -> VoiceProfile:
     """Enroll a speaker's acoustic voiceprint from a sample audio file."""
     content = await file.read()
@@ -206,6 +210,7 @@ async def create_voice_profile(
             audio_bytes=content,
             filename=file.filename or "sample.mp3",
             role=role or "",
+            owner_id=user["user_id"],
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -215,16 +220,19 @@ async def create_voice_profile(
 
 
 @router.delete("/voice-profiles/{profile_id}", response_model=List[VoiceProfile])
-async def remove_voice_profile(profile_id: str) -> List[VoiceProfile]:
-    """Delete an enrolled voice profile."""
-    return delete_voice_profile(profile_id)
+async def remove_voice_profile(
+    profile_id: str,
+    user: Dict[str, Any] = Depends(require_user),
+) -> List[VoiceProfile]:
+    """Delete one of the account's voice profiles."""
+    return delete_voice_profile(profile_id, user["user_id"])
 
 
 # -----------------------------------------------------------------------------
 # Daily Usage, Cost, Revenue & Bot Notification Endpoints
 # -----------------------------------------------------------------------------
 
-@router.get("/metrics/daily")
+@router.get("/metrics/daily", dependencies=[Depends(require_admin)], include_in_schema=False)
 async def get_daily_usage_metrics(
     date: Optional[str] = Query(default=None, description="Target date YYYY-MM-DD (defaults to today)"),
 ) -> dict:
@@ -236,7 +244,7 @@ async def get_daily_usage_metrics(
     }
 
 
-@router.post("/metrics/send-report")
+@router.post("/metrics/send-report", dependencies=[Depends(require_admin)], include_in_schema=False)
 async def trigger_daily_bot_report(
     date: Optional[str] = Query(default=None, description="Target date YYYY-MM-DD (defaults to today)"),
     telegram_bot_token: Optional[str] = Query(default=None),
@@ -259,6 +267,11 @@ async def trigger_daily_bot_report(
 
 def _require_summa_access(result, user: Optional[Dict[str, Any]]) -> None:
     """Minutes and calendar export are Apex Pro features."""
+    if result.plan == "guest":
+        raise HTTPException(
+            status_code=402,
+            detail="Crea tu cuenta para usar Apex Summa / Create an account to use Apex Summa.",
+        )
     if result.plan == "free" and not is_paid(user):
         raise HTTPException(
             status_code=402,
@@ -286,6 +299,8 @@ async def get_job_apex_summa_report(
     if not result:
         raise HTTPException(status_code=404, detail=f"Resultado '{job_id}' no encontrado.")
 
+    if result.plan == "guest":
+        raise HTTPException(status_code=402, detail="Crea tu cuenta para usar Apex Summa / Create an account to use Apex Summa.")
     is_locked = result.plan == "free" and not is_paid(user)
     report = generate_apex_summa_report(
         result=result,

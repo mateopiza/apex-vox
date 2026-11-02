@@ -30,7 +30,7 @@
     user: JSON.parse(localStorage.getItem("apex_vox_user") || "null"),
     token: localStorage.getItem("apex_vox_token") || null,
     plan: "free",
-    config: { oauth_providers: [], plan_simulator: false, require_login: true, trial_days: 3, pro_period_days: 30 },
+    config: { oauth_providers: [], trial_days: 3, pro_period_days: 30, guest_max_audios: 3, guest_max_minutes: 30, guest_audios_remaining: 3, newsletter_enabled: true },
     sessionId: null,
     files: [],
     voiceProfiles: [],
@@ -54,7 +54,7 @@
       nav_landing: "Inicio & Planes",
       nav_playground: "Playground (Apex Vox)",
       nav_box: "Apex Box (10h+ & Extensión)",
-      nav_portal: "Portal de Usuario",
+      nav_portal: "Mi cuenta",
       btn_register_login: "Registrarse / Entrar",
       hero_badge: "POTENCIADO POR GROQ · ALMACENAMIENTO MEGA S4 · SUPABASE CLOUD",
       hero_title: "Apex Vox: Transcripción Inteligente, Separación de Voces y Analítica Ejecutiva",
@@ -102,10 +102,10 @@
       plan_pro_f4: "<strong>Resumen IA Apex Summa completo:</strong> Quién habló más, De qué se habló, Objetivos, Llamados de atención, Calendario de tareas y Gráficas",
       plan_pro_f5: "<strong>Generador de Actas Corporativas:</strong> Actas de Consejo, Junta Directiva, Comité y Asamblea",
       plan_pro_cta: "Empezar prueba gratis de 3 días",
-      portal_profile_title: "Perfil de Usuario y Cuota Diaria",
+      portal_profile_title: "Mi cuenta",
       lbl_name: "Nombre:",
       lbl_email: "Correo:",
-      lbl_storage_retention: "Retención de Almacenamiento (Mega S4):",
+      lbl_storage_retention: "Retención de tus archivos:",
       portal_quota_label: "Consumo de Audio Hoy (1 o varios audios):",
       portal_quota_hint: "Tienes 2 horas gratis cada día. Tus archivos en el plan gratuito se almacenan por 24 horas en Mega S4.",
       portal_billing_title: "Apex Pro — Pagos con Bold",
@@ -114,7 +114,7 @@
       lbl_billing_mode: "Modalidad",
       btn_start_trial_bold: "Iniciar prueba gratis de 3 días",
       btn_generate_bold_link: "Pagar 30 días con Bold",
-      portal_cloud_history_title: "Almacenamiento MEGA S4 & Historial en Supabase Cloud",
+      portal_cloud_history_title: "Historial de transcripciones",
       btn_refresh: "Actualizar",
       kpi_retention_policy: "Política de Retención",
       kpi_stored_jobs: "Transcripciones Guardadas",
@@ -170,6 +170,32 @@
       lbl_password: "Contraseña",
       btn_create_free_account: "Crear Cuenta (2h Gratis / Día)",
       btn_login_existing: "Entrar",
+      plan_pro_f6: "<strong>Bot de Telegram:</strong> envía notas de voz y recibe la transcripción en tu chat (1 por suscripción)",
+      kpi_plan: "Plan",
+      kpi_networks: "Redes este mes",
+      tg_title: "Bot de Telegram",
+      tg_badge: "Apex Pro",
+      tg_desc: "Envía notas de voz o audios a nuestro bot y recibe la transcripción en Telegram. Un chat por suscripción; la vinculación usa un código de un solo uso.",
+      tg_link: "Generar código de vinculación",
+      tg_unlink: "Desvincular chat",
+      sec_title: "Seguridad y privacidad",
+      sec_desc: "Tu cuenta puede usarse desde un máximo de 3 redes distintas por mes. Puedes eliminar tu cuenta y todos sus datos cuando quieras.",
+      sec_policy: "Política de seguridad",
+      sec_privacy: "Privacidad",
+      sec_delete: "Eliminar mi cuenta",
+      guest_cta: "Crea tu cuenta gratis: 2 horas al día, historial y Apex Summa",
+      vp_guest: "Inicia sesión para registrar perfiles de voz privados.",
+      guest_result_cta: "Este resultado no se guarda y desaparece en 60 minutos. Crea tu cuenta para conservar tu historial y obtener el análisis de Apex Summa.",
+      footer_privacy: "Privacidad",
+      footer_terms: "Términos",
+      footer_security: "Seguridad",
+      news_label: "Boletín de Apex Vox: lanzamientos y guías, sin spam.",
+      news_btn: "Suscribirme",
+      btn_send_reset: "Enviar enlace",
+      btn_back: "Volver",
+      btn_save_password: "Guardar nueva contraseña",
+      forgot_link: "¿Olvidaste tu contraseña?",
+      auth_legal: "Al continuar aceptas los <a href=\"/legal/terminos\" target=\"_blank\">Términos</a> y la <a href=\"/legal/privacidad\" target=\"_blank\">Política de privacidad</a>.",
       lbl_billing_mode_value: "Pago único · 30 días por pago",
       oauth_google: "Continuar con Google",
       oauth_github: "Continuar con GitHub",
@@ -192,7 +218,7 @@
       nav_landing: "Home & Plans",
       nav_playground: "Playground (Apex Vox)",
       nav_box: "Apex Box (10h+ & Extension)",
-      nav_portal: "User Portal",
+      nav_portal: "My account",
       btn_register_login: "Sign Up / Log In",
       hero_badge: "POWERED BY GROQ · MEGA S4 OBJECT STORAGE · SUPABASE CLOUD",
       hero_title: "Apex Vox: Intelligent Transcription, Speaker Separation & Executive Analytics",
@@ -240,10 +266,10 @@
       plan_pro_f4: "<strong>Full Apex Summa AI Report:</strong> Who spoke most, Topics, Objectives, Callouts, Calendar Tasks & Charts",
       plan_pro_f5: "<strong>Corporate Minutes Generator:</strong> Board of Directors, Committee & Assembly Minutes",
       plan_pro_cta: "Start the 3-day free trial",
-      portal_profile_title: "User Profile & Daily Quota",
+      portal_profile_title: "My account",
       lbl_name: "Name:",
       lbl_email: "Email:",
-      lbl_storage_retention: "Storage Retention (Mega S4):",
+      lbl_storage_retention: "File retention:",
       portal_quota_label: "Audio Usage Today (1 or multiple audios):",
       portal_quota_hint: "You get 2 free hours every day. Free tier files are retained for 24 hours in Mega S4.",
       portal_billing_title: "Apex Pro — Payments with Bold",
@@ -252,7 +278,7 @@
       lbl_billing_mode: "Billing",
       btn_start_trial_bold: "Start 3-day free trial",
       btn_generate_bold_link: "Pay 30 days with Bold",
-      portal_cloud_history_title: "MEGA S4 Storage & Supabase Cloud History",
+      portal_cloud_history_title: "Transcription history",
       btn_refresh: "Refresh",
       kpi_retention_policy: "Retention Policy",
       kpi_stored_jobs: "Saved Transcriptions",
@@ -308,6 +334,32 @@
       lbl_password: "Password",
       btn_create_free_account: "Create Account (2h Free / Day)",
       btn_login_existing: "Log In",
+      plan_pro_f6: "<strong>Telegram bot:</strong> send voice notes and get the transcript in your chat (1 per subscription)",
+      kpi_plan: "Plan",
+      kpi_networks: "Networks this month",
+      tg_title: "Telegram bot",
+      tg_badge: "Apex Pro",
+      tg_desc: "Send voice notes or audio to our bot and get the transcript in Telegram. One chat per subscription, linked with a one-time code.",
+      tg_link: "Generate link code",
+      tg_unlink: "Unlink chat",
+      sec_title: "Security and privacy",
+      sec_desc: "Your account can be used from up to 3 different networks per month. You can delete your account and all its data at any time.",
+      sec_policy: "Security policy",
+      sec_privacy: "Privacy",
+      sec_delete: "Delete my account",
+      guest_cta: "Create your free account: 2 hours a day, history and Apex Summa",
+      vp_guest: "Sign in to enrol private voice profiles.",
+      guest_result_cta: "This result is not saved and disappears in 60 minutes. Create an account to keep your history and get the Apex Summa analysis.",
+      footer_privacy: "Privacy",
+      footer_terms: "Terms",
+      footer_security: "Security",
+      news_label: "Apex Vox newsletter: launches and guides, no spam.",
+      news_btn: "Subscribe",
+      btn_send_reset: "Send link",
+      btn_back: "Back",
+      btn_save_password: "Save new password",
+      forgot_link: "Forgot your password?",
+      auth_legal: "By continuing you accept the <a href=\"/legal/terminos?lang=en\" target=\"_blank\">Terms</a> and the <a href=\"/legal/privacidad?lang=en\" target=\"_blank\">Privacy policy</a>.",
       lbl_billing_mode_value: "One-off payment · 30 days each",
       oauth_google: "Continue with Google",
       oauth_github: "Continue with GitHub",
@@ -366,9 +418,6 @@
   const modelSelect = document.getElementById("model-select");
   const speakersSelect = document.getElementById("speakers-select");
   const languageSelect = document.getElementById("language-select");
-  const playgroundPlanSelect = document.getElementById("playground-plan-select");
-  const apiKeyInput = document.getElementById("api-key-input");
-  const deepgramKeyInput = document.getElementById("deepgram-key-input");
   const promptHintInput = document.getElementById("prompt-hint-input");
   const transcribeBtn = document.getElementById("transcribe-btn");
 
@@ -468,8 +517,9 @@
       engineSelect.value = val;
     }
 
-    updateHeaderPlanPill();
-    if (state.currentResult) {
+    if (typeof refreshAuthUi === "function" && openAuthBtn) refreshAuthUi();
+    else updateHeaderPlanPill();
+    if (state.currentResult && state.currentResult.plan !== "guest") {
       renderApexSumma(state.currentResult);
     }
   }
@@ -507,7 +557,9 @@
   function updateHeaderPlanPill() {
     if (!planPillText) return;
     const isEn = state.lang === "en";
-    if (state.plan === "pro" || state.plan === "trial") {
+    if (!state.user) {
+      planPillText.textContent = isEn ? "Guest · no account" : "Sin cuenta";
+    } else if (state.plan === "pro" || state.plan === "trial") {
       planPillText.textContent = isEn
         ? "Apex Pro (Unlimited)"
         : "Apex Pro (Ilimitado)";
@@ -515,9 +567,6 @@
       planPillText.textContent = isEn
         ? "Free Plan (2h/day · 24h)"
         : "Plan Gratis (2h/día · 24h)";
-    }
-    if (playgroundPlanSelect && playgroundPlanSelect.value !== state.plan) {
-      playgroundPlanSelect.value = state.plan === "free" ? "free" : "pro";
     }
   }
 
@@ -582,10 +631,35 @@
 
   function refreshAuthUi() {
     if (openAuthBtn) {
-      openAuthBtn.textContent = state.user && state.user.full_name
-        ? state.user.full_name
-        : t("Registrarse / Entrar", "Sign Up / Log In");
+      const initialsEl = document.getElementById("user-initials");
+      const name = state.user ? (state.user.full_name || state.user.email || "") : "";
+      const initials = name.split(/[\s@.]+/).filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join("");
+      openAuthBtn.classList.toggle("signed-in", Boolean(state.user));
+      if (initialsEl) {
+        initialsEl.textContent = initials;
+        initialsEl.classList.toggle("hidden", !state.user);
+      }
+      const label = state.user ? t(`Mi cuenta (${name})`, `My account (${name})`) : t("Entrar o crear cuenta", "Sign in or create account");
+      openAuthBtn.setAttribute("aria-label", label);
+      openAuthBtn.title = label;
     }
+    const guestNotice = document.getElementById("guest-notice");
+    if (guestNotice) {
+      guestNotice.classList.toggle("hidden", Boolean(state.user));
+      const p = guestNotice.querySelector("p");
+      const c = state.config;
+      if (p && !state.user) {
+        p.innerHTML = t(
+          `Sin cuenta: hasta <strong>${c.guest_max_audios} audios al día</strong> de máximo <strong>${c.guest_max_minutes} minutos</strong>, con cualquier motor. No guardamos ni analizamos nada.${c.guest_audios_remaining !== null && c.guest_audios_remaining !== undefined ? ` Te quedan <strong>${c.guest_audios_remaining}</strong> hoy.` : ""}`,
+          `Without an account: up to <strong>${c.guest_max_audios} audios a day</strong>, <strong>${c.guest_max_minutes} minutes</strong> each, any engine. Nothing is saved or analysed.${c.guest_audios_remaining !== null && c.guest_audios_remaining !== undefined ? ` <strong>${c.guest_audios_remaining}</strong> left today.` : ""}`
+        );
+      }
+    }
+    document.querySelectorAll(".vp-guest").forEach((el) => el.classList.toggle("hidden", Boolean(state.user)));
+    ["vp-name-input", "vp-file-input", "enroll-vp-btn"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.disabled = !state.user;
+    });
     const logoutBtn = document.getElementById("portal-logout-btn");
     if (logoutBtn) logoutBtn.classList.toggle("hidden", !state.user);
     updateHeaderPlanPill();
@@ -630,9 +704,7 @@
     } catch (err) {
       /* keep defaults */
     }
-    const simulatorGroup = playgroundPlanSelect ? playgroundPlanSelect.closest(".form-group") : null;
-    if (simulatorGroup) simulatorGroup.classList.toggle("hidden", !state.config.plan_simulator);
-    if (!state.config.plan_simulator && playgroundPlanSelect) playgroundPlanSelect.value = state.plan === "free" ? "free" : "pro";
+    refreshAuthUi();
     const oauthBox = document.getElementById("oauth-options");
     let shown = 0;
     document.querySelectorAll("[data-oauth-provider]").forEach((el) => {
@@ -648,7 +720,9 @@
     const authCode = params.get("auth_code");
     const authError = params.get("auth_error");
     const billing = params.get("billing");
-    if (authCode || authError || billing) {
+    const newsletter = params.get("newsletter");
+    const resetToken = params.get("reset_token");
+    if (authCode || authError || billing || newsletter || resetToken) {
       window.history.replaceState({}, document.title, window.location.pathname);
     }
     if (authCode) {
@@ -667,6 +741,20 @@
       }
     } else if (authError) {
       showAlert(t("No se pudo iniciar sesión con el proveedor. Intenta de nuevo.", "Could not sign in with that provider. Please try again."));
+    }
+    if (newsletter) {
+      const msgs = {
+        confirmed: [t("¡Listo! Ya estás suscrito al boletín de Apex Vox.", "Done! You're subscribed to the Apex Vox newsletter."), "success"],
+        unsubscribed: [t("Te diste de baja del boletín.", "You've unsubscribed from the newsletter."), "success"],
+        invalid: [t("El enlace del boletín no es válido o expiró.", "The newsletter link is invalid or expired."), "error"],
+      };
+      const m = msgs[newsletter];
+      if (m) showAlert(m[0], m[1]);
+    }
+    if (resetToken && authDialog) {
+      state.resetToken = resetToken;
+      setAuthMode("reset");
+      authDialog.showModal();
     }
     if (billing === "return" && state.token) {
       switchView("portal");
@@ -868,6 +956,166 @@
     }
   }
 
+  async function loadAccountExtras() {
+    if (!state.token) return;
+    try {
+      const sec = await authFetch("/api/auth/security");
+      if (sec.ok) {
+        const data = await sec.json();
+        const el = document.getElementById("portal-kpi-networks");
+        if (el) el.textContent = `${data.used} / ${data.limit}`;
+      }
+    } catch (err) { /* ignore */ }
+    const planEl = document.getElementById("portal-kpi-plan");
+    if (planEl && state.user && state.user.quota) planEl.textContent = state.user.quota.plan_display_name || state.plan;
+    await loadTelegramStatus();
+  }
+
+  async function loadTelegramStatus() {
+    const statusEl = document.getElementById("tg-status");
+    const linkBtn = document.getElementById("tg-link-btn");
+    const unlinkBtn = document.getElementById("tg-unlink-btn");
+    if (!statusEl || !state.token) return;
+    try {
+      const res = await authFetch("/api/telegram/link");
+      if (!res.ok) return;
+      const st = await res.json();
+      if (!st.configured) {
+        statusEl.textContent = t("El bot de Telegram estará disponible pronto.", "The Telegram bot is coming soon.");
+      } else if (st.linked) {
+        statusEl.textContent = t(`Vinculado a @${st.telegram_username || "tu chat"}. Envíale audios al bot.`, `Linked to @${st.telegram_username || "your chat"}. Send audio to the bot.`);
+      } else if (!st.eligible) {
+        statusEl.textContent = t("Disponible con Apex Pro (prueba gratis o pago).", "Available with Apex Pro (free trial or paid).");
+      } else {
+        statusEl.textContent = t("Sin vincular.", "Not linked.");
+      }
+      if (linkBtn) linkBtn.classList.toggle("hidden", !st.configured || st.linked);
+      if (unlinkBtn) unlinkBtn.classList.toggle("hidden", !st.linked);
+    } catch (err) { /* ignore */ }
+  }
+
+  async function createTelegramCode() {
+    const box = document.getElementById("tg-code-box");
+    try {
+      const res = await authFetch("/api/telegram/link-code", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Error");
+      if (box) {
+        box.classList.remove("hidden");
+        const link = data.deep_link
+          ? `<a class="text-link-strong" href="${escapeHtml(data.deep_link)}" target="_blank" rel="noopener noreferrer">${t("Abrir el bot en Telegram", "Open the bot in Telegram")}</a>`
+          : "";
+        box.innerHTML = `
+          <div><strong>${t("Código", "Code")}</strong> <code>${escapeHtml(data.code)}</code></div>
+          <div>${t(`Envía <code>/start ${escapeHtml(data.code)}</code> al bot. Vence en ${data.expires_in_minutes} minutos.`, `Send <code>/start ${escapeHtml(data.code)}</code> to the bot. Expires in ${data.expires_in_minutes} minutes.`)}</div>
+          <div class="bold-checkout-link">${link}</div>`;
+      }
+    } catch (err) {
+      showAlert(err.message);
+    }
+  }
+
+  async function unlinkTelegram() {
+    await authFetch("/api/telegram/link", { method: "DELETE" });
+    const box = document.getElementById("tg-code-box");
+    if (box) box.classList.add("hidden");
+    loadTelegramStatus();
+  }
+
+  async function deleteAccount() {
+    const ok = window.confirm(t(
+      "¿Eliminar tu cuenta y todos sus datos (historial, perfiles de voz, vinculación de Telegram)? Esta acción no se puede deshacer.",
+      "Delete your account and all its data (history, voice profiles, Telegram link)? This cannot be undone."
+    ));
+    if (!ok) return;
+    const res = await authFetch("/api/auth/account", { method: "DELETE" });
+    if (res.ok) {
+      clearSession();
+      switchView("landing");
+      showAlert(t("Tu cuenta y sus datos fueron eliminados.", "Your account and its data were deleted."), "success");
+    } else {
+      const data = await res.json().catch(() => ({}));
+      showAlert(data.detail || "Error");
+    }
+  }
+
+  // --- password recovery ---------------------------------------------------------
+  function setAuthMode(mode) {
+    const show = (id, on) => { const el = document.getElementById(id); if (el) el.classList.toggle("hidden", !on); };
+    show("auth-name-group", mode === "register");
+    show("auth-email-group", mode !== "reset");
+    show("auth-password-group", mode !== "forgot");
+    show("auth-main-actions", mode === "register");
+    show("auth-forgot-actions", mode === "forgot");
+    show("auth-reset-actions", mode === "reset");
+    show("forgot-password-btn", mode === "register");
+    show("oauth-options", mode === "register" && (state.config.oauth_providers || []).length > 0);
+    const title = document.getElementById("auth-dialog-title");
+    if (title) {
+      title.textContent = mode === "forgot"
+        ? t("Recupera tu contraseña", "Recover your password")
+        : mode === "reset"
+          ? t("Elige una nueva contraseña", "Choose a new password")
+          : (I18N[state.lang] || I18N.es).auth_modal_title;
+    }
+    state.authMode = mode;
+  }
+
+  async function submitForgotPassword() {
+    const email = document.getElementById("auth-email-input").value.trim();
+    const fb = document.getElementById("auth-feedback-box");
+    await fetch("/api/auth/password/forgot", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, lang: state.lang }),
+    }).catch(() => null);
+    if (fb) {
+      fb.textContent = t("Si el correo tiene una cuenta, te enviamos un enlace para restablecer la contraseña.", "If that email has an account, we sent a reset link.");
+      fb.className = "alert-box alert-success";
+    }
+  }
+
+  async function submitResetPassword() {
+    const password = document.getElementById("auth-password-input").value;
+    const fb = document.getElementById("auth-feedback-box");
+    try {
+      const res = await fetch("/api/auth/password/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: state.resetToken || "", password }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Error");
+      storeSession(data);
+      state.resetToken = null;
+      if (authDialog) authDialog.close();
+      setAuthMode("register");
+      showAlert(t("Contraseña actualizada. Cerramos tus otras sesiones.", "Password updated. Your other sessions were signed out."), "success");
+    } catch (err) {
+      if (fb) { fb.textContent = err.message; fb.className = "alert-box alert-error"; }
+    }
+  }
+
+  // --- newsletter -------------------------------------------------------------------
+  async function submitNewsletter(e) {
+    e.preventDefault();
+    const input = document.getElementById("newsletter-email");
+    const fb = document.getElementById("newsletter-feedback");
+    try {
+      const res = await fetch("/api/newsletter/subscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: input.value.trim(), lang: state.lang }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Error");
+      if (fb) fb.textContent = t("Revisa tu correo y confirma la suscripción.", "Check your inbox to confirm your subscription.");
+      input.value = "";
+    } catch (err) {
+      if (fb) fb.textContent = err.message;
+    }
+  }
+
   async function loadUserPortalSummary() {
     try {
       const res = await authFetch("/api/portal/summary");
@@ -880,6 +1128,7 @@
       const retEl = document.getElementById("portal-retention-label");
       const qNumbers = document.getElementById("portal-quota-numbers");
       const qBar = document.getElementById("portal-quota-bar");
+      loadAccountExtras();
       const kpiRet = document.getElementById("portal-kpi-retention");
       const kpiCount = document.getElementById("portal-kpi-jobs-count");
       const histList = document.getElementById("portal-history-list");
@@ -962,7 +1211,12 @@
 
   async function loadVoiceProfiles() {
     try {
-      const res = await fetch("/api/voice-profiles");
+      if (!state.token) {
+        state.voiceProfiles = [];
+        renderVoiceProfiles();
+        return;
+      }
+      const res = await authFetch("/api/voice-profiles");
       if (res.ok) {
         state.voiceProfiles = await res.json();
         renderVoiceProfiles();
@@ -993,7 +1247,7 @@
         </div>
       `;
       li.querySelector(".delete-vp-btn").addEventListener("click", async () => {
-        const res = await fetch(`/api/voice-profiles/${prof.profile_id}`, {
+        const res = await authFetch(`/api/voice-profiles/${prof.profile_id}`, {
           method: "DELETE",
         });
         if (res.ok) {
@@ -1020,7 +1274,7 @@
     formData.append("file", file);
 
     try {
-      const res = await fetch("/api/voice-profiles", {
+      const res = await authFetch("/api/voice-profiles", {
         method: "POST",
         body: formData,
       });
@@ -1321,12 +1575,6 @@
 
     const spkVal = speakersSelect.value;
     const numSpeakers = spkVal === "auto" ? null : parseInt(spkVal, 10);
-    if (state.config.require_login && !requireSession(t(
-      "Crea tu cuenta gratis: 2 horas de transcripción al día.",
-      "Create your free account: 2 hours of transcription per day."
-    ))) return;
-    const activePlan = state.config.plan_simulator && playgroundPlanSelect ? playgroundPlanSelect.value : state.plan;
-    if (state.config.plan_simulator) state.plan = activePlan;
     updateHeaderPlanPill();
 
     const payload = {
@@ -1337,9 +1585,6 @@
       language: languageSelect.value === "auto" ? null : languageSelect.value,
       num_speakers: numSpeakers,
       prompt_hint: promptHintInput.value.trim() || null,
-      api_key: apiKeyInput.value.trim() || null,
-      deepgram_api_key: deepgramKeyInput ? deepgramKeyInput.value.trim() || null : null,
-      plan_override: state.config.plan_simulator ? activePlan : null,
     };
 
     try {
@@ -1450,8 +1695,15 @@
     }
     if (kpiFiles) {
       kpiFiles.textContent =
-        result.plan === "free" ? "Mega S4 (24h)" : "Mega S4 (Ilimitado)";
+        result.plan === "guest"
+          ? t("No se guarda", "Not saved")
+          : result.plan === "free" ? t("24 horas", "24 hours") : t("Ilimitado", "Unlimited");
     }
+    const isGuestResult = result.plan === "guest";
+    const summaBox = document.getElementById("apex-summa-container");
+    const guestCta = document.getElementById("guest-result-cta");
+    if (summaBox) summaBox.classList.toggle("hidden", isGuestResult);
+    if (guestCta) guestCta.classList.toggle("hidden", !isGuestResult);
 
     mergedAudioPlayer.src = `/api/jobs/${result.job_id}/audio`;
 
@@ -1463,7 +1715,7 @@
     document.getElementById("export-csv").href = `/api/jobs/${jid}/export/csv`;
     document.getElementById("export-md").href = `/api/jobs/${jid}/export/md`;
 
-    renderApexSumma(result);
+    if (!isGuestResult) renderApexSumma(result);
     renderSpeakerTabs(result);
     renderSegmentsList(result);
   }
@@ -1938,6 +2190,20 @@
     });
   }
 
+  const on = (id, evt, fn) => { const el = document.getElementById(id); if (el) el.addEventListener(evt, fn); };
+  on("tg-link-btn", "click", createTelegramCode);
+  on("tg-unlink-btn", "click", unlinkTelegram);
+  on("delete-account-btn", "click", deleteAccount);
+  on("forgot-password-btn", "click", () => setAuthMode("forgot"));
+  on("back-to-login-btn", "click", () => setAuthMode("register"));
+  on("submit-forgot-btn", "click", submitForgotPassword);
+  on("submit-reset-btn", "click", submitResetPassword);
+  on("newsletter-form", "submit", submitNewsletter);
+  const openSignup = () => { setAuthMode("register"); if (authDialog && !authDialog.open) authDialog.showModal(); };
+  on("guest-signup-btn", "click", openSignup);
+  on("guest-result-signup-btn", "click", openSignup);
+  if (authDialog) authDialog.addEventListener("close", () => { if (state.authMode !== "reset") setAuthMode("register"); });
+
   const portalLogoutBtn = document.getElementById("portal-logout-btn");
   if (portalLogoutBtn) {
     portalLogoutBtn.addEventListener("click", async () => {
@@ -2035,17 +2301,6 @@
   const printMinutesBtn = document.getElementById("print-minutes-btn");
   if (printMinutesBtn) printMinutesBtn.addEventListener("click", printMinutesDocument);
 
-  if (playgroundPlanSelect) {
-    playgroundPlanSelect.addEventListener("change", () => {
-      state.plan = playgroundPlanSelect.value;
-      updateHeaderPlanPill();
-      if (state.currentResult && state.currentResult.summa_report) {
-        state.currentResult.plan = state.plan;
-        state.currentResult.summa_report.is_locked = state.plan === "free";
-        renderApexSumma(state.currentResult);
-      }
-    });
-  }
 
   dropzone.addEventListener("click", () => fileInput.click());
   dropzone.addEventListener("keydown", (e) => {

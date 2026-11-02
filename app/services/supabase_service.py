@@ -24,10 +24,12 @@ import hashlib
 import hmac
 import json
 import logging
+import os
+import re
 import secrets
 import threading
 import uuid
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import httpx
 
@@ -236,7 +238,6 @@ class SupabaseCloudService:
                 "id": user_id,
                 "email": clean_email,
                 "full_name": user_record["full_name"],
-                "password_hash": user_record["password_hash"],
                 "plan": "free",
                 "preferred_language": user_record["preferred_language"],
                 "created_at": now_iso,
@@ -409,6 +410,11 @@ class SupabaseCloudService:
             )
         return self._profile_response(user["user_id"], token)
 
+    def email_registered(self, email: str) -> bool:
+        clean = (email or "").strip().lower()
+        with self._lock:
+            return any(u.get("email", "").lower() == clean for u in self._load_db()["users"].values())
+
     def create_handoff_code(self, access_token: str, ttl_seconds: int = 120) -> str:
         """One-time code that lets the browser pick up a session after an OAuth redirect."""
         code = secrets.token_urlsafe(24)
@@ -528,7 +534,6 @@ class SupabaseCloudService:
         user_id: Optional[str],
         duration_seconds: float,
         audios_count: int = 1,
-        plan_override: Optional[str] = None,
     ) -> QuotaUsageResponse:
         """
         Verify if user has enough daily quota for the requested audio duration
@@ -545,12 +550,10 @@ class SupabaseCloudService:
                     "email": f"{uid}@apexvox.local",
                     "full_name": "Usuario Apex Vox",
                     "password_hash": "",
-                    "plan": plan_override or "free",
+                    "plan": "free",
                     "preferred_language": "es",
                     "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
                 }
-            if plan_override in ("free", "trial", "pro"):
-                db["users"][uid]["plan"] = plan_override
 
             user = db["users"][uid]
             self._refresh_plan_expiry(user)
@@ -635,6 +638,7 @@ class SupabaseCloudService:
         reference: str,
         currency: str = "COP",
         source: str = "bold",
+        on_activated: Optional[Callable[[Dict[str, Any], Dict[str, Any]], None]] = None,
     ) -> UserProfileResponse:
         """
         Grant PRO_PERIOD_DAYS of Apex Pro for an approved payment. Idempotent per
@@ -686,7 +690,243 @@ class SupabaseCloudService:
                 "created_at": now.isoformat(),
             }
             self._save_db(db)
+            snapshot_user, snapshot_payment = dict(user), dict(payment)
+        if on_activated:
+            try:
+                on_activated(snapshot_user, snapshot_payment)
+            except Exception as exc:  # notifications must never undo a payment
+                logger.warning("Payment activation hook failed: %s", exc)
         return self._profile_response(user_id)
+
+    # -------------------------------------------------------------------------
+    # Secrets & one-time tokens
+    # -------------------------------------------------------------------------
+
+    def _app_secret(self) -> bytes:
+        """Server secret for HMACs; persisted on the data volume when not set via env."""
+        env_secret = os.getenv("APP_SECRET_KEY", "").strip()
+        if env_secret:
+            return env_secret.encode("utf-8")
+        path = settings.OUTPUT_DIR / ".app_secret"
+        with self._lock:
+            if not path.exists():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(secrets.token_hex(32), encoding="utf-8")
+                try:
+                    path.chmod(0o600)
+                except OSError:
+                    pass
+            return path.read_text(encoding="utf-8").strip().encode("utf-8")
+
+    def _digest(self, value: str) -> str:
+        return hmac.new(self._app_secret(), value.encode("utf-8"), hashlib.sha256).hexdigest()
+
+    # -------------------------------------------------------------------------
+    # Account sharing guard: at most MAX_IPS_PER_MONTH networks per account
+    # -------------------------------------------------------------------------
+
+    def register_account_ip(self, user_id: str, client_ip: str) -> bool:
+        """
+        Record the (hashed) network an account is used from this month.
+        Returns False when it would be a new network beyond the monthly limit.
+        """
+        if not user_id or not client_ip:
+            return True
+        month = _now().strftime("%Y-%m")
+        ip_hash = self._digest(f"ip:{client_ip}")[:20]
+        with self._lock:
+            db = self._load_db()
+            user = db["users"].get(user_id)
+            if not user:
+                return True
+            months = user.setdefault("ip_months", {})
+            for key in [k for k in months if k != month]:
+                months.pop(key, None)
+            seen = months.setdefault(month, [])
+            if ip_hash in seen:
+                return True
+            if len(seen) >= settings.MAX_IPS_PER_MONTH:
+                return False
+            seen.append(ip_hash)
+            self._save_db(db)
+            return True
+
+    def account_ip_usage(self, user_id: str) -> Dict[str, int]:
+        month = _now().strftime("%Y-%m")
+        with self._lock:
+            user = self._load_db()["users"].get(user_id) or {}
+            used = len((user.get("ip_months") or {}).get(month, []))
+        return {"used": used, "limit": settings.MAX_IPS_PER_MONTH}
+
+    # -------------------------------------------------------------------------
+    # Guests (no account): a few ephemeral transcriptions per day, per IP
+    # -------------------------------------------------------------------------
+
+    def guest_key(self, client_ip: str) -> str:
+        """Pseudonymous id for a visitor; the IP itself is never stored."""
+        return "guest_" + self._digest(f"guest:{client_ip or 'unknown'}")[:24]
+
+    def guest_audios_used_today(self, guest_key: str) -> int:
+        with self._lock:
+            db = self._load_db()
+            return int(db.setdefault("guest_usage", {}).get(f"{guest_key}:{_today_str()}", 0))
+
+    def guest_audios_remaining(self, guest_key: str) -> int:
+        return max(0, settings.GUEST_MAX_AUDIOS_PER_DAY - self.guest_audios_used_today(guest_key))
+
+    def consume_guest_audios(self, guest_key: str, count: int) -> int:
+        """Reserve `count` audios of today's guest allowance. Raises PermissionError when exceeded."""
+        with self._lock:
+            db = self._load_db()
+            usage = db.setdefault("guest_usage", {})
+            today = _today_str()
+            # Keep only today's counters.
+            for key in [k for k in usage if not k.endswith(today)]:
+                usage.pop(key, None)
+            used = int(usage.get(f"{guest_key}:{today}", 0))
+            if used + count > settings.GUEST_MAX_AUDIOS_PER_DAY:
+                raise PermissionError(
+                    f"Sin cuenta puedes transcribir hasta {settings.GUEST_MAX_AUDIOS_PER_DAY} audios al día. "
+                    f"Crea tu cuenta gratis para tener 2 horas diarias, historial y Apex Summa. / "
+                    f"Without an account you can transcribe up to {settings.GUEST_MAX_AUDIOS_PER_DAY} audios per day."
+                )
+            usage[f"{guest_key}:{today}"] = used + count
+            self._save_db(db)
+            return settings.GUEST_MAX_AUDIOS_PER_DAY - used - count
+
+    # -------------------------------------------------------------------------
+    # Password reset
+    # -------------------------------------------------------------------------
+
+    def create_password_reset(self, email: str, ttl_minutes: int = 60) -> Optional[Tuple[str, Dict[str, Any]]]:
+        """Returns (token, user) for a known e-mail, or None (callers must not reveal which)."""
+        clean = (email or "").strip().lower()
+        with self._lock:
+            db = self._load_db()
+            user = next((u for u in db["users"].values() if u.get("email", "").lower() == clean), None)
+            if not user:
+                return None
+            token = secrets.token_urlsafe(32)
+            resets = db.setdefault("password_resets", {})
+            now = _now()
+            for key in [k for k, v in resets.items() if (_parse_iso(v.get("expires_at")) or now) <= now]:
+                resets.pop(key, None)
+            resets[self._digest(f"reset:{token}")] = {
+                "user_id": user["user_id"],
+                "expires_at": (now + dt.timedelta(minutes=ttl_minutes)).isoformat(),
+            }
+            self._save_db(db)
+            return token, dict(user)
+
+    def reset_password(self, token: str, new_password: str) -> UserProfileResponse:
+        if len(new_password or "") < MIN_PASSWORD_LENGTH:
+            raise ValueError(
+                f"La contraseña debe tener al menos {MIN_PASSWORD_LENGTH} caracteres / "
+                f"Password must be at least {MIN_PASSWORD_LENGTH} characters."
+            )
+        with self._lock:
+            db = self._load_db()
+            entry = db.setdefault("password_resets", {}).pop(self._digest(f"reset:{token or ''}"), None)
+            expires = _parse_iso(entry.get("expires_at")) if entry else None
+            if not entry or not expires or _now() >= expires:
+                self._save_db(db)
+                raise PermissionError("El enlace para restablecer la contraseña expiró o ya fue usado.")
+            user = db["users"].get(entry["user_id"])
+            if not user:
+                raise PermissionError("Cuenta no encontrada.")
+            user["password_hash"] = _hash_password(new_password)
+            # Sign out every existing session.
+            db["tokens"] = {
+                t: v for t, v in db["tokens"].items()
+                if (v if isinstance(v, str) else v.get("user_id")) != user["user_id"]
+            }
+            token_new = self._issue_token(db, user["user_id"])
+            self._save_db(db)
+        return self._profile_response(user["user_id"], token_new)
+
+    # -------------------------------------------------------------------------
+    # Newsletter (double opt-in)
+    # -------------------------------------------------------------------------
+
+    def newsletter_request(self, email: str, lang: str = "es") -> Optional[str]:
+        """Store a pending subscription and return the confirmation token (None if already confirmed)."""
+        clean = (email or "").strip().lower()
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", clean) or len(clean) > 254:
+            raise ValueError("Correo electrónico inválido / Invalid email address.")
+        with self._lock:
+            db = self._load_db()
+            news = db.setdefault("newsletter", {})
+            entry = news.get(clean)
+            if entry and entry.get("status") == "confirmed":
+                return None
+            token = secrets.token_urlsafe(24)
+            news[clean] = {
+                "status": "pending",
+                "lang": lang if lang in ("es", "en") else "es",
+                "token": self._digest(f"news:{token}"),
+                "requested_at": _now().isoformat(),
+            }
+            self._save_db(db)
+            return token
+
+    def newsletter_confirm(self, token: str) -> Optional[Dict[str, Any]]:
+        digest = self._digest(f"news:{token or ''}")
+        with self._lock:
+            db = self._load_db()
+            for email, entry in db.setdefault("newsletter", {}).items():
+                if entry.get("token") == digest and entry.get("status") == "pending":
+                    requested = _parse_iso(entry.get("requested_at"))
+                    if requested and _now() - requested > dt.timedelta(days=7):
+                        return None
+                    entry.update(status="confirmed", token=None, confirmed_at=_now().isoformat())
+                    self._save_db(db)
+                    return {"email": email, "lang": entry.get("lang", "es")}
+        return None
+
+    def newsletter_unsubscribe_token(self, email: str) -> str:
+        return self._digest(f"unsub:{email.strip().lower()}")[:32]
+
+    def newsletter_unsubscribe(self, email: str, token: str) -> bool:
+        clean = (email or "").strip().lower()
+        if not hmac.compare_digest(self.newsletter_unsubscribe_token(clean), token or ""):
+            return False
+        with self._lock:
+            db = self._load_db()
+            entry = db.setdefault("newsletter", {}).setdefault(clean, {})
+            entry.update(status="unsubscribed", unsubscribed_at=_now().isoformat())
+            self._save_db(db)
+        return True
+
+    def delete_account(self, user_id: str) -> Dict[str, Any]:
+        """Right to erasure: remove the account, its sessions, history, payments link and voice profiles."""
+        with self._lock:
+            db = self._load_db()
+            user = db["users"].pop(user_id, None)
+            if not user:
+                raise LookupError("Cuenta no encontrada.")
+            db["tokens"] = {
+                t: v for t, v in db["tokens"].items()
+                if (v if isinstance(v, str) else v.get("user_id")) != user_id
+            }
+            removed_jobs = [jid for jid, rec in db.get("transcriptions", {}).items() if rec.get("user_id") == user_id]
+            for jid in removed_jobs:
+                db["transcriptions"].pop(jid, None)
+            for key in [k for k in db.get("daily_usage", {}) if k.startswith(f"{user_id}:")]:
+                db["daily_usage"].pop(key, None)
+            for ref, pay in db.get("payments", {}).items():
+                if pay.get("user_id") == user_id:
+                    pay["user_id"] = "deleted"  # keep accounting record without personal link
+            self._save_db(db)
+        for jid in removed_jobs:
+            for suffix in ("_result.json", "_merged.mp3"):
+                (settings.OUTPUT_DIR / f"{jid}{suffix}").unlink(missing_ok=True)
+        try:
+            from app.services.acoustic_diarizer import _load_all_profiles, save_voice_profiles
+
+            save_voice_profiles([p for p in _load_all_profiles() if p.owner_id != user_id])
+        except Exception as exc:
+            logger.warning("Voice profile cleanup failed: %s", exc)
+        return {"email": user.get("email", ""), "jobs_deleted": len(removed_jobs)}
 
     def save_transcription_record(self, record: Dict[str, Any]) -> None:
         """Persist transcription metadata and Mega S4 keys in Supabase Cloud & local DB."""
