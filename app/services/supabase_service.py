@@ -346,6 +346,18 @@ class SupabaseCloudService:
             quota=quota,
         )
 
+    def set_preferred_language(self, user_id: str, lang: str) -> UserProfileResponse:
+        if lang not in ("es", "en"):
+            raise ValueError("Idioma no soportado.")
+        with self._lock:
+            db = self._load_db()
+            user = db["users"].get(user_id)
+            if not user:
+                raise LookupError("Cuenta no encontrada.")
+            user["preferred_language"] = lang
+            self._save_db(db)
+        return self.get_profile(user_id)
+
     def get_profile(self, user_id: str) -> UserProfileResponse:
         return self._profile_response(user_id)
 

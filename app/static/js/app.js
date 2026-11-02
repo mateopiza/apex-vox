@@ -25,7 +25,7 @@
   }
 
   const state = {
-    lang: localStorage.getItem("apex_vox_lang") || detectInitialLanguage(),
+    lang: localStorage.getItem("apex_vox_lang_choice") || detectInitialLanguage(),
     activeView: "playground",
     user: JSON.parse(localStorage.getItem("apex_vox_user") || "null"),
     token: localStorage.getItem("apex_vox_token") || null,
@@ -106,6 +106,7 @@
       lbl_name: "Nombre:",
       lbl_email: "Correo:",
       lbl_storage_retention: "Retención de tus archivos:",
+      lbl_language: "Idioma:",
       portal_quota_label: "Consumo de Audio Hoy (1 o varios audios):",
       portal_quota_hint: "Tienes 2 horas gratis cada día. En el plan gratuito lo almacenamos por 24 horas: descárgalo si lo necesitas.",
       portal_billing_title: "Apex Pro — Pagos con Bold",
@@ -269,6 +270,7 @@
       lbl_name: "Name:",
       lbl_email: "Email:",
       lbl_storage_retention: "File retention:",
+      lbl_language: "Language:",
       portal_quota_label: "Audio Usage Today (1 or multiple audios):",
       portal_quota_hint: "You get 2 free hours every day. On the free plan we store it for 24 hours: download it if you need it.",
       portal_billing_title: "Apex Pro — Payments with Bold",
@@ -477,7 +479,8 @@
   function applyLanguage(lang) {
     const clean = lang === "en" ? "en" : "es";
     state.lang = clean;
-    localStorage.setItem("apex_vox_lang", clean);
+    const langSelect = document.getElementById("profile-lang-select");
+    if (langSelect) langSelect.value = clean;
     document.documentElement.lang = clean;
 
     if (langEsBtn && langEnBtn) {
@@ -615,6 +618,11 @@
     state.plan = (profile.quota && profile.quota.plan) || profile.plan || "free";
     localStorage.setItem("apex_vox_user", JSON.stringify(Object.assign({}, profile, { access_token: "" })));
     if (state.token) localStorage.setItem("apex_vox_token", state.token);
+    // Con sesión iniciada, manda el idioma guardado en la cuenta
+    if (profile.preferred_language === "es" || profile.preferred_language === "en") {
+      localStorage.setItem("apex_vox_lang_choice", profile.preferred_language);
+      if (profile.preferred_language !== state.lang) applyLanguage(profile.preferred_language);
+    }
     refreshAuthUi();
     const oauthNext = sessionStorage.getItem("apex_oauth_next");
     if (state.token && oauthNext && oauthNext.startsWith("/oauth/authorize?")) {
@@ -2285,8 +2293,25 @@
   const footerYear = document.getElementById("footer-year");
   if (footerYear) footerYear.textContent = String(new Date().getFullYear());
 
-  if (langEsBtn) langEsBtn.addEventListener("click", () => applyLanguage("es"));
-  if (langEnBtn) langEnBtn.addEventListener("click", () => applyLanguage("en"));
+  // El idioma se elige solo en "Mi cuenta"; por defecto sale del dispositivo y del país.
+  localStorage.removeItem("apex_vox_lang");
+  const profileLangSelect = document.getElementById("profile-lang-select");
+  if (profileLangSelect) {
+    profileLangSelect.addEventListener("change", async () => {
+      const lang = profileLangSelect.value === "en" ? "en" : "es";
+      localStorage.setItem("apex_vox_lang_choice", lang);
+      applyLanguage(lang);
+      if (state.token) {
+        try {
+          await authFetch("/api/auth/me/language", {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ preferred_language: lang }),
+          });
+        } catch (_) { /* se mantiene la elección local */ }
+      }
+    });
+  }
 
   if (openAuthBtn && authDialog) {
     openAuthBtn.addEventListener("click", () => {

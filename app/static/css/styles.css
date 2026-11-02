@@ -3381,3 +3381,6 @@ dialog.apex-dialog[open] {
 .mcp-url-row { display: flex; gap: 8px; }
 .mcp-url-row input { flex: 1; font-family: var(--font-mono); font-size: 13px; }
 .mcp-steps { margin: 6px 0 0; padding-left: 18px; font-size: 13px; color: var(--text-secondary); display: grid; gap: 4px; }
+
+.profile-lang-row { display: flex; align-items: center; gap: 10px; }
+.form-control--inline { width: auto; min-width: 140px; padding-top: 6px; padding-bottom: 6px; }

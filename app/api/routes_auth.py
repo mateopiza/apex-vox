@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
@@ -90,6 +91,19 @@ async def login_user_endpoint(payload: UserLoginRequest, request: Request) -> Us
         supabase_service.revoke_token(profile.access_token)
         raise
     return profile
+
+
+class LanguagePreference(BaseModel):
+    preferred_language: str
+
+
+@router.patch("/auth/me/language", response_model=UserProfileResponse)
+async def update_language(payload: LanguagePreference, user: Dict[str, Any] = Depends(require_user)) -> UserProfileResponse:
+    """Idioma de la cuenta (web, correos y extensión)."""
+    try:
+        return supabase_service.set_preferred_language(user["user_id"], payload.preferred_language)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/auth/me", response_model=UserProfileResponse)

@@ -247,3 +247,21 @@ def test_client_ip_trusts_cf_connecting_ip_only_from_cloudflare() -> None:
     assert client_ip(req("172.70.1.10", "190.1.2.3")) == "190.1.2.3"  # llega desde Cloudflare
     assert client_ip(req("8.8.8.8", "190.1.2.3")) == "8.8.8.8"  # directo: no se confía en la cabecera
     assert client_ip(req("1.2.3.4, 172.70.1.10", "bogus")) == "172.70.1.10"
+
+
+
+def test_default_language_from_device_then_country_and_profile_choice() -> None:
+    client = TestClient(app)
+    lang = lambda headers: client.get("/", headers=headers).text.split('data-default-lang="', 1)[1][:2]
+    assert lang({"accept-language": "en-US,en;q=0.9", "cf-ipcountry": "CO"}) == "en"  # manda el dispositivo
+    assert lang({"accept-language": "es-CO,es;q=0.9", "cf-ipcountry": "US"}) == "es"
+    assert lang({"accept-language": "pt-BR,pt;q=0.9", "cf-ipcountry": "MX"}) == "es"  # otro idioma: país
+    assert lang({"accept-language": "pt-BR,pt;q=0.9", "cf-ipcountry": "BR"}) == "en"
+    html = client.get("/").text
+    assert 'id="lang-es-btn"' not in html and 'id="profile-lang-select"' in html
+
+    profile = _register(client)
+    auth = {"Authorization": f"Bearer {profile['access_token']}"}
+    res = client.patch("/api/auth/me/language", json={"preferred_language": "en"}, headers=auth)
+    assert res.status_code == 200 and res.json()["preferred_language"] == "en"
+    assert client.patch("/api/auth/me/language", json={"preferred_language": "fr"}, headers=auth).status_code == 400

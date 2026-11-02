@@ -67,10 +67,6 @@
       </nav>
 
       <div class="status-pills">
-        <div class="lang-switch" role="group" aria-label="Selector de idioma">
-          <button type="button" class="lang-btn active" id="lang-es-btn" data-lang="es">ES</button>
-          <button type="button" class="lang-btn" id="lang-en-btn" data-lang="en">EN</button>
-        </div>
 
         <span class="status-pill" id="plan-status-pill" title="Plan activo y cuota diaria">
           <span class="status-dot" id="plan-dot"></span>
@@ -283,6 +279,13 @@
             <p><strong data-i18n="lbl_name">Nombre:</strong> <span id="portal-user-name">Usuario Invitado</span></p>
             <p><strong data-i18n="lbl_email">Correo:</strong> <span id="portal-user-email">invitado@apexvox.ai</span></p>
             <p><strong data-i18n="lbl_storage_retention">Retención de tus archivos:</strong> <span id="portal-retention-label">24 horas (Plan Gratis)</span></p>
+            <p class="profile-lang-row">
+              <label for="profile-lang-select"><strong data-i18n="lbl_language">Idioma:</strong></label>
+              <select id="profile-lang-select" class="form-control form-control--inline">
+                <option value="es">Español</option>
+                <option value="en">English</option>
+              </select>
+            </p>
           </div>
 
           <div class="quota-meter-box">

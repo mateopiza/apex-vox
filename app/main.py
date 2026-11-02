@@ -244,9 +244,27 @@ def _asset_version() -> str:
     return digest.hexdigest()[:12]
 
 
-def _preferred_language(accept_language: str) -> str:
-    """'es' when the visitor's browser prefers Spanish, otherwise 'en'."""
-    best_lang, best_q = "en", -1.0
+# Países donde el español es el idioma principal (código ISO de CF-IPCountry)
+_SPANISH_COUNTRIES = {
+    "ES", "MX", "CO", "AR", "PE", "VE", "CL", "EC", "GT", "CU", "BO", "DO", "HN",
+    "PY", "SV", "NI", "CR", "PA", "UY", "PR", "GQ",
+}
+
+
+def _default_language(accept_language: str, country: str = "") -> str:
+    """
+    Idioma inicial: el del dispositivo si es español o inglés; si el dispositivo usa otro
+    idioma (o no lo indica), el del país del visitante (cabecera CF-IPCountry de Cloudflare).
+    """
+    device = _preferred_language(accept_language, default="")
+    if device:
+        return device
+    return "es" if (country or "").strip().upper() in _SPANISH_COUNTRIES else "en"
+
+
+def _preferred_language(accept_language: str, default: str = "en") -> str:
+    """'es' o 'en' según la preferencia del navegador; `default` si no pide ninguno de los dos."""
+    best_lang, best_q = default, -1.0
     for part in accept_language.split(","):
         piece = part.strip()
         if not piece:
@@ -279,14 +297,14 @@ async def root(request: Request) -> Response:
     html = None if wants_json else _render_index()
 
     if html is not None:
-        lang = _preferred_language(request.headers.get("accept-language", ""))
+        lang = _default_language(request.headers.get("accept-language", ""), request.headers.get("cf-ipcountry", ""))
         html = html.replace('<html lang="es"', f'<html lang="{lang}" data-default-lang="{lang}"', 1)
         base = settings.PUBLIC_BASE_URL or str(request.base_url).rstrip("/")
         html = html.replace("{{BASE_URL}}", base).replace("{{OG_LANG}}", lang)
         return HTMLResponse(
             content=html,
             status_code=200,
-            headers={"Cache-Control": "no-cache", "Vary": "Accept-Language"},
+            headers={"Cache-Control": "no-cache", "Vary": "Accept-Language, CF-IPCountry"},
         )
 
     return JSONResponse(
@@ -308,7 +326,9 @@ async def legal_page(slug: str, request: Request, lang: str = "") -> HTMLRespons
 
     if slug not in PAGES:
         return HTMLResponse("Not Found", status_code=404)
-    chosen = lang if lang in ("es", "en") else _preferred_language(request.headers.get("accept-language", ""))
+    chosen = lang if lang in ("es", "en") else _default_language(
+        request.headers.get("accept-language", ""), request.headers.get("cf-ipcountry", "")
+    )
     return HTMLResponse(render_page(slug, chosen, _asset_version()), headers={"Cache-Control": "public, max-age=3600"})
 
 
