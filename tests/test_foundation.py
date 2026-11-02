@@ -113,7 +113,7 @@ def test_root_endpoint() -> None:
     client = TestClient(app)
     html_res = client.get("/")
     assert html_res.status_code == 200
-    assert "Audio Studio" in html_res.text
+    assert "<title>Apex Vox — " in html_res.text
 
     response = client.get("/?format=json")
     assert response.status_code == 200

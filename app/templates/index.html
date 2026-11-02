@@ -3,32 +3,36 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <title>Apex Vox — Audio Studio · Potenciado por Groq | Apex Summa &amp; Apex Box</title>
-  <meta name="description" content="Apex Vox: transcripción multi-audio, identificación de oradores y resúmenes ejecutivos con Apex Summa. Potenciado por Groq." />
+  <title>{{TITLE}}</title>
+  <meta name="description" content="{{DESCRIPTION}}" />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
   <meta name="theme-color" content="#f3f3ee" />
   <meta name="application-name" content="Apex Vox" />
   <meta name="color-scheme" content="light" />
-  <link rel="canonical" href="{{BASE_URL}}/" />
+  <link rel="canonical" href="{{BASE_URL}}/?lang={{OG_LANG}}" />
+  <link rel="alternate" hreflang="es" href="{{BASE_URL}}/?lang=es" />
+  <link rel="alternate" hreflang="en" href="{{BASE_URL}}/?lang=en" />
+  <link rel="alternate" hreflang="x-default" href="{{BASE_URL}}/" />
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="Apex Vox" />
-  <meta property="og:url" content="{{BASE_URL}}/" />
-  <meta property="og:title" content="Apex Vox — Cada audio, en orden. Cada voz, con nombre." />
-  <meta property="og:description" content="Transcripción multi-audio, identificación de hablantes y actas ejecutivas con Apex Summa. 2 horas gratis cada 24 horas." />
+  <meta property="og:url" content="{{BASE_URL}}/?lang={{OG_LANG}}" />
+  <meta property="og:title" content="{{TITLE}}" />
+  <meta property="og:description" content="{{DESCRIPTION}}" />
   <meta property="og:image" content="{{BASE_URL}}/static/og/og-{{OG_LANG}}.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="Apex Vox: cada audio, en orden; cada voz, con nombre; cada reunión, con acta." />
-  <meta property="og:locale" content="es_CO" />
-  <meta property="og:locale:alternate" content="en_US" />
+  <meta property="og:image:alt" content="{{OG_IMAGE_ALT}}" />
+  <meta property="og:locale" content="{{OG_LOCALE}}" />
+  <meta property="og:locale:alternate" content="{{OG_LOCALE_ALT}}" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:title" content="Apex Vox — Audio Studio" />
-  <meta name="twitter:description" content="Transcripción multi-audio, oradores identificados y actas con Apex Summa. Potenciado por Groq." />
+  <meta name="twitter:title" content="{{TITLE}}" />
+  <meta name="twitter:description" content="{{DESCRIPTION}}" />
   <meta name="twitter:image" content="{{BASE_URL}}/static/og/og-{{OG_LANG}}.png" />
+  <script type="application/ld+json">{{JSON_LD}}</script>
   <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
   <link rel="icon" href="/static/icons/favicon-32.png" type="image/png" sizes="32x32" />
   <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png" sizes="180x180" />
   <link rel="manifest" href="/manifest.webmanifest" />
-  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Apex Vox" />
   <meta name="mobile-web-app-capable" content="yes" />

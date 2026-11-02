@@ -433,6 +433,7 @@ def render_page(slug: str, lang: str, asset_version: str) -> str:
 
     lang = lang if lang in ("es", "en") else "es"
     title, sections = PAGES[slug][lang]
+    base = settings.PUBLIC_BASE_URL or "https://apex-vox.ialabs.app"
     ctx = _ctx()
     nav_labels = {
         "es": [("terminos", "Términos"), ("habeas-data", "Habeas Data"), ("privacidad", "Privacidad"), ("seguridad", "Seguridad")],
@@ -457,6 +458,11 @@ def render_page(slug: str, lang: str, asset_version: str) -> str:
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{_html.escape(title)} · Apex Vox</title>
+<meta name="description" content="{_html.escape(title)} — Apex Vox ({'transcripción y resumen de reuniones' if lang == 'es' else 'meeting transcription and summaries'}).">
+<meta name="robots" content="index, follow">
+<link rel="canonical" href="{base}/legal/{slug}?lang={lang}">
+<link rel="alternate" hreflang="es" href="{base}/legal/{slug}?lang=es">
+<link rel="alternate" hreflang="en" href="{base}/legal/{slug}?lang=en">
 <link rel="icon" href="/static/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&amp;family=Share+Tech+Mono&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
 <link rel="stylesheet" href="/static/css/tokens.css?v={asset_version}">

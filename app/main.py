@@ -282,6 +282,87 @@ def _preferred_language(accept_language: str, default: str = "en") -> str:
     return best_lang
 
 
+_SEO = {
+    "es": {
+        "title": "Apex Vox — Transcribe y resume tus reuniones con IA",
+        "description": "Transcribe audios y reuniones con oradores identificados, resúmenes, tareas y actas. "
+                       "Graba en Zoom, Meet o Teams y en persona. 2 horas gratis al día.",
+        "image_alt": "Apex Vox: cada audio, en orden; cada voz, con nombre; cada reunión, con acta.",
+        "locale": "es_CO", "locale_alt": "en_US",
+    },
+    "en": {
+        "title": "Apex Vox — Transcribe and summarize your meetings with AI",
+        "description": "Transcribe audio and meetings with identified speakers, summaries, tasks and minutes. "
+                       "Record Zoom, Meet, Teams and in-person meetings. 2 free hours a day.",
+        "image_alt": "Apex Vox: every audio in order, every voice with a name, every meeting with minutes.",
+        "locale": "en_US", "locale_alt": "es_CO",
+    },
+}
+
+
+def _fill_seo(html: str, lang: str, base: str) -> str:
+    """Título, descripción, Open Graph y JSON-LD según idioma (se escapan para HTML/JSON)."""
+    import html as _html
+    import json as _json
+
+    seo = _SEO.get(lang, _SEO["es"])
+    ld = {
+        "@context": "https://schema.org",
+        "@graph": [
+            {
+                "@type": "SoftwareApplication",
+                "name": "Apex Vox",
+                "url": f"{base}/",
+                "applicationCategory": "BusinessApplication",
+                "operatingSystem": "Web, Android, iOS, Chrome",
+                "inLanguage": ["es", "en"],
+                "description": seo["description"],
+                "image": f"{base}/static/og/og-{lang}.png",
+                "offers": [
+                    {"@type": "Offer", "name": "Free", "price": "0", "priceCurrency": "USD"},
+                    {"@type": "Offer", "name": "Apex Pro", "price": f"{settings.PRO_PRICE_USD:g}", "priceCurrency": "USD"},
+                ],
+            },
+            {
+                "@type": "Organization",
+                "name": settings.LEGAL_ENTITY_NAME,
+                "url": f"{base}/",
+                "logo": f"{base}/static/icons/icon-512.png",
+                "email": settings.CONTACT_EMAIL,
+            },
+            {"@type": "WebSite", "name": "Apex Vox", "url": f"{base}/", "inLanguage": lang},
+        ],
+    }
+    return (
+        html.replace("{{TITLE}}", _html.escape(seo["title"]))
+        .replace("{{DESCRIPTION}}", _html.escape(seo["description"]))
+        .replace("{{OG_IMAGE_ALT}}", _html.escape(seo["image_alt"]))
+        .replace("{{OG_LOCALE}}", seo["locale"])
+        .replace("{{OG_LOCALE_ALT}}", seo["locale_alt"])
+        .replace("{{JSON_LD}}", _json.dumps(ld, ensure_ascii=False).replace("</", "<\\/"))
+    )
+
+
+@app.get("/sitemap.xml", include_in_schema=False)
+async def sitemap(request: Request) -> Response:
+    """Páginas públicas con sus versiones por idioma."""
+    base = settings.PUBLIC_BASE_URL or str(request.base_url).rstrip("/")
+    pages = [("/", "1.0"), ("/legal/terminos", "0.3"), ("/legal/habeas-data", "0.3"),
+             ("/legal/privacidad", "0.3"), ("/legal/seguridad", "0.2")]
+    urls = []
+    for path, prio in pages:
+        sep = "&" if "?" in path else "?"
+        alts = "".join(
+            f'<xhtml:link rel="alternate" hreflang="{l}" href="{base}{path}{sep}lang={l}"/>' for l in ("es", "en")
+        )
+        for l in ("es", "en"):
+            urls.append(f"<url><loc>{base}{path}{sep}lang={l}</loc>{alts}<priority>{prio}</priority></url>")
+    xml = ('<?xml version="1.0" encoding="UTF-8"?>'
+           '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">'
+           + "".join(urls) + "</urlset>")
+    return Response(xml, media_type="application/xml", headers={"Cache-Control": "public, max-age=86400"})
+
+
 @app.api_route("/", methods=["GET", "HEAD"], tags=["UI & Root"], response_model=None)
 async def root(request: Request) -> Response:
     """
@@ -297,10 +378,13 @@ async def root(request: Request) -> Response:
     html = None if wants_json else _render_index()
 
     if html is not None:
-        lang = _default_language(request.headers.get("accept-language", ""), request.headers.get("cf-ipcountry", ""))
+        forced = request.query_params.get("lang")
+        lang = forced if forced in ("es", "en") else _default_language(
+            request.headers.get("accept-language", ""), request.headers.get("cf-ipcountry", "")
+        )
         html = html.replace('<html lang="es"', f'<html lang="{lang}" data-default-lang="{lang}"', 1)
         base = settings.PUBLIC_BASE_URL or str(request.base_url).rstrip("/")
-        html = html.replace("{{BASE_URL}}", base).replace("{{OG_LANG}}", lang)
+        html = _fill_seo(html, lang, base).replace("{{BASE_URL}}", base).replace("{{OG_LANG}}", lang)
         return HTMLResponse(
             content=html,
             status_code=200,
@@ -410,7 +494,10 @@ self.addEventListener('fetch', (event) => {
 async def robots() -> Response:
     """Allow the landing page, keep API and job artefacts out of indexes."""
     return Response(
-        content="User-agent: *\nAllow: /$\nDisallow: /api/\nDisallow: /oauth/\nDisallow: /mcp\n",
+        content=(
+            "User-agent: *\nAllow: /$\nAllow: /legal/\nDisallow: /api/\nDisallow: /oauth/\nDisallow: /mcp\n"
+            f"Sitemap: {settings.PUBLIC_BASE_URL or 'https://apex-vox.ialabs.app'}/sitemap.xml\n"
+        ),
         media_type="text/plain",
     )
 

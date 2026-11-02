@@ -25,7 +25,8 @@
   }
 
   const state = {
-    lang: localStorage.getItem("apex_vox_lang_choice") || detectInitialLanguage(),
+    lang: (["es", "en"].includes(new URLSearchParams(location.search).get("lang")) && new URLSearchParams(location.search).get("lang"))
+      || localStorage.getItem("apex_vox_lang_choice") || detectInitialLanguage(),
     activeView: "playground",
     user: JSON.parse(localStorage.getItem("apex_vox_user") || "null"),
     token: localStorage.getItem("apex_vox_token") || null,
