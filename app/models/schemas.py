@@ -153,7 +153,9 @@ class QuotaUsageResponse(BaseModel):
     summa_enabled: bool = False
     trial_active: bool = False
     trial_ends_at: Optional[str] = None
-    auto_billing_enabled: bool = False
+    auto_billing_enabled: bool = False  # Bold payment links are one-off; renewals are manual
+    pro_until: Optional[str] = None  # end of the paid Apex Pro period
+    trial_available: bool = False  # True while the one-time 3-day trial is unused
 
 
 class UserProfileResponse(BaseModel):
@@ -169,33 +171,30 @@ class UserProfileResponse(BaseModel):
 
 
 class BoldCheckoutRequest(BaseModel):
-    """Request to create a Bold API payment checkout session ($30,000 COP / $10 USD)."""
-    user_id: Optional[str] = None
+    """Create a Bold payment link for 30 days of Apex Pro ($30,000 COP / $10 USD)."""
     currency: str = "COP"  # COP (30000) or USD (10)
-    start_trial: bool = True  # 3-day free trial + automatic billing
-    redirect_url: Optional[str] = None
 
 
 class BoldCheckoutResponse(BaseModel):
-    """Bold API checkout parameters including SHA256 integrity signature."""
-    order_id: str
+    """Bold payment link created through the official Link de pagos API."""
+    order_id: str  # our reference, echoed back by Bold in the webhook
+    payment_link: str  # Bold link id (LNK_...)
+    checkout_url: str  # https://checkout.bold.co/... — redirect the payer here
     amount: int
     currency: str
     amount_display: str
-    trial_days: int = 3
-    auto_billing: bool = True
-    bold_api_key: str
-    integrity_signature: str
-    checkout_url: str
-    plan_summary: str
+    period_days: int = 30
+    plan_summary: str = ""
 
 
 class SubscribeActionRequest(BaseModel):
-    """Activate 3-day free trial or Pro subscription with automatic billing."""
-    user_id: Optional[str] = None
+    """Start the one-time 3-day Apex Pro trial (registered accounts only)."""
     currency: str = "COP"
-    payment_reference: Optional[str] = None
-    auto_billing: bool = True
+
+
+class OAuthExchangeRequest(BaseModel):
+    """One-time code returned to the browser after a Google / GitHub sign-in."""
+    code: str
 
 
 class WhisperSegment(BaseModel):

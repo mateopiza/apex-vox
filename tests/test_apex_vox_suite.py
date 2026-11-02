@@ -32,7 +32,6 @@ from starlette.testclient import TestClient
 
 from app.config import resolve_engine_code
 from app.main import app
-from app.services.bold_service import compute_bold_integrity_signature
 from app.services.storage_s4 import mega_s4_storage
 from tests.fixtures.audio_generator import create_synthetic_wav
 
@@ -116,70 +115,97 @@ def test_user_registration_2h_free_quota_and_24h_retention() -> None:
     assert "2 horas gratis al día" in str(exc_info.value)
 
 
-def test_bold_api_checkout_3day_trial_and_unlimited_pro_plan() -> None:
+def test_bold_api_checkout_3day_trial_and_unlimited_pro_plan(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     Verify:
-    - Bold API checkout generates $30.000 COP and $10 USD sessions with SHA-256 integrity signature,
-      3-day free trial, and automatic recurring billing.
-    - Subscribing or receiving a Bold webhook upgrades the user to unlimited quota and unlimited storage.
+    - Trial and checkout require a signed-in account (user ids are not credentials).
+    - The 3-day trial is unlimited and can only be used once per account.
+    - Bold checkout uses the official payment-link API ($30.000 COP / $10 USD).
+    - A signed SALE_APPROVED webhook grants a paid Apex Pro period, idempotently.
     """
+    import base64, hashlib, hmac, json as _json
+    from app.config import settings as _settings
+    from app.services import bold_service
+
     client = TestClient(app)
     unique_email = f"pro_{uuid.uuid4().hex[:8]}@apexvox.ai"
     reg = client.post(
         "/api/auth/register",
-        json={"email": unique_email, "password": "pass1234", "full_name": "Lewis Pro"},
+        json={"email": unique_email, "password": "pass12345", "full_name": "Lewis Pro"},
     ).json()
     uid = reg["user_id"]
+    auth = {"Authorization": f"Bearer {reg['access_token']}"}
 
-    # 1. Checkout in COP ($30.000 COP)
-    cop_res = client.post(
-        "/api/billing/checkout",
-        json={"user_id": uid, "currency": "COP", "start_trial": True},
-    )
-    assert cop_res.status_code == 200
+    # Anonymous or id-only requests are rejected
+    assert client.post("/api/billing/subscribe", json={"user_id": uid}).status_code == 401
+    assert client.post("/api/billing/checkout", json={"currency": "COP"},
+                       headers={"Authorization": uid}).status_code == 401
+
+    # 1. Checkout through Bold's payment-link API (HTTP layer mocked)
+    calls: list = []
+
+    def fake_bold(method: str, path: str, json_body=None):
+        calls.append((method, path, json_body))
+        return {"payload": {"payment_link": "LNK_TEST123", "url": "https://checkout.bold.co/LNK_TEST123"}, "errors": []}
+
+    monkeypatch.setattr(bold_service, "_bold_request", fake_bold)
+    cop_res = client.post("/api/billing/checkout", json={"currency": "COP"}, headers=auth)
+    assert cop_res.status_code == 200, cop_res.text
     cop_data = cop_res.json()
-    assert cop_data["amount"] == 30000
-    assert cop_data["currency"] == "COP"
-    assert cop_data["trial_days"] == 3
-    assert cop_data["auto_billing"] is True
-    expected_sig = compute_bold_integrity_signature(
-        cop_data["order_id"], 30000, "COP"
-    )
-    assert cop_data["integrity_signature"] == expected_sig
+    assert cop_data["amount"] == 30000 and cop_data["currency"] == "COP"
+    assert cop_data["checkout_url"] == "https://checkout.bold.co/LNK_TEST123"
+    method, path, body = calls[-1]
+    assert (method, path) == ("POST", "/online/link/v1")
+    assert body["amount_type"] == "CLOSE"
+    assert body["amount"]["total_amount"] == 30000
+    assert body["reference"] == cop_data["order_id"] and len(body["reference"]) <= 60
+    assert body["callback_url"].startswith("https://")
 
-    # 2. Checkout in USD ($10 USD)
-    usd_res = client.post(
-        "/api/billing/checkout",
-        json={"user_id": uid, "currency": "USD", "start_trial": True},
-    )
-    assert usd_res.status_code == 200
-    assert usd_res.json()["amount"] == 10
-    assert usd_res.json()["currency"] == "USD"
+    usd_res = client.post("/api/billing/checkout", json={"currency": "USD"}, headers=auth)
+    assert usd_res.json()["amount"] == 10 and usd_res.json()["currency"] == "USD"
 
-    # 3. Activate 3-day trial + auto-billing
-    sub_res = client.post(
-        "/api/billing/subscribe",
-        json={"user_id": uid, "currency": "COP", "auto_billing": True},
-    )
-    assert sub_res.status_code == 200
+    # 2. One-time 3-day trial
+    sub_res = client.post("/api/billing/subscribe", json={"currency": "COP"}, headers=auth)
+    assert sub_res.status_code == 200, sub_res.text
     sub_data = sub_res.json()
-    assert sub_data["plan"] in ("trial", "pro")
+    assert sub_data["plan"] == "trial"
     assert sub_data["quota"]["is_unlimited"] is True
     assert sub_data["quota"]["daily_limit_seconds"] is None
     assert sub_data["quota"]["retention_hours"] is None
-    assert sub_data["quota"]["auto_billing_enabled"] is True
+    assert sub_data["quota"]["trial_available"] is False
+    again = client.post("/api/billing/subscribe", json={"currency": "COP"}, headers=auth)
+    assert again.status_code == 409
 
-    # 4. Verify Bold Webhook processing
-    wh_res = client.post(
-        "/api/billing/bold/webhook",
-        json={
-            "type": "SALE_APPROVED",
-            "data": {"order_id": cop_data["order_id"], "user_id": uid, "currency": "COP"},
-        },
-    )
+    # 3. Bold webhook: unsigned rejected, signed one grants a paid period
+    payload = _json.dumps({
+        "type": "SALE_APPROVED",
+        "data": {"metadata": {"reference": cop_data["order_id"]}, "amount": {"currency": "COP", "total": 30000}},
+    }).encode()
+    unsigned = client.post("/api/billing/bold/webhook", content=payload,
+                           headers={"Content-Type": "application/json"})
+    assert unsigned.status_code == 401
+    original_secret = _settings.BOLD_WEBHOOK_SECRET
+    _settings.BOLD_WEBHOOK_SECRET = "test_webhook_secret"
+    try:
+        sig = hmac.new(b"test_webhook_secret", base64.b64encode(payload), hashlib.sha256).hexdigest()
+        wh_res = client.post("/api/billing/bold/webhook", content=payload,
+                             headers={"Content-Type": "application/json", "x-bold-signature": sig})
+        tampered = client.post("/api/billing/bold/webhook", content=payload.replace(b"30000", b"1"),
+                               headers={"Content-Type": "application/json", "x-bold-signature": sig})
+        assert tampered.status_code == 401
+        retry = client.post("/api/billing/bold/webhook", content=payload,
+                            headers={"Content-Type": "application/json", "x-bold-signature": sig})
+    finally:
+        _settings.BOLD_WEBHOOK_SECRET = original_secret
     assert wh_res.status_code == 200
     assert wh_res.json()["status"] == "processed"
-    assert wh_res.json()["upgraded_plan"] == "pro"
+    assert wh_res.json()["user_id"] == uid
+    # Webhook retries never stack extra days
+    assert retry.json()["pro_until"] == wh_res.json()["pro_until"]
+
+    me = client.get("/api/auth/me", headers=auth).json()
+    assert me["quota"]["pro_until"] == wh_res.json()["pro_until"]
+    assert me["quota"]["auto_billing_enabled"] is False
 
 
 def test_mega_s4_storage_signature_and_retention() -> None:

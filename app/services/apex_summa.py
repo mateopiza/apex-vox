@@ -528,6 +528,14 @@ def generate_apex_summa_report(
         for item in MINUTES_TEMPLATES_CATALOG
     ]
 
+    if is_locked:
+        # Free plan: keep the speaker teaser and charts, withhold the Pro analysis.
+        exec_summary = ""
+        topics = []
+        objectives = []
+        callouts = []
+        calendar_tasks = []
+
     return ApexSummaReport(
         job_id=result.job_id,
         generated_at=dt.datetime.now(dt.timezone.utc).isoformat(),
