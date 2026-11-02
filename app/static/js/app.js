@@ -50,29 +50,29 @@
     es: {
       brand_title: "Apex Vox",
       powered_by_groq: "Potenciado por Groq",
-      brand_subtitle: "Audio Studio · Transcripción Multi-Audio, Identificación de Oradores y Resumen IA Apex Summa",
-      nav_landing: "Inicio & Planes",
-      nav_playground: "Playground (Apex Vox)",
-      nav_box: "Apex Box (10h+ & Extensión)",
+      brand_subtitle: "Transcribe, identifica quién habla y resume tus reuniones",
+      nav_landing: "Inicio",
+      nav_playground: "Studio",
+      nav_box: "Grabar",
       nav_portal: "Mi cuenta",
       btn_register_login: "Registrarse / Entrar",
       hero_badge: "POTENCIADO POR GROQ · ALMACENADO EN APEX-VOX.IALABS.APP",
-      hero_title: "Apex Vox: Transcripción Inteligente, Separación de Voces y Analítica Ejecutiva",
+      hero_title: "Transcribe y resume tus reuniones",
       hero_desc: "Regístrate hoy y obtén <strong>2 horas gratis al día</strong> en 1 o varios audios con almacenamiento por 24 horas, o activa <strong>Apex Pro por USD 10 al mes</strong> (<strong>20% de descuento</strong> si pagas en tus primeras 24 horas): transcripciones y almacenamiento ilimitados y resúmenes ejecutivos con <strong>Apex Summa</strong>.",
-      hero_cta_playground: "Abrir Playground Ahora",
-      hero_cta_box: "Grabar Sin Límite (Apex Box 10h+)",
-      hero_cta_register: "Regístrate: 2 Horas Gratis / Día",
+      hero_cta_playground: "Abrir Studio",
+      hero_cta_box: "Grabar una reunión",
+      hero_cta_register: "Crear cuenta gratis",
       hero_cta_trial: "Activar Apex Pro",
-      suite_heading: "Ecosistema del Producto Apex",
+      suite_heading: "Lo que hace Apex Vox",
       suite_vox_status: "Producto Listo",
       suite_vox_part: "Transcripción (el núcleo)",
-      suite_vox_desc: "Subida multi-audio en orden, corte inteligente, reconocimiento de voz con los motores Mc-Ayrton, Mc-Lewis, Mc-Norris y Mc-Piastri (Potenciado por Groq) y perfiles acústicos.",
+      suite_vox_desc: "Sube uno o varios audios en orden y obtén la transcripción con quién dijo qué.",
       suite_summa_status: "Activo en Plan Pro",
       suite_summa_part: "Notas y resúmenes",
       suite_summa_desc: "Al terminar la transcripción identifica: 1. Quién habló más, 2. De qué se habló, 3. Objetivos, 4. Llamados de atención, 5. Próximas tareas en calendario, 6. Gráficas y 7. Creación de Actas (Consejo, Comité, Asamblea).",
-      suite_box_status: "Activo · Extensión & App Móvil",
-      suite_box_part: "Grabador ilimitado en bloques (Presencial, Zoom/Meet/Teams & App Celular)",
-      suite_box_desc: "Grabación continua de 10+ horas en bloques óptimos de 3 min (~1.03 MB) sin saturar la RAM, modo Reunión Presencial y Reunión Virtual (Zoom, Meet, Teams), notas en vivo y extensión Chrome MV3.",
+      suite_box_status: "Web, extensión y celular",
+      suite_box_part: "Grabar reuniones",
+      suite_box_desc: "Graba reuniones presenciales o virtuales (Zoom, Meet, Teams) en bloques de 3 minutos, con notas en vivo.",
       tbl_col_part: "Parte del Producto",
       tbl_col_name: "Nombre",
       tbl_col_state: "Estado",
@@ -90,9 +90,9 @@
       plan_free_period: "/ siempre",
       plan_free_f1: "<strong>2 horas gratis al día</strong> en 1 o varios audios al día",
       plan_free_f2: "<strong>Almacenado por 24 horas</strong>: descárgalo si lo necesitas",
-      plan_free_f3: "Acceso a motores <strong>Mc-Ayrton, Mc-Lewis, Mc-Norris y Mc-Piastri</strong> (Potenciado por Groq)",
+      plan_free_f3: "Modelos <strong>Mc-Ayrton, Mc-Lewis, Mc-Norris y Mc-Piastri</strong>",
       plan_free_f4: "Exportación TXT, SRT, VTT, JSON, CSV y Markdown",
-      plan_free_cta: "Registrarse Gratis (2h / día)",
+      plan_free_cta: "Crear cuenta gratis",
       plan_pro_badge: "20% DE DESCUENTO SI PAGAS EN TUS PRIMERAS 24 H",
       plan_pro_title: "Plan Apex Pro",
       per_month: "mes",
@@ -116,37 +116,37 @@
       btn_refresh: "Actualizar",
       kpi_retention_policy: "Política de Retención",
       kpi_stored_jobs: "Transcripciones Guardadas",
-      step1_title: "Subir y Ordenar Archivos de Audio",
+      step1_title: "Sube tus audios",
       btn_clear_queue: "Limpiar cola",
       btn_play_sequence: "Escuchar en orden",
       dropzone_title: "Arrastra tus archivos de audio aquí o haz clic para seleccionarlos",
-      dropzone_hint: "Soporta MP3, OGG, WAV, M4A, FLAC, WEBM · 1 o varios audios · Almacenado en apex-vox.ialabs.app",
-      reorder_hint: "Arrastra cualquier tarjeta desde el ícono <strong>⠿</strong> (o usa <strong>↑ / ↓</strong>) para cambiar su posición y presiona <strong>Escuchar</strong> en cada pista para verificar el audio antes de transcribir.",
-      step2_title: "Motor Apex Vox (Potenciado por Groq)",
-      lbl_engine_select: "Selecciona el Modelo (Potenciado por Groq)",
+      dropzone_hint: "MP3, OGG, WAV, M4A, FLAC o WEBM · uno o varios audios",
+      reorder_hint: "Arrastra desde <strong>⠿</strong> (o usa <strong>↑ / ↓</strong>) para ordenar y pulsa <strong>Escuchar</strong> para revisar cada audio.",
+      step2_title: "Modelo",
+      lbl_engine_select: "Modelo",
       lbl_speakers_count: "Número de Oradores",
       spk_auto: "Automático (1, 2 o varios oradores)",
       lbl_audio_lang: "Idioma del Audio",
       lbl_context_hint: "Contexto / Vocabulario (Opcional)",
       lbl_active_plan_mode: "Plan Activo (Simulador / Cuenta)",
       lbl_api_override: "Configuración Avanzada de Clave Groq (Opcional — ya configurada en servidor)",
-      btn_transcribe_now: "Procesar, Unir y Transcribir con Apex Vox",
-      step3_vp_title: "Perfiles de Voz (Identificación de Oradores Conocidos)",
-      vp_desc: "Registra una muestra corta de voz (5–30s) de una persona para que Apex Vox reconozca automáticamente su timbre de voz y le asigne su nombre real.",
-      btn_enroll_vp: "Registrar Huella de Voz",
-      result_card_title: "Transcripción Ordenada con Marcas de Tiempo y Oradores",
+      btn_transcribe_now: "Transcribir",
+      step3_vp_title: "Perfiles de voz",
+      vp_desc: "Graba 5–30 segundos de la voz de alguien para que Apex Vox lo reconozca por su nombre.",
+      btn_enroll_vp: "Guardar voz",
+      result_card_title: "Transcripción",
       btn_rename_speakers: "Renombrar Oradores",
-      empty_state_heading: "Apex Vox — Listo para transcribir e identificar voces en orden",
-      empty_state_desc: "Sube uno o varios archivos MP3, OGG o WAV en el panel izquierdo, elige tu modelo <strong>Mc-Ayrton, Mc-Lewis, Mc-Norris o Mc-Piastri</strong> (Potenciado por Groq) y obtén tu transcripción junto con el análisis ejecutivo de <strong>Apex Summa</strong>.",
+      empty_state_heading: "Listo para transcribir",
+      empty_state_desc: "Sube uno o varios audios a la izquierda, elige el modelo y pulsa <strong>Transcribir</strong>.",
       kpi_duration_lbl: "Duración Global",
       kpi_speakers_lbl: "Oradores Detectados",
       kpi_engine_lbl: "Modelo Serie Mc",
       kpi_storage_lbl: "Almacenado",
-      player_caption: "Reproductor Continuo Sincronizado (Haz clic en cualquier marca de tiempo para saltar al instante exacto)",
+      player_caption: "Haz clic en una marca de tiempo para ir a ese momento",
       rename_panel_title: "Asignar nombres personalizados a los oradores identificados:",
       btn_save_names: "Guardar Nombres",
       btn_cancel: "Cancelar",
-      summa_main_title: "Resumen Inteligente, Gráficas, Calendario de Tareas y Generador de Actas",
+      summa_main_title: "Resumen, tareas y actas",
       summa_locked_msg: "El Resumen IA completo de Apex Summa, las Gráficas y el Generador de Actas están incluidos en Apex Pro (USD 10 / mes · 20% de descuento si pagas en tus primeras 24 horas).",
       summa_sec1_who: "1. ¿Quién Habló Más?",
       summa_sec6_charts: "6. Gráficas de la Transcripción",
@@ -162,11 +162,11 @@
       btn_generate_minutes: "Generar Acta Oficial Ahora",
       btn_download_minutes_md: "Descargar Acta (.MD)",
       btn_print_minutes: "Imprimir / Guardar PDF",
-      auth_modal_title: "Regístrate en Apex Vox — 2 Horas Gratis al Día",
+      auth_modal_title: "Crea tu cuenta: 2 horas gratis al día",
       auth_modal_subtitle: "Al registrarte obtienes <strong>2 horas gratis cada día</strong> (en 1 o varios audios). Lo transcrito lo almacenamos por 24 horas: descárgalo si lo necesitas.",
       lbl_full_name: "Nombre Completo",
       lbl_password: "Contraseña",
-      btn_create_free_account: "Crear Cuenta (2h Gratis / Día)",
+      btn_create_free_account: "Crear cuenta",
       btn_login_existing: "Entrar",
       plan_pro_f6: "<strong>Bot de Telegram:</strong> envía notas de voz y recibe la transcripción en tu chat (1 por suscripción)",
       kpi_plan: "Plan",
@@ -213,29 +213,29 @@
     en: {
       brand_title: "Apex Vox",
       powered_by_groq: "Powered by Groq",
-      brand_subtitle: "Audio Studio · Multi-Audio Transcription, Speaker Identification & Apex Summa AI Summary",
-      nav_landing: "Home & Plans",
-      nav_playground: "Playground (Apex Vox)",
-      nav_box: "Apex Box (10h+ & Extension)",
+      brand_subtitle: "Transcribe, identify speakers and summarize your meetings",
+      nav_landing: "Home",
+      nav_playground: "Studio",
+      nav_box: "Record",
       nav_portal: "My account",
       btn_register_login: "Sign Up / Log In",
       hero_badge: "POWERED BY GROQ · STORED ON APEX-VOX.IALABS.APP",
-      hero_title: "Apex Vox: Intelligent Transcription, Speaker Separation & Executive Analytics",
+      hero_title: "Transcribe and summarize your meetings",
       hero_desc: "Sign up today and get <strong>2 free hours per day</strong> across 1 or multiple audios with 24-hour storage, or activate <strong>Apex Pro for USD 10 a month</strong> (<strong>20% off</strong> if you pay within your first 24 hours): unlimited transcriptions and storage, and executive AI insights with <strong>Apex Summa</strong>.",
-      hero_cta_playground: "Open Playground Now",
-      hero_cta_box: "Record Unlimited (Apex Box 10h+)",
-      hero_cta_register: "Sign Up: 2 Free Hours / Day",
+      hero_cta_playground: "Open Studio",
+      hero_cta_box: "Record a meeting",
+      hero_cta_register: "Create a free account",
       hero_cta_trial: "Activate Apex Pro",
-      suite_heading: "Apex Product Ecosystem",
+      suite_heading: "What Apex Vox does",
       suite_vox_status: "Product Ready",
       suite_vox_part: "Transcription (the core)",
-      suite_vox_desc: "Ordered multi-audio upload, smart slicing, speaker recognition with Mc-Ayrton, Mc-Lewis, Mc-Norris & Mc-Piastri engines (Powered by Groq), and voiceprint profiles.",
+      suite_vox_desc: "Upload one or more audios in order and get the transcript with who said what.",
       suite_summa_status: "Active on Pro Plan",
       suite_summa_part: "AI Notes & Summaries",
       suite_summa_desc: "Upon completing transcription, identifies: 1. Who spoke the most, 2. What was discussed, 3. Objectives, 4. Callouts/Warnings, 5. Upcoming tasks calendar, 6. Transcription charts & 7. Formal Minutes (Board, Committee, Assembly).",
-      suite_box_status: "Active · Extension & Mobile App",
-      suite_box_part: "Unlimited Block Recorder (In-Person, Zoom/Meet/Teams & Mobile Web App)",
-      suite_box_desc: "10+ hours continuous recording in optimal 3-min blocks (~1.03 MB) with constant RAM, In-Person & Virtual Meeting modes (Zoom, Meet, Teams), live notes, and Chrome MV3 extension.",
+      suite_box_status: "Web, extension and phone",
+      suite_box_part: "Record meetings",
+      suite_box_desc: "Record in-person or virtual meetings (Zoom, Meet, Teams) in 3-minute blocks, with live notes.",
       tbl_col_part: "Product Part",
       tbl_col_name: "Name",
       tbl_col_state: "Status",
@@ -253,9 +253,9 @@
       plan_free_period: "/ forever",
       plan_free_f1: "<strong>2 hours free per day</strong> across 1 or multiple audios",
       plan_free_f2: "<strong>Stored for 24 hours</strong>: download it if you need it",
-      plan_free_f3: "Access to <strong>Mc-Ayrton, Mc-Lewis, Mc-Norris & Mc-Piastri</strong> (Powered by Groq)",
+      plan_free_f3: "<strong>Mc-Ayrton, Mc-Lewis, Mc-Norris and Mc-Piastri</strong> models",
       plan_free_f4: "Export to TXT, SRT, VTT, JSON, CSV & Markdown",
-      plan_free_cta: "Sign Up Free (2h / day)",
+      plan_free_cta: "Create a free account",
       plan_pro_badge: "20% OFF IF YOU PAY IN YOUR FIRST 24 H",
       plan_pro_title: "Apex Pro Plan",
       per_month: "month",
@@ -279,37 +279,37 @@
       btn_refresh: "Refresh",
       kpi_retention_policy: "Retention Policy",
       kpi_stored_jobs: "Saved Transcriptions",
-      step1_title: "Upload and Order Audio Files",
+      step1_title: "Upload your audios",
       btn_clear_queue: "Clear queue",
       btn_play_sequence: "Play in order",
       dropzone_title: "Drag and drop your audio files here or click to browse",
-      dropzone_hint: "Supports MP3, OGG, WAV, M4A, FLAC, WEBM · 1 or multiple audios · Stored on apex-vox.ialabs.app",
-      reorder_hint: "Drag any card by the <strong>⠿</strong> handle (or use <strong>↑ / ↓</strong>) to reorder it, and press <strong>Listen</strong> on each track to verify the audio before transcribing.",
-      step2_title: "Apex Vox Engine (Powered by Groq)",
-      lbl_engine_select: "Select Engine Model (Powered by Groq)",
+      dropzone_hint: "MP3, OGG, WAV, M4A, FLAC or WEBM · one or more audios",
+      reorder_hint: "Drag from <strong>⠿</strong> (or use <strong>↑ / ↓</strong>) to reorder and press <strong>Listen</strong> to check each audio.",
+      step2_title: "Model",
+      lbl_engine_select: "Model",
       lbl_speakers_count: "Number of Speakers",
       spk_auto: "Automatic (1, 2 or multiple speakers)",
       lbl_audio_lang: "Audio Language",
       lbl_context_hint: "Context / Vocabulary (Optional)",
       lbl_active_plan_mode: "Active Plan (Simulator / Account)",
       lbl_api_override: "Advanced Groq Key Override (Optional — configured on server)",
-      btn_transcribe_now: "Process, Merge & Transcribe with Apex Vox",
-      step3_vp_title: "Voice Profiles (Known Speaker Identification)",
-      vp_desc: "Enroll a short voice sample (5–30s) so Apex Vox automatically recognizes their vocal timbre and assigns their real name.",
-      btn_enroll_vp: "Enroll Voiceprint",
-      result_card_title: "Ordered Transcript with Timestamps & Speakers",
+      btn_transcribe_now: "Transcribe",
+      step3_vp_title: "Voice profiles",
+      vp_desc: "Record 5–30 seconds of someone's voice so Apex Vox recognizes them by name.",
+      btn_enroll_vp: "Save voice",
+      result_card_title: "Transcript",
       btn_rename_speakers: "Rename Speakers",
-      empty_state_heading: "Apex Vox — Ready to transcribe and identify voices in order",
-      empty_state_desc: "Upload one or multiple MP3, OGG, or WAV files on the left, choose your <strong>Mc-Ayrton, Mc-Lewis, Mc-Norris, or Mc-Piastri</strong> model (Powered by Groq), and get your transcript plus <strong>Apex Summa</strong> executive analytics.",
+      empty_state_heading: "Ready to transcribe",
+      empty_state_desc: "Upload one or more audios on the left, choose the model and press <strong>Transcribe</strong>.",
       kpi_duration_lbl: "Total Duration",
       kpi_speakers_lbl: "Detected Speakers",
       kpi_engine_lbl: "Mc-Series Model",
       kpi_storage_lbl: "Stored",
-      player_caption: "Synchronized Continuous Player (Click any timestamp to jump to that exact moment)",
+      player_caption: "Click a timestamp to jump to that moment",
       rename_panel_title: "Assign custom names to identified speakers:",
       btn_save_names: "Save Names",
       btn_cancel: "Cancel",
-      summa_main_title: "AI Executive Summary, Charts, Tasks Calendar & Minutes Generator",
+      summa_main_title: "Summary, tasks and minutes",
       summa_locked_msg: "The full Apex Summa AI Summary, Charts, and Minutes Generator are included in Apex Pro (USD 10 / month · 20% off if you pay within your first 24 hours).",
       summa_sec1_who: "1. Who Spoke the Most?",
       summa_sec6_charts: "6. Transcription Charts",
@@ -325,11 +325,11 @@
       btn_generate_minutes: "Generate Official Minutes Now",
       btn_download_minutes_md: "Download Minutes (.MD)",
       btn_print_minutes: "Print / Save PDF",
-      auth_modal_title: "Sign Up for Apex Vox — 2 Free Hours Per Day",
+      auth_modal_title: "Create your account: 2 free hours a day",
       auth_modal_subtitle: "Register to get <strong>2 free hours every day</strong> (in 1 or multiple audios). We store your transcripts for 24 hours: download them if you need them.",
       lbl_full_name: "Full Name",
       lbl_password: "Password",
-      btn_create_free_account: "Create Account (2h Free / Day)",
+      btn_create_free_account: "Create account",
       btn_login_existing: "Log In",
       plan_pro_f6: "<strong>Telegram bot:</strong> send voice notes and get the transcript in your chat (1 per subscription)",
       kpi_plan: "Plan",
@@ -2828,7 +2828,7 @@
       formData.append("duration_hint_sec", String(durationSec.toFixed(2)));
       formData.append("transcribe_immediately", "true");
 
-      showBoxAlert(`Enviando y transcribiendo Bloque #${blockIndex + 1} (${(blob.size / 1024).toFixed(1)} KB · RAM liberada)...`, "info");
+      showBoxAlert(`Transcribiendo el bloque ${blockIndex + 1}…`, "info");
 
       const res = await authFetch(`/api/box/sessions/${sessionId}/blocks`, {
         method: "POST",
@@ -2863,7 +2863,7 @@
       boxKpiDuration.textContent = latestResponse.total_duration_formatted;
     }
     if (boxKpiRam && latestResponse && latestResponse.ram_freed_total_mb !== undefined) {
-      boxKpiRam.textContent = `~1.05 MB (${latestResponse.ram_freed_total_mb} MB liberados)`;
+      
     }
     const uniqueSpeakers = new Set(boxState.segments.map((s) => s.speaker).filter(Boolean));
     if (boxKpiSpeakers) {
@@ -2882,12 +2882,11 @@
             (b) => `
             <div class="track-item">
               <div class="track-meta">
-                <div class="track-name">Bloque #${b.block_index + 1} · ${escapeHtml(b.filename)}</div>
+                <div class="track-name">Bloque ${b.block_index + 1}</div>
                 <div class="track-sub">
-                  <span>Duración: ${b.duration_sec.toFixed(1)}s</span>
-                  <span>Tamaño: ${(b.size_bytes / 1024).toFixed(1)} KB</span>
-                  <span>Segmentos: ${b.segments_count}</span>
-                  <span>Estado: RAM Liberada ✓</span>
+                  <span>${Math.round(b.duration_sec)} s</span>
+                  <span>${b.segments_count} frases</span>
+                  <span>Enviado ✓</span>
                 </div>
               </div>
             </div>
@@ -2902,8 +2901,8 @@
       if (boxState.segments.length === 0) {
         boxLiveSegmentsList.innerHTML = `
           <div class="empty-state">
-            <h4>Listo para grabar horas ilimitadas sin llenar la RAM</h4>
-            <p>A medida que cada bloque se procesa, la transcripción aparecerá aquí de forma continua.</p>
+            <h4>Aquí verás lo que se dice</h4>
+            <p>Pulsa Grabar y la transcripción aparecerá cada 3 minutos.</p>
           </div>
         `;
       } else {
@@ -2977,13 +2976,13 @@
       setBoxRecordingButtons(true);
 
       showBoxAlert(
-        `Grabando en continuo (${boxState.mode === "virtual" ? "Reunión Virtual + Mic" : "Reunión Presencial / App Móvil"}). Rotación automática cada ${Math.round(blockSec / 60)} min con 0 ms de pérdida y RAM constante.`,
+        `Grabando (${boxState.mode === "virtual" ? "reunión virtual" : "presencial"}). La transcripción aparece cada 3 minutos.`,
         "success"
       );
     } catch (err) {
       boxState.status = "idle";
       showBoxAlert(
-        `No se pudo acceder al micrófono/audio (${err.message}). Puedes usar el botón "⚡ Simular Bloque 10h" para probar el flujo completo sin micrófono.`,
+        `No se pudo acceder al micrófono/audio (${err.message}). Revisa que el navegador tenga permiso para usar el micrófono.`,
         "error"
       );
     }
