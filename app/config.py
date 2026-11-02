@@ -159,19 +159,71 @@ class Settings:
     PUBLIC_BASE_URL: str = field(
         default_factory=lambda: os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
     )
-    # Playground plan simulator (free/pro switch). Never honoured in production.
-    ALLOW_PLAN_SIMULATOR: bool = field(
-        default_factory=lambda: _parse_bool(
-            os.getenv("ALLOW_PLAN_SIMULATOR") or None,
-            default=os.getenv("ENVIRONMENT", "development").strip().lower() != "production",
-        )
+    # Visitors without an account: a few short, ephemeral transcriptions per day.
+    GUEST_MAX_AUDIOS_PER_DAY: int = field(
+        default_factory=lambda: int(os.getenv("GUEST_MAX_AUDIOS_PER_DAY", "3"))
     )
-    # Require a signed-in account to upload and transcribe (2h/day free starts at sign-up).
-    REQUIRE_LOGIN_TO_TRANSCRIBE: bool = field(
-        default_factory=lambda: _parse_bool(
-            os.getenv("REQUIRE_LOGIN_TO_TRANSCRIBE") or None,
-            default=os.getenv("ENVIRONMENT", "development").strip().lower() == "production",
-        )
+    GUEST_MAX_AUDIO_MINUTES: float = field(
+        default_factory=lambda: float(os.getenv("GUEST_MAX_AUDIO_MINUTES", "30"))
+    )
+    # Guest results and merged audio are purged from memory/disk after this window.
+    GUEST_RESULT_TTL_MINUTES: int = field(
+        default_factory=lambda: int(os.getenv("GUEST_RESULT_TTL_MINUTES", "60"))
+    )
+    # Accounts may be used from at most this many networks (IPs) per calendar month.
+    MAX_IPS_PER_MONTH: int = field(
+        default_factory=lambda: int(os.getenv("MAX_IPS_PER_MONTH", "3"))
+    )
+    # Protects operational endpoints (/api/metrics/*). Empty = those endpoints are disabled.
+    ADMIN_API_KEY: str = field(
+        default_factory=lambda: os.getenv("ADMIN_API_KEY", "").strip()
+    )
+
+    # -------------------------------------------------------------------------
+    # Telegram audio inbox (one linked chat per Apex Pro account)
+    # -------------------------------------------------------------------------
+    TELEGRAM_BOT_TOKEN: str = field(
+        default_factory=lambda: os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+    )
+    TELEGRAM_BOT_USERNAME: str = field(
+        default_factory=lambda: os.getenv("TELEGRAM_BOT_USERNAME", "").strip()
+    )
+    TELEGRAM_WEBHOOK_SECRET: str = field(
+        default_factory=lambda: os.getenv("TELEGRAM_WEBHOOK_SECRET", "").strip()
+    )
+
+    # Legal / contact details shown in the policies
+    LEGAL_ENTITY_NAME: str = field(
+        default_factory=lambda: os.getenv("LEGAL_ENTITY_NAME", "IA Labs (ialabs.app)").strip()
+    )
+    CONTACT_EMAIL: str = field(
+        default_factory=lambda: os.getenv("CONTACT_EMAIL", "hola@ialabs.app").strip()
+    )
+    SECURITY_EMAIL: str = field(
+        default_factory=lambda: os.getenv("SECURITY_EMAIL", "seguridad@ialabs.app").strip()
+    )
+
+    # -------------------------------------------------------------------------
+    # Email (Resend): transactional emails and the newsletter
+    # -------------------------------------------------------------------------
+    RESEND_API_KEY: str = field(
+        default_factory=lambda: os.getenv("RESEND_API_KEY", "").strip()
+    )
+    EMAIL_FROM: str = field(
+        default_factory=lambda: os.getenv("EMAIL_FROM", "Apex Vox <hola@ialabs.app>").strip()
+    )
+    EMAIL_REPLY_TO: str = field(
+        default_factory=lambda: os.getenv("EMAIL_REPLY_TO", "").strip()
+    )
+    RESEND_NEWSLETTER_SEGMENT_ID: str = field(
+        default_factory=lambda: os.getenv(
+            "RESEND_NEWSLETTER_SEGMENT_ID", "572f148f-353f-4d56-a808-23d68a9c830b"
+        ).strip()
+    )
+    RESEND_NEWSLETTER_TOPIC_ID: str = field(
+        default_factory=lambda: os.getenv(
+            "RESEND_NEWSLETTER_TOPIC_ID", "0d50e8f4-c2f8-412a-890a-b90e2c1ab380"
+        ).strip()
     )
     SESSION_TTL_DAYS: int = field(
         default_factory=lambda: int(os.getenv("SESSION_TTL_DAYS", "30"))
@@ -462,6 +514,15 @@ class Settings:
     def SILENCE_THRESHOLD_DB(self) -> float:
         """Silence detection threshold in dB (alias for SILENCE_NOISE_THRESHOLD_DB)."""
         return self.SILENCE_NOISE_THRESHOLD_DB
+
+    @property
+    def is_email_configured(self) -> bool:
+        """Return True when a Resend API key is available."""
+        return bool(self.RESEND_API_KEY)
+
+    @property
+    def GUEST_MAX_AUDIO_SECONDS(self) -> float:
+        return self.GUEST_MAX_AUDIO_MINUTES * 60.0
 
     @property
     def is_production(self) -> bool:

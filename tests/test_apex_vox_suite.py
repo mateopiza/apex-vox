@@ -259,6 +259,12 @@ def test_apex_summa_7_part_report_calendar_and_minutes(
     7. Generador de Actas (Consejo / Junta Directiva, Comité, Asamblea in ES & EN)
     """
     client = TestClient(app)
+    reg = client.post(
+        "/api/auth/register",
+        json={"email": f"summa_{uuid.uuid4().hex[:8]}@apexvox.ai", "password": "summaPass123", "full_name": "Summa"},
+    ).json()
+    client.headers.update({"Authorization": f"Bearer {reg['access_token']}"})
+    assert client.post("/api/billing/subscribe", json={}).status_code == 200  # Apex Pro trial
 
     wav_path = tmp_path / "consejo_directivo.wav"
     create_synthetic_wav(wav_path, [(2.5, 140.0), (0.6, 0.0), (2.0, 240.0)])
@@ -296,8 +302,6 @@ def test_apex_summa_7_part_report_calendar_and_minutes(
             "diarization_engine": "Mc-Lewis",
             "model": "Mc-Lewis",
             "language": "es",
-            "api_key": "gsk_test_key_summa",
-            "plan_override": "pro",
         },
     )
     assert trans_res.status_code == 200, trans_res.text

@@ -281,7 +281,14 @@ def _profiles_file_path() -> Path:
     return settings.OUTPUT_DIR / "voice_profiles.json"
 
 
-def list_voice_profiles() -> List[VoiceProfile]:
+def list_voice_profiles(owner_id: Optional[str] = None) -> List[VoiceProfile]:
+    """Profiles of one account. Without an owner, nothing (profiles are private)."""
+    if not owner_id:
+        return []
+    return [p for p in _load_all_profiles() if p.owner_id == owner_id]
+
+
+def _load_all_profiles() -> List[VoiceProfile]:
     path = _profiles_file_path()
     if not path.exists():
         return []
@@ -305,6 +312,7 @@ def enroll_voice_profile(
     audio_bytes: bytes,
     filename: str = "sample.mp3",
     role: str = "",
+    owner_id: Optional[str] = None,
 ) -> VoiceProfile:
     """
     Extract acoustic voiceprint embedding from an uploaded reference audio sample
@@ -329,9 +337,14 @@ def enroll_voice_profile(
     finally:
         temp_path.unlink(missing_ok=True)
 
-    profiles = list_voice_profiles()
-    # Replace existing profile if same name (case-insensitive)
-    profiles = [p for p in profiles if p.name.lower() != clean_name.lower()]
+    if not owner_id:
+        raise ValueError("Inicia sesión para registrar perfiles de voz.")
+    profiles = _load_all_profiles()
+    # Replace this owner's existing profile with the same name (case-insensitive)
+    profiles = [
+        p for p in profiles
+        if not (p.owner_id == owner_id and p.name.lower() == clean_name.lower())
+    ]
 
     profile = VoiceProfile(
         profile_id=f"vp_{uuid.uuid4().hex[:8]}",
@@ -341,16 +354,20 @@ def enroll_voice_profile(
         pitch_hz=pitch,
         embedding=[round(float(x), 5) for x in emb.tolist()],
         created_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        owner_id=owner_id,
     )
     profiles.append(profile)
     save_voice_profiles(profiles)
     return profile
 
 
-def delete_voice_profile(profile_id: str) -> List[VoiceProfile]:
-    profiles = [p for p in list_voice_profiles() if p.profile_id != profile_id]
+def delete_voice_profile(profile_id: str, owner_id: Optional[str]) -> List[VoiceProfile]:
+    profiles = [
+        p for p in _load_all_profiles()
+        if not (p.profile_id == profile_id and p.owner_id == owner_id)
+    ]
     save_voice_profiles(profiles)
-    return profiles
+    return list_voice_profiles(owner_id)
 
 
 def match_enrolled_voice_profiles(
@@ -358,12 +375,13 @@ def match_enrolled_voice_profiles(
     segments: List[WhisperSegment],
     speaker_assignments: Dict[int, str],
     similarity_threshold: float = 0.78,
+    owner_id: Optional[str] = None,
 ) -> Tuple[Dict[int, str], Dict[str, str]]:
     """
     If enrolled VoiceProfiles exist and audio_path is available, compute the average
     acoustic embedding of each diarized speaker cluster and match against enrolled profiles.
     """
-    profiles = list_voice_profiles()
+    profiles = list_voice_profiles(owner_id)
     if not profiles or not audio_path or not audio_path.exists() or not segments:
         return speaker_assignments, {}
 

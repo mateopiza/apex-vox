@@ -1,0 +1,25 @@
+# Supabase Auth e-mail templates (paste into supabase/config.toml or the dashboard)
+
+[auth.email.template.confirmation]
+subject = "Confirma tu correo en Apex Vox"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.invite]
+subject = "Te invitaron a Apex Vox"
+content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.magic_link]
+subject = "Tu enlace de acceso a Apex Vox"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.email_change]
+subject = "Confirma el cambio de correo en Apex Vox"
+content_path = "./supabase/templates/email_change.html"
+
+[auth.email.template.recovery]
+subject = "Restablece tu contraseña de Apex Vox"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.email.template.reauthentication]
+subject = "Tu código de verificación de Apex Vox"
+content_path = "./supabase/templates/reauthentication.html"

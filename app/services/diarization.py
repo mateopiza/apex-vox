@@ -265,6 +265,7 @@ def diarize_segments(
     batch_size: int = 100,
     merged_audio_path: Optional[Path] = None,
     trust_acoustic_labels: bool = False,
+    voice_owner_id: Optional[str] = None,
 ) -> Tuple[List[DiarizedSegment], int, Dict[str, str]]:
     """
     Perform speaker diarization across a chronological list of WhisperSegments.
@@ -327,6 +328,7 @@ def diarize_segments(
                 audio_path=merged_audio_path,
                 segments=segments,
                 speaker_assignments=assignments,
+                owner_id=voice_owner_id,
             )
             roles.update(matched_roles)
         except Exception as exc:

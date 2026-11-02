@@ -8,6 +8,7 @@ generation, and persistent result storage.
 
 from __future__ import annotations
 
+import datetime
 import json
 import logging
 import shutil
@@ -67,6 +68,7 @@ class UploadSession:
     session_dir: Path
     tracks: Dict[str, UploadedTrack] = field(default_factory=dict)
     ordered_ids: List[str] = field(default_factory=list)
+    owner: Optional[str] = None  # user id or guest key that created the session
 
 
 class JobManager:
@@ -82,17 +84,39 @@ class JobManager:
     # Session Management
     # -------------------------------------------------------------------------
 
-    def create_or_get_session(self, session_id: Optional[str] = None) -> UploadSession:
+    def create_or_get_session(self, session_id: Optional[str] = None, owner: Optional[str] = None) -> UploadSession:
+        """Reuse the caller's own session; a foreign or unknown id starts a fresh one."""
         with self._lock:
-            if session_id and session_id in self._sessions:
-                return self._sessions[session_id]
+            existing = self._sessions.get(session_id) if session_id else None
+            if existing and (owner is None or existing.owner in (None, owner)):
+                if existing.owner is None:
+                    existing.owner = owner
+                return existing
 
-            sid = session_id or uuid.uuid4().hex[:12]
+            sid = uuid.uuid4().hex[:16]
             session_dir = settings.UPLOAD_DIR / sid
             session_dir.mkdir(parents=True, exist_ok=True)
-            session = UploadSession(session_id=sid, session_dir=session_dir)
+            session = UploadSession(session_id=sid, session_dir=session_dir, owner=owner)
             self._sessions[sid] = session
             return session
+
+    def session_owned_by(self, session_id: str, owner: Optional[str]) -> bool:
+        with self._lock:
+            session = self._sessions.get(session_id)
+            return bool(session) and (session.owner is None or session.owner == owner)
+
+    def discard_session(self, session_id: str) -> None:
+        """Forget a session and delete its uploaded files (used for guest jobs)."""
+        with self._lock:
+            session = self._sessions.pop(session_id, None)
+        if session:
+            shutil.rmtree(session.session_dir, ignore_errors=True)
+
+    def _purge_guest_job(self, job_id: str) -> None:
+        with self._lock:
+            self._results.pop(job_id, None)
+            self._jobs.pop(job_id, None)
+        (settings.OUTPUT_DIR / f"{job_id}_merged.mp3").unlink(missing_ok=True)
 
     def get_session(self, session_id: str) -> Optional[UploadSession]:
         with self._lock:
@@ -103,6 +127,7 @@ class JobManager:
         session_id: str,
         filename: str,
         content: bytes,
+        owner: Optional[str] = None,
     ) -> ProbedAudio:
         """Save uploaded bytes, probe with ffprobe, and register in session."""
         if not content:
@@ -115,7 +140,7 @@ class JobManager:
                 f"Formatos permitidos: {', '.join(sorted(settings.ALLOWED_EXTENSIONS))}"
             )
 
-        session = self.create_or_get_session(session_id)
+        session = self.create_or_get_session(session_id, owner)
         file_id = f"track_{uuid.uuid4().hex[:8]}"
         safe_name = Path(filename).name
         dest_path = session.session_dir / f"{file_id}_{safe_name}"
@@ -218,7 +243,7 @@ class JobManager:
             if req.file_order:
                 self.reorder_session_files(req.session_id, req.file_order)
 
-            job_id = f"job_{uuid.uuid4().hex[:10]}"
+            job_id = f"job_{uuid.uuid4().hex[:16]}"
             status = JobStatusResponse(
                 job_id=job_id,
                 session_id=req.session_id,
@@ -340,25 +365,17 @@ class JobManager:
 
             total_duration = round(sum(p.duration_sec for p in probed_list), 3)
 
-            # Enforce daily quota (2h/day on free plan vs unlimited on pro/trial)
-            effective_user = supabase_service.get_user_by_token_or_id(req.user_id)
-            resolved_uid = (
-                effective_user["user_id"]
-                if effective_user
-                else (req.user_id or None)
-            )
-            effective_plan = (
-                req.plan_override
-                or (effective_user.get("plan") if effective_user else None)
-                or "free"
-            ).lower()
-
-            if resolved_uid or req.plan_override:
+            # Plan comes from the account set by the server (never from the client).
+            is_guest = bool(req.guest_key) and not req.user_id
+            effective_user = None if is_guest else supabase_service.get_user_by_token_or_id(req.user_id)
+            resolved_uid = effective_user["user_id"] if effective_user else None
+            if is_guest:
+                effective_plan = "guest"
+            else:
                 quota_state = supabase_service.check_and_consume_quota(
                     user_id=resolved_uid,
                     duration_seconds=total_duration,
                     audios_count=len(ordered_tracks),
-                    plan_override=req.plan_override,
                 )
                 effective_plan = quota_state.plan
 
@@ -473,6 +490,7 @@ class JobManager:
                 api_key=req.api_key,
                 merged_audio_path=merged_audio_path if merged_audio_path.exists() else None,
                 trust_acoustic_labels=trust_acoustic,
+                voice_owner_id=resolved_uid,
             )
 
             # Final pass of format & silence hallucination cleaning
@@ -515,6 +533,28 @@ class JobManager:
                 s4_object_key=s4_result_key,
                 expires_at=expires_at,
             )
+
+            if is_guest:
+                ttl = settings.GUEST_RESULT_TTL_MINUTES
+                result.storage_provider = "none"
+                result.s4_object_key = None
+                result.expires_at = (
+                    datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=ttl)
+                ).isoformat()
+                result.summa_report = None
+                with self._lock:
+                    self._results[job_id] = result
+                timer = threading.Timer(ttl * 60, self._purge_guest_job, args=(job_id,))
+                timer.daemon = True
+                timer.start()
+                self.discard_session(req.session_id)
+                self._update_job(
+                    job_id,
+                    status="completed",
+                    progress=100,
+                    current_step="Transcripción lista. Sin cuenta no se guarda ni se analiza.",
+                )
+                return result
 
             # 5. Generate Apex Summa AI Intelligence Report
             self._update_job(
@@ -662,6 +702,13 @@ class JobManager:
                 "full_text": full_text,
             }
         )
+        if updated_result.plan == "guest":
+            # Guest results are memory-only and never analysed.
+            updated_result.summa_report = None
+            with self._lock:
+                self._results[job_id] = updated_result
+            return updated_result
+
         updated_result.summa_report = generate_apex_summa_report(
             result=updated_result,
             language=updated_result.language or "es",
