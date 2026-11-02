@@ -1156,6 +1156,8 @@
       if (!res.ok) throw new Error(data.detail || "");
       const addr = document.getElementById("bot-invite-address");
       if (addr && data.invites_address) addr.textContent = data.invites_address;
+      const hint = document.getElementById("bot-invite-hint");
+      if (hint) hint.classList.toggle("hidden", !data.invites_address);
       const rows = [];
       (data.events || []).forEach((e) => {
         if (e.bot_id) return;
