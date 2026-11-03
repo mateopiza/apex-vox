@@ -23,20 +23,31 @@ logger = logging.getLogger("app.config")
 # Determine base directory (project root)
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Attempt to load .env file via python-dotenv if available
-try:
-    from dotenv import load_dotenv
+def load_dotenv_files(base_dir: Path = BASE_DIR) -> Path | None:
+    """Load the project's `.env` (if any) without overriding the real environment.
 
-    env_path = BASE_DIR / ".env"
-    if env_path.exists():
-        load_dotenv(dotenv_path=env_path, override=False)
-        logger.debug("Loaded environment variables from %s", env_path)
-    else:
-        # Also check default system/current working directory .env
-        load_dotenv(override=False)
-except ImportError:
-    # python-dotenv not installed yet (e.g. initial setup)
-    logger.debug("python-dotenv not installed; relying on existing environment variables.")
+    Only ``<project>/.env`` or ``<cwd>/.env`` are read. Parent directories are never searched:
+    a checkout nested inside another one (e.g. a git worktree) must not pick up that
+    checkout's production keys. ``APEX_VOX_SKIP_DOTENV=1`` disables it (the test suite sets it,
+    so tests never talk to real Supabase, storage or AI providers).
+    """
+    if os.getenv("APEX_VOX_SKIP_DOTENV", "").strip().lower() in ("1", "true", "yes"):
+        return None
+    try:
+        from dotenv import load_dotenv
+    except ImportError:
+        # python-dotenv not installed yet (e.g. initial setup)
+        logger.debug("python-dotenv not installed; relying on existing environment variables.")
+        return None
+    for env_path in (base_dir / ".env", Path.cwd() / ".env"):
+        if env_path.is_file():
+            load_dotenv(dotenv_path=env_path, override=False)
+            logger.debug("Loaded environment variables from %s", env_path)
+            return env_path
+    return None
+
+
+load_dotenv_files()
 
 
 def _parse_bool(val: str | bool | None, default: bool = False) -> bool:
