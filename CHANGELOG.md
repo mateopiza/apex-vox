@@ -10,6 +10,7 @@ Preparation of the public open-source release.
 
 ### Added
 
+- **Browser end-to-end suite (`tests/e2e/`, Playwright + real uvicorn server)** covering landing and languages, layout at 390/768/1440 px, guest transcription, sign-up → upload → transcribe → rename → all exports → history → logout, wrong-password login and cross-account job isolation. It is hermetic (outbound requests from the server fail the test) and runs in a new `e2e` CI job that uploads screenshots and traces on failure.
 - **Recorded calls with a masked number (Twilio, Apex Pro).** Phone verification by SMS code (Twilio Verify); bridge calls that ring the verified phone first, ask to press 1 and dial the contact from `TWILIO_CALLER_ID`, so the contact never sees the user's number; recording notice to both parties; dual-channel recording with speakers labelled by channel; live notes during the call placed on the timeline; summary, minutes and email when ready; recordings deleted from Twilio after processing. Web card in "Record", `/api/phone*`, `/api/calls*` and signed `/api/twilio/*` webhooks.
 - **MCP connector:** `find_meeting` identifies a meeting from a natural-language description (relative dates in Spanish and English, participants, contact number, source, topics); `list_meetings` filters by date, source, speaker and title; new `get_meeting_details`, `get_meeting_notes` (with transcript context), `get_meeting_minutes`, `list_upcoming_meetings` and `list_phone_calls`; `search_meetings` ignores accents, matches all words and searches live notes; transcript filters by speaker and time range; `meeting_id` accepts `latest`.
 - Transcription records carry their source (`upload`, `box`, `meeting_bot`, `phone_call`) and speakers.
@@ -26,6 +27,7 @@ Preparation of the public open-source release.
 
 ### Fixed
 
+- `.env` loading no longer searches parent directories (a git worktree picked up the outer checkout's production keys), and the test suite never loads `.env` (`APEX_VOX_SKIP_DOTENV=1`): local test runs were writing test accounts and transcripts to the real Supabase and MEGA S4 and calling Deepgram.
 - Supabase sync of `transcriptions` sends only the columns in `supabase/schema.sql` (PostgREST rejected the extra `title` field).
 - Deleting an account also removes its meeting bots, calendar events and phone calls.
 - Web recorder ("Record"): the block timer, progress bar, counters, live transcript, block list, notes and alerts were wired to element ids that no longer existed after the redesign. They now update while recording.

@@ -22,3 +22,6 @@ venv/
 .claude/
 .backup-pre-groq-web/
 .DS_Store
+
+# Test artifacts (e2e screenshots and Playwright traces)
+test-results/

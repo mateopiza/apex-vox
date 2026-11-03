@@ -32,9 +32,15 @@ python -m pytest tests/test_mcp_oauth.py -q                   # a single file
 pip install ruff && ruff check app tests --select E9,F63,F7,F82   # same lint as CI
 for f in app/static/js/*.js extension/*.js extension/**/*.js; do node --check "$f"; done
 docker build -t apex-vox:dev .                                # image builds
+
+# Browser end-to-end journeys (real server + Chromium); they skip themselves without Playwright
+pip install -r requirements-e2e.txt && python -m playwright install chromium
+python -m pytest tests/e2e -q                                 # E2E_HEADED=1 to watch the browser
 ```
 
-External services are mocked in the tests, so you need no real keys. `tests/conftest.py` forces `ENVIRONMENT=development` and sets a placeholder Groq key.
+External services are mocked in the tests, so you need no real keys. `tests/conftest.py` forces `ENVIRONMENT=development`, sets a placeholder Groq key and sets `APEX_VOX_SKIP_DOTENV=1`, so your `.env` (and its production keys) is never loaded during a test run.
+
+The browser suite in `tests/e2e/` starts the real app with uvicorn on a free port and drives the web UI in Chromium: landing and languages, layout at phone/tablet/desktop widths, guest transcription, sign-up → upload → transcribe → rename speakers → every export → history → logout, wrong-password login, and that one account can never open another account's jobs. Only the Groq transcription is faked; any outbound request from the server to an external host, any console error, uncaught exception or CSP violation fails the test. On failure, a screenshot and a Playwright trace land in `test-results/e2e/` (`python -m playwright show-trace <file>.zip`).
 
 ## Branches and pull requests
 
@@ -75,6 +81,7 @@ For larger changes (new integrations, storage or auth changes, UI redesigns), op
 - Add or update tests in `tests/` for every behaviour change. Bug fixes should come with a regression test.
 - Generate audio with `tests/fixtures/audio_generator.py` (FFmpeg) instead of committing audio files.
 - Mock network calls (Groq, Deepgram, Bold, Recall.ai, Resend, Supabase, Telegram). Tests must run offline.
+- User-facing flows that change (sign-up, Studio, exports, account) need a journey in `tests/e2e/`.
 - Security-sensitive code (auth, payments, webhooks, OAuth, ownership checks) needs tests for the negative cases: bad signatures, foreign IDs, expired tokens.
 
 ## Commit messages
