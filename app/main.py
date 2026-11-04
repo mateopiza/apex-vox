@@ -612,6 +612,7 @@ def health_check(x_admin_key: Optional[str] = Header(default=None)) -> JSONRespo
     from app.services.supabase_service import supabase_service
 
     state_readable = supabase_service.state_readable()
+    replica_healthy = supabase_service.replica_healthy()
 
     is_healthy = (
         uploads_writable
@@ -620,6 +621,7 @@ def health_check(x_admin_key: Optional[str] = Header(default=None)) -> JSONRespo
         and ffmpeg_available
         and ffprobe_available
         and state_readable
+        and replica_healthy
     )
 
     health_status: Dict[str, Any] = {
@@ -653,6 +655,7 @@ def health_check(x_admin_key: Optional[str] = Header(default=None)) -> JSONRespo
             "outputs_writable": outputs_writable,
             "temp_writable": temp_writable,
             "state_readable": state_readable,
+            "state_replica_healthy": replica_healthy,
             "unsynced_objects": mega_s4_storage.unsynced_count(),
         },
         "models": {
