@@ -27,6 +27,7 @@ Preparation of the public open-source release.
 
 ### Fixed
 
+- One slow request no longer freezes the whole server. Upload, Apex Box, login, minutes, webhooks and other routes ran ffmpeg, Groq calls, password hashing or file reads on the only event loop. They now run in worker threads, with long work limited by `HEAVY_ROUTE_CONCURRENCY`.
 - A failed transcription gives back the plan or guest quota it used, on the day it was charged. An Apex Box block with no real transcript is not charged. A failed guest job no longer leaves its audio on disk.
 - Apex Box: free accounts get the Summa preview and no minutes, as on normal uploads and as documented; finalizing twice returns the same result; a failed finalize can be retried instead of staying stuck; blocks and status changes are refused once a recording is closed; audio and transcript follow the timeline even when blocks finish out of order.
 - Authenticated requests no longer reparse the whole accounts file (about 100 ms per parse at 10k accounts): read paths share a snapshot that is reparsed only when the file changes. Password hashing and the Supabase Auth call no longer run under the global state lock.

@@ -124,7 +124,7 @@ def _upload_response(session_id: str, files) -> UploadResponse:
 
 
 @router.get("/sessions/{session_id}", response_model=UploadResponse)
-async def get_session_files(session_id: str = Depends(require_session_owner)) -> UploadResponse:
+def get_session_files(session_id: str = Depends(require_session_owner)) -> UploadResponse:
     """Retrieve the current ordered list of audio files in a session."""
     try:
         files = job_manager.get_session_files(session_id)
@@ -134,7 +134,7 @@ async def get_session_files(session_id: str = Depends(require_session_owner)) ->
 
 
 @router.put("/sessions/{session_id}/order", response_model=UploadResponse)
-async def update_session_order(
+def update_session_order(
     payload: ReorderRequest, session_id: str = Depends(require_session_owner)
 ) -> UploadResponse:
     """Update the processing sequence order of uploaded audio files."""
@@ -146,7 +146,7 @@ async def update_session_order(
 
 
 @router.delete("/sessions/{session_id}/files/{file_id}", response_model=UploadResponse)
-async def delete_session_file(
+def delete_session_file(
     file_id: str, session_id: str = Depends(require_session_owner)
 ) -> UploadResponse:
     """Remove a specific audio track from the session."""
@@ -169,7 +169,7 @@ _AUDIO_MIME_MAP = {
 
 
 @router.get("/sessions/{session_id}/files/{file_id}/audio")
-async def stream_session_track_audio(file_id: str, session_id: str = Depends(require_session_media)) -> FileResponse:
+def stream_session_track_audio(file_id: str, session_id: str = Depends(require_session_media)) -> FileResponse:
     """Stream an individual uploaded audio file inline for interactive preview in the UI."""
     session = job_manager.get_session(session_id)
     if not session or file_id not in session.tracks:

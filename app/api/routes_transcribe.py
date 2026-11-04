@@ -62,7 +62,7 @@ router = APIRouter(prefix="/api", tags=["Transcription, Diarization & Voice Prof
 
 
 @router.post("/transcribe", response_model=TranscribeResponse)
-async def start_transcription_job(
+def start_transcription_job(
     payload: TranscribeRequest,
     request: Request,
     sync: bool = Query(default=False, description="Run synchronously before returning (non-production only)"),
@@ -151,7 +151,7 @@ def _with_media_token(result: TranscriptionResult) -> TranscriptionResult:
 
 
 @router.get("/jobs/{job_id}/status", response_model=JobStatusResponse)
-async def get_job_status(job_id: str = Depends(require_job_owner)) -> JobStatusResponse:
+def get_job_status(job_id: str = Depends(require_job_owner)) -> JobStatusResponse:
     """Poll the current status and progress percentage of a transcription job."""
     status = job_manager.get_job_status(job_id)
     if not status:
@@ -160,7 +160,7 @@ async def get_job_status(job_id: str = Depends(require_job_owner)) -> JobStatusR
 
 
 @router.get("/jobs/{job_id}/result", response_model=TranscriptionResult)
-async def get_job_result(job_id: str = Depends(require_job_owner)) -> TranscriptionResult:
+def get_job_result(job_id: str = Depends(require_job_owner)) -> TranscriptionResult:
     """Retrieve the complete chronological transcription and speaker diarization result."""
     result = job_manager.get_job_result(job_id)
     if result:
@@ -187,13 +187,13 @@ async def rename_job_speakers(
 ) -> TranscriptionResult:
     """Rename speaker labels across all segments of a completed transcription job."""
     try:
-        return _with_media_token(job_manager.rename_speakers(job_id, payload.speaker_map))
+        return _with_media_token(await run_heavy(job_manager.rename_speakers, job_id, payload.speaker_map))
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.get("/jobs/{job_id}/audio")
-async def stream_merged_job_audio(job_id: str = Depends(require_job_media)) -> FileResponse:
+def stream_merged_job_audio(job_id: str = Depends(require_job_media)) -> FileResponse:
     """Stream the merged continuous MP3 timeline audio for interactive playback."""
     merged_path = settings.OUTPUT_DIR / f"{job_id}_merged.mp3"
     if not merged_path.exists():
@@ -210,7 +210,7 @@ async def stream_merged_job_audio(job_id: str = Depends(require_job_media)) -> F
 # -----------------------------------------------------------------------------
 
 @router.get("/voice-profiles", response_model=List[VoiceProfile])
-async def get_enrolled_voice_profiles(
+def get_enrolled_voice_profiles(
     user: Optional[Dict[str, Any]] = Depends(optional_user),
 ) -> List[VoiceProfile]:
     """Voice profiles enrolled by the signed-in account (empty for visitors)."""
@@ -248,7 +248,7 @@ async def create_voice_profile(
 
 
 @router.delete("/voice-profiles/{profile_id}", response_model=List[VoiceProfile])
-async def remove_voice_profile(
+def remove_voice_profile(
     profile_id: str,
     user: Dict[str, Any] = Depends(require_user),
 ) -> List[VoiceProfile]:
@@ -261,7 +261,7 @@ async def remove_voice_profile(
 # -----------------------------------------------------------------------------
 
 @router.get("/metrics/daily", dependencies=[Depends(require_admin)], include_in_schema=False)
-async def get_daily_usage_metrics(
+def get_daily_usage_metrics(
     date: Optional[str] = Query(default=None, description="Target date YYYY-MM-DD (defaults to today)"),
 ) -> dict:
     """Return daily and cumulative audio consumption, API expenditure (Groq + Deepgram), and estimated revenue."""
@@ -273,7 +273,7 @@ async def get_daily_usage_metrics(
 
 
 @router.post("/metrics/send-report", dependencies=[Depends(require_admin)], include_in_schema=False)
-async def trigger_daily_bot_report(
+def trigger_daily_bot_report(
     date: Optional[str] = Query(default=None, description="Target date YYYY-MM-DD (defaults to today)"),
 ) -> dict:
     """Save the daily report to `outputs/reports/` and send it to the configured Telegram chat / webhook.
@@ -319,6 +319,10 @@ async def get_job_apex_summa_report(
     6. Gráficas de la transcripción (charts)
     7. Opciones de actas (available_minutes_templates)
     """
+    return await run_heavy(_summa_report, job_id, lang, user)
+
+
+def _summa_report(job_id: str, lang: str, user: Optional[Dict[str, Any]]) -> ApexSummaReport:
     result = job_manager.get_job_result(job_id)
     if not result:
         raise HTTPException(status_code=404, detail=f"Resultado '{job_id}' no encontrado.")
@@ -349,6 +353,12 @@ async def create_job_meeting_minutes(
     - seguimiento: Acta de Seguimiento de Proyecto
     - ejecutiva: Minuta Ejecutiva de Decisiones Rápidas
     """
+    return await run_heavy(_meeting_minutes, job_id, payload, user)
+
+
+def _meeting_minutes(
+    job_id: str, payload: MinutesGenerationRequest, user: Optional[Dict[str, Any]]
+) -> MinutesDocumentResponse:
     result = job_manager.get_job_result(job_id)
     if not result:
         raise HTTPException(status_code=404, detail=f"Resultado '{job_id}' no encontrado.")
@@ -372,6 +382,10 @@ async def download_job_tasks_calendar_ics(
     user: Optional[Dict[str, Any]] = Depends(optional_user),
 ) -> Response:
     """Download the upcoming tasks ('Próximas tareas') as an iCalendar (.ics) file."""
+    return await run_heavy(_calendar_file, job_id, user)
+
+
+def _calendar_file(job_id: str, user: Optional[Dict[str, Any]]) -> Response:
     result = job_manager.get_job_result(job_id)
     if not result:
         raise HTTPException(status_code=404, detail=f"Resultado '{job_id}' no encontrado.")

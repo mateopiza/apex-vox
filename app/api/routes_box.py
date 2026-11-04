@@ -83,7 +83,7 @@ async def get_optimal_block_configuration(
 
 
 @router.post("/sessions", response_model=BoxSessionStateResponse)
-async def create_box_recording_session(
+def create_box_recording_session(
     payload: BoxCreateSessionRequest,
     user: Dict[str, Any] = Depends(require_user),
 ) -> BoxSessionStateResponse:
@@ -104,7 +104,7 @@ async def create_box_recording_session(
 
 
 @router.get("/sessions", response_model=List[BoxSessionStateResponse])
-async def list_box_recording_sessions(
+def list_box_recording_sessions(
     user: Dict[str, Any] = Depends(require_user),
 ) -> List[BoxSessionStateResponse]:
     """List the signed-in account's active and recent Apex Box recording sessions."""
@@ -112,7 +112,7 @@ async def list_box_recording_sessions(
 
 
 @router.get("/sessions/{box_session_id}", response_model=BoxSessionStateResponse)
-async def get_box_recording_session(
+def get_box_recording_session(
     box_session_id: str,
     user: Dict[str, Any] = Depends(require_user),
 ) -> BoxSessionStateResponse:
@@ -125,7 +125,7 @@ async def get_box_recording_session(
 
 
 @router.patch("/sessions/{box_session_id}/status", response_model=BoxSessionStateResponse)
-async def update_box_recording_status(
+def update_box_recording_status(
     box_session_id: str,
     status: str = Query(..., description="recording | paused"),
     user: Dict[str, Any] = Depends(require_user),
@@ -159,7 +159,7 @@ async def upload_recording_block(
     try:
         # La duración del cliente solo sirve para rechazar pronto: lo que se cobra es lo medido.
         if duration_hint_sec and duration_hint_sec > 0:
-            supabase_service.check_quota(user["user_id"], duration_hint_sec)
+            await run_in_threadpool(supabase_service.check_quota, user["user_id"], duration_hint_sec)
         return await run_heavy(
             apex_box_manager.ingest_block,
             box_session_id=box_session_id,
@@ -186,7 +186,7 @@ async def upload_recording_block(
 
 
 @router.post("/sessions/{box_session_id}/notes", response_model=BoxNoteItem)
-async def add_live_meeting_note(
+def add_live_meeting_note(
     box_session_id: str,
     payload: BoxNoteRequest,
     user: Dict[str, Any] = Depends(require_user),
@@ -202,7 +202,7 @@ async def add_live_meeting_note(
 
 
 @router.put("/sessions/{box_session_id}/notes/{note_id}", response_model=BoxNoteItem)
-async def update_live_meeting_note(
+def update_live_meeting_note(
     box_session_id: str,
     note_id: str,
     payload: BoxNoteRequest,
@@ -217,7 +217,7 @@ async def update_live_meeting_note(
 
 
 @router.delete("/sessions/{box_session_id}/notes/{note_id}", response_model=List[BoxNoteItem])
-async def delete_live_meeting_note(
+def delete_live_meeting_note(
     box_session_id: str,
     note_id: str,
     user: Dict[str, Any] = Depends(require_user),
@@ -257,7 +257,7 @@ _extension_cache: Dict[str, bytes] = {}
 
 
 @router.get("/extension/download")
-async def download_chrome_extension() -> Response:
+def download_chrome_extension() -> Response:
     """
     Descarga de la extensión desde nuestro dominio. El archivo vive en el almacenamiento
     privado; el servidor lo trae y lo entrega, así el cliente nunca ve el proveedor ni
@@ -267,10 +267,10 @@ async def download_chrome_extension() -> Response:
     data: Optional[bytes] = None
     if mega_s4_storage.is_cloud_configured:
         try:
-            key = await run_in_threadpool(ensure_extension_published_to_s4)
+            key = ensure_extension_published_to_s4()
             data = _extension_cache.get(key)
             if data is None:
-                data = await run_in_threadpool(mega_s4_storage.get_bytes, key)
+                data = mega_s4_storage.get_bytes(key)
                 _extension_cache.clear()
                 _extension_cache[key] = data
         except Exception:
@@ -286,7 +286,7 @@ async def download_chrome_extension() -> Response:
 
 
 @router.get("/extension.zip")
-async def download_chrome_extension_package() -> Response:
+def download_chrome_extension_package() -> Response:
     """Download the packaged Chrome Extension (Manifest V3) ZIP archive."""
     try:
         zip_bytes = build_extension_zip_bytes()

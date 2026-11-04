@@ -8,7 +8,6 @@ from fastapi.testclient import TestClient
 
 from app.config import settings
 from app.main import app
-from app.models.schemas import TranscribeRequest
 from app.services import groq_service, job_manager as job_module
 from app.services.job_manager import QuotaCharge, job_manager
 from app.services.supabase_service import supabase_service

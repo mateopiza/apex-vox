@@ -255,6 +255,7 @@ def _render_index() -> str | None:
     return html.replace("{{ASSET_VERSION}}", _asset_version())
 
 
+@lru_cache(maxsize=1)
 def _asset_version() -> str:
     """Content hash of the CSS/JS bundle, so every deploy busts long-lived caches."""
     digest = hashlib.sha256()
@@ -503,7 +504,7 @@ async def api_info() -> Dict[str, Any]:
 
 
 @app.get("/api/health", tags=["Health"])
-async def health_check(x_admin_key: Optional[str] = Header(default=None)) -> JSONResponse:
+def health_check(x_admin_key: Optional[str] = Header(default=None)) -> JSONResponse:
     """
     Container and application health check endpoint.
     Verifies system runtime, storage accessibility, ffmpeg binaries,

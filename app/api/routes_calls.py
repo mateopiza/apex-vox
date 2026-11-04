@@ -26,6 +26,7 @@ from __future__ import annotations
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
@@ -81,7 +82,7 @@ def _bad(exc: TwilioError) -> HTTPException:
 # ---------------------------------------------------------------------------
 
 @router.get("/api/phone")
-async def phone_status(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
+def phone_status(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
     return {**twilio_service.phone_state(user), "calling_allowed": is_paid(user)}
 
 
@@ -108,7 +109,7 @@ def phone_verify_check(payload: PhoneCheck, user: Dict[str, Any] = Depends(requi
 
 
 @router.delete("/api/phone")
-async def phone_remove(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
+def phone_remove(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
     twilio_service.remove_phone(user["user_id"])
     return {"status": "removed"}
 
@@ -118,7 +119,7 @@ async def phone_remove(user: Dict[str, Any] = Depends(require_user)) -> Dict[str
 # ---------------------------------------------------------------------------
 
 @router.get("/api/calls")
-async def my_calls(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
+def my_calls(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
     return {"phone": {**twilio_service.phone_state(user), "calling_allowed": is_paid(user)},
             "calls": twilio_service.list_calls(user["user_id"], limit=20)}
 
@@ -134,12 +135,12 @@ def start_call(payload: CallRequest, user: Dict[str, Any] = Depends(require_user
 
 
 @router.get("/api/calls/{call_id}")
-async def call_status(call_id: str, user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
+def call_status(call_id: str, user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
     return twilio_service.public_call(_own_call(user, call_id))
 
 
 @router.post("/api/calls/{call_id}/notes")
-async def call_note(call_id: str, payload: CallNote, user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
+def call_note(call_id: str, payload: CallNote, user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
     _own_call(user, call_id)
     try:
         return twilio_service.add_note(user["user_id"], call_id, payload.text, payload.tag)
@@ -186,6 +187,10 @@ def _call_for_webhook(call_id: str, params: Dict[str, str]) -> Optional[Dict[str
 @router.post("/api/twilio/voice/{call_id}", include_in_schema=False)
 async def twilio_voice(call_id: str, request: Request) -> Response:
     params = await _signed_params(request)
+    return await run_in_threadpool(_voice_answer, call_id, params)
+
+
+def _voice_answer(call_id: str, params: Dict[str, str]) -> Response:
     rec = _call_for_webhook(call_id, params)
     if not rec or rec.get("status") not in twilio_service.ACTIVE_STATUSES:
         return _xml(twilio_service.twiml_unavailable(rec))
@@ -195,6 +200,10 @@ async def twilio_voice(call_id: str, request: Request) -> Response:
 @router.post("/api/twilio/connect/{call_id}", include_in_schema=False)
 async def twilio_connect(call_id: str, request: Request) -> Response:
     params = await _signed_params(request)
+    return await run_in_threadpool(_connect_answer, call_id, params)
+
+
+def _connect_answer(call_id: str, params: Dict[str, str]) -> Response:
     rec = _call_for_webhook(call_id, params)
     if not rec or rec.get("status") not in twilio_service.ACTIVE_STATUSES:
         return _xml(twilio_service.twiml_unavailable(rec))
@@ -207,13 +216,17 @@ async def twilio_connect(call_id: str, request: Request) -> Response:
 @router.post("/api/twilio/notice/{call_id}", include_in_schema=False)
 async def twilio_notice(call_id: str, request: Request) -> Response:
     params = await _signed_params(request)
-    rec = _call_for_webhook(call_id, params)
+    rec = await run_in_threadpool(_call_for_webhook, call_id, params)
     return _xml(twilio_service.twiml_contact_notice(rec or {}))
 
 
 @router.post("/api/twilio/dial-done/{call_id}", include_in_schema=False)
 async def twilio_dial_done(call_id: str, request: Request) -> Response:
     params = await _signed_params(request)
+    return await run_in_threadpool(_dial_done_answer, call_id, params)
+
+
+def _dial_done_answer(call_id: str, params: Dict[str, str]) -> Response:
     rec = _call_for_webhook(call_id, params)
     status = params.get("DialCallStatus", "")
     if rec:
@@ -224,14 +237,22 @@ async def twilio_dial_done(call_id: str, request: Request) -> Response:
 @router.post("/api/twilio/status/{call_id}", include_in_schema=False)
 async def twilio_status(call_id: str, request: Request) -> Dict[str, Any]:
     params = await _signed_params(request)
-    if _call_for_webhook(call_id, params):
-        twilio_service.on_status(call_id, request.query_params.get("leg", "owner"), params)
+    await run_in_threadpool(_record_status, call_id, request.query_params.get("leg", "owner"), params)
     return {"status": "ok"}
+
+
+def _record_status(call_id: str, leg: str, params: Dict[str, str]) -> None:
+    if _call_for_webhook(call_id, params):
+        twilio_service.on_status(call_id, leg, params)
 
 
 @router.post("/api/twilio/recording/{call_id}", include_in_schema=False)
 async def twilio_recording(call_id: str, request: Request) -> Dict[str, Any]:
     params = await _signed_params(request)
+    return await run_in_threadpool(_recording_answer, call_id, params)
+
+
+def _recording_answer(call_id: str, params: Dict[str, str]) -> Dict[str, Any]:
     if not _call_for_webhook(call_id, params):
         return {"status": "ignored"}
     return {"status": "accepted" if twilio_service.on_recording(call_id, params) else "ignored"}

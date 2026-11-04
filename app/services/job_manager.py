@@ -125,6 +125,7 @@ class JobManager:
         self._results: Dict[str, TranscriptionResult] = {}
         self._job_owners: Dict[str, str] = {}  # job id -> cuenta o clave del invitado
         self._charges: Dict[str, QuotaCharge] = {}  # job id -> cargo pendiente de un trabajo en curso
+        self._result_edit_locks: Dict[str, threading.Lock] = {}
 
     # -------------------------------------------------------------------------
     # Session Management
@@ -771,6 +772,14 @@ class JobManager:
         self, job_id: str, speaker_map: Dict[str, str]
     ) -> TranscriptionResult:
         """Rename speaker labels across all segments of a completed job."""
+        with self._lock:
+            edit_lock = self._result_edit_locks.setdefault(job_id, threading.Lock())
+        with edit_lock:  # dos renombres seguidos no se pisan
+            return self._rename_speakers(job_id, speaker_map)
+
+    def _rename_speakers(
+        self, job_id: str, speaker_map: Dict[str, str]
+    ) -> TranscriptionResult:
         result = self.get_job_result(job_id)
         if not result:
             raise KeyError(f"Resultado del trabajo '{job_id}' no encontrado.")
