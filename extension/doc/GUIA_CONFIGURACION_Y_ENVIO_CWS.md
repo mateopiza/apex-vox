@@ -1,13 +1,13 @@
 # Guía Completa de Configuración, Cumplimiento y Envío a Google Chrome Web Store
 
-Esta guía documenta la estructura reorganizada de `/home/iamdexter/Documentos/transcripcion/extension`, las adaptaciones técnicas aplicadas para cumplir las políticas de **Google Chrome Web Store (Manifest V3)** y todos los textos/configuraciones listos para copiar y pegar en el **Chrome Web Store Developer Dashboard**.
+Esta guía documenta la estructura reorganizada de `extension`, las adaptaciones técnicas aplicadas para cumplir las políticas de **Google Chrome Web Store (Manifest V3)** y todos los textos/configuraciones listos para copiar y pegar en el **Chrome Web Store Developer Dashboard**.
 
 ---
 
 ## 1. Estructura Organizada de la Carpeta `extension/`
 
 ```text
-/home/iamdexter/Documentos/transcripcion/extension/
+extension/
 ├── CHROMEWEBSTORE.md                         # Fuente única de verdad para la ficha de Chrome Web Store
 ├── manifest.json                             # Manifest V3 de desarrollo (incluye localhost:8000 para pruebas)
 ├── service-worker.js                         # Service Worker MV3 (sin estado global, async/await puro)

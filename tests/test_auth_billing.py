@@ -252,7 +252,10 @@ def test_client_ip_trusts_cf_connecting_ip_only_from_cloudflare() -> None:
 
 def test_default_language_from_device_then_country_and_profile_choice() -> None:
     client = TestClient(app)
-    lang = lambda headers: client.get("/", headers=headers).text.split('data-default-lang="', 1)[1][:2]
+
+    def lang(headers: dict) -> str:
+        return client.get("/", headers=headers).text.split('data-default-lang="', 1)[1][:2]
+
     assert lang({"accept-language": "en-US,en;q=0.9", "cf-ipcountry": "CO"}) == "en"  # manda el dispositivo
     assert lang({"accept-language": "es-CO,es;q=0.9", "cf-ipcountry": "US"}) == "es"
     assert lang({"accept-language": "pt-BR,pt;q=0.9", "cf-ipcountry": "MX"}) == "es"  # otro idioma: país

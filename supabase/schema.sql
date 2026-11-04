@@ -87,3 +87,5 @@ alter table public.profiles enable row level security;
 alter table public.daily_usage enable row level security;
 alter table public.subscriptions enable row level security;
 alter table public.transcriptions enable row level security;
+
+-- Replica of the account state (STATE_BACKEND=postgres): see migrations/20261104120000_app_state.sql

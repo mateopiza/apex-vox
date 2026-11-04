@@ -25,6 +25,7 @@ import copy
 import datetime as dt
 import hashlib
 import hmac
+import json
 import logging
 import os
 import re
@@ -38,6 +39,7 @@ import httpx
 
 from app.config import settings
 from app.models.schemas import QuotaUsageResponse, UserProfileResponse
+from app.services.state_replica import META_SECTION, StateReplica
 from app.services.state_store import StateCorruptError, atomic_write_bytes, atomic_write_json, read_json
 
 logger = logging.getLogger("app.services.supabase_service")
@@ -110,6 +112,10 @@ class SupabaseCloudService:
         self._snapshot: Optional[Tuple[Tuple[int, int, int], Dict[str, Any]]] = None
         self._secret_cache: Optional[Tuple[Any, bytes]] = None
         self._db_file = settings.OUTPUT_DIR / "supabase_cloud_state.json"
+        self._replica: Optional[StateReplica] = None
+        self._replica_generation = 0
+        if settings.STATE_BACKEND == "postgres":
+            self._start_replica()
         self._ensure_seed_state()
         self._migrate_raw_secrets()
 
@@ -225,7 +231,55 @@ class SupabaseCloudService:
 
     def _save_db(self, db: Dict[str, Any]) -> None:
         with self._lock:
-            atomic_write_json(self._db_file, db)
+            if not self._replica:
+                atomic_write_json(self._db_file, db)
+                return
+            # The file comes first: it is the commit point, and the replica follows it.
+            generation = max(self._replica_generation, self._local_generation(db)) + 1
+            self._replica_generation = generation
+            db[META_SECTION] = {"generation": generation}
+            data = json.dumps(db, ensure_ascii=False).encode("utf-8")
+            atomic_write_bytes(self._db_file, data)
+            self._replica.enqueue(data, generation)
+
+    @staticmethod
+    def _local_generation(db: Dict[str, Any]) -> int:
+        return int((db.get(META_SECTION) or {}).get("generation") or 0)
+
+    def _start_replica(self) -> None:
+        """Compare the local file with Postgres, and refuse to start with no state in either."""
+        if not settings.SUPABASE_URL or not settings.SUPABASE_SERVICE_ROLE_KEY:
+            raise RuntimeError("STATE_BACKEND=postgres needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.")
+        replica = StateReplica()
+        remote, remote_generation, importing = replica.load_remote()
+        has_local = self._db_file.exists()
+        if importing or (not has_local and not remote):
+            raise RuntimeError(
+                "The Postgres replica is empty or being imported, and cannot be used yet. See docs/deployment.md."
+            )
+        local = read_json(self._db_file) if has_local else {}
+        local_generation = self._local_generation(local)
+        if not has_local or local_generation < remote_generation:
+            logger.warning(
+                "Restoring the account state from Postgres (local generation %s, remote %s).",
+                local_generation, remote_generation,
+            )
+            remote[META_SECTION] = {"generation": remote_generation}
+            atomic_write_json(self._db_file, remote)
+        elif local_generation > remote_generation:
+            # Saves that had not left this machine when it stopped.
+            replica.send(json.dumps(local, ensure_ascii=False).encode("utf-8"), local_generation)
+        self._replica_generation = max(local_generation, remote_generation)
+        self._replica = replica
+        replica.start()
+
+    def replica_healthy(self) -> bool:
+        return not (self._replica and self._replica.conflict)
+
+    def flush_state(self, timeout: float = 5.0) -> None:
+        """Best effort, outside the lock, for changes that should leave this machine right away."""
+        if self._replica:
+            self._replica.flush(timeout)
 
     def state_readable(self) -> bool:
         """Health check: can the accounts file be read?"""
@@ -910,6 +964,7 @@ class SupabaseCloudService:
             }
             self._save_db(db)
             snapshot_user, snapshot_payment = dict(user), dict(payment)
+        self.flush_state()
         if on_activated:
             try:
                 on_activated(snapshot_user, snapshot_payment)
@@ -1243,6 +1298,7 @@ class SupabaseCloudService:
         from app.services import retention
 
         retention.process_pending_erasures(only_user=user_id)
+        self.flush_state()
         return {"email": user.get("email", ""), "jobs_deleted": len(jobs)}
 
     def finish_erasure(self, user_id: str) -> None:

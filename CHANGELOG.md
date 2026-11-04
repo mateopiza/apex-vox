@@ -10,6 +10,7 @@ Preparation of the public open-source release.
 
 ### Added
 
+- **Optional Postgres replica of the account state** (`STATE_BACKEND=postgres`, off by default), with a migration, an importer and cutover steps in `docs/deployment.md`. It is an off-machine copy restored if the volume is lost, not a move to Postgres. Only tested against a fake Supabase so far.
 - **Retention sweep.** Deletes expired results from the bucket, disk and Supabase, original uploads after `JOB_RETENTION_HOURS`, and files left by restarts, keeping usage totals in an aggregate ledger. It starts in simulation (`RETENTION_DRY_RUN=true`): see `docs/deployment.md`.
 - **Browser end-to-end suite (`tests/e2e/`, Playwright + real uvicorn server)** covering landing and languages, layout at 390/768/1440 px, guest transcription, sign-up → upload → transcribe → rename → all exports → history → logout, wrong-password login and cross-account job isolation. It is hermetic (outbound requests from the server fail the test) and runs in a new `e2e` CI job that uploads screenshots and traces on failure.
 - **Recorded calls with a masked number (Twilio, Apex Pro).** Phone verification by SMS code (Twilio Verify); bridge calls that ring the verified phone first, ask to press 1 and dial the contact from `TWILIO_CALLER_ID`, so the contact never sees the user's number; recording notice to both parties; dual-channel recording with speakers labelled by channel; live notes during the call placed on the timeline; summary, minutes and email when ready; recordings deleted from Twilio after processing. Web card in "Record", `/api/phone*`, `/api/calls*` and signed `/api/twilio/*` webhooks.
@@ -23,6 +24,7 @@ Preparation of the public open-source release.
 
 ### Changed
 
+- CI: lint rules live in `ruff.toml` with a pinned version and cover Ruff's default set, coverage is reported, the Docker image and CI install exact versions from `requirements.lock`, and the image must pass its health check.
 - Long audio is transcribed faster: up to `GROQ_PARALLEL_CHUNKS` chunks are sent at once and assembled in order. Set it to `1` to keep the text of the previous chunk as context.
 - The web interface is fully translated into Spanish and English. The default language follows the device, then the visitor's country. The plan card adapts to the device.
 - The Chrome extension (manifest, recorder and badge) and the OAuth consent page are available in Spanish and English.

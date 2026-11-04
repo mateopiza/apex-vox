@@ -1,0 +1,7 @@
+line-length = 120
+target-version = "py311"
+
+[lint]
+# Ruff's default rules, written out so that CI and local runs agree. Line length is not enforced
+# yet: many existing lines are over 120.
+select = ["E4", "E7", "E9", "F"]

@@ -57,6 +57,8 @@ Notes on the columns below:
 | `JOB_RETENTION_HOURS` | `24` | No | Original uploads and leftovers are deleted this long after their last change, on every plan. Merged audio and results follow the plan's retention. |
 | `SUMMA_MAX_MAP_BLOCKS` | `8` | No | A long meeting is summarized in parts of up to 24,000 characters and then combined. Above this many parts, an even sample is used and the report says `analysis_source: llm_partial`. |
 | `SUMMA_LLM_BUDGET_SECONDS` | `90` | No | Time for all LLM calls of one report. Past it, the report uses what it has. |
+| `STATE_BACKEND` | `json` | No | `postgres` also keeps a copy of the account state in Supabase. Follow the steps in [deployment.md](deployment.md) first: the app refuses to start without an imported replica. |
+| `STATE_PG_FLUSH_SECONDS` | `2` | No | How often changes are sent to that copy. Also the most that can be lost with the volume. |
 | `JOB_CONCURRENCY` | `2` | No | Recordings processed at the same time. Others wait with status `queued`. |
 | `JOB_TIMEOUT_SECONDS` | `1800` | No | A job over this time fails and gives back its quota. Measured from when it starts running, not while queued. |
 | `CHUNK_DURATION_MINUTES` | `10` | No | Target chunk length. Used only if `CHUNK_TARGET_DURATION_SEC` is unset. |

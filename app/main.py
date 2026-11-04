@@ -403,10 +403,10 @@ async def sitemap(request: Request) -> Response:
     for path, prio in pages:
         sep = "&" if "?" in path else "?"
         alts = "".join(
-            f'<xhtml:link rel="alternate" hreflang="{l}" href="{base}{path}{sep}lang={l}"/>' for l in ("es", "en")
+            f'<xhtml:link rel="alternate" hreflang="{lang}" href="{base}{path}{sep}lang={lang}"/>' for lang in ("es", "en")
         )
-        for l in ("es", "en"):
-            urls.append(f"<url><loc>{base}{path}{sep}lang={l}</loc>{alts}<priority>{prio}</priority></url>")
+        for lang in ("es", "en"):
+            urls.append(f"<url><loc>{base}{path}{sep}lang={lang}</loc>{alts}<priority>{prio}</priority></url>")
     xml = ('<?xml version="1.0" encoding="UTF-8"?>'
            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">'
            + "".join(urls) + "</urlset>")
@@ -612,6 +612,7 @@ def health_check(x_admin_key: Optional[str] = Header(default=None)) -> JSONRespo
     from app.services.supabase_service import supabase_service
 
     state_readable = supabase_service.state_readable()
+    replica_healthy = supabase_service.replica_healthy()
 
     is_healthy = (
         uploads_writable
@@ -620,6 +621,7 @@ def health_check(x_admin_key: Optional[str] = Header(default=None)) -> JSONRespo
         and ffmpeg_available
         and ffprobe_available
         and state_readable
+        and replica_healthy
     )
 
     health_status: Dict[str, Any] = {
@@ -653,6 +655,7 @@ def health_check(x_admin_key: Optional[str] = Header(default=None)) -> JSONRespo
             "outputs_writable": outputs_writable,
             "temp_writable": temp_writable,
             "state_readable": state_readable,
+            "state_replica_healthy": replica_healthy,
             "unsynced_objects": mega_s4_storage.unsynced_count(),
         },
         "models": {

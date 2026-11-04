@@ -34,13 +34,13 @@ jobs:
           cache-dependency-path: requirements*.txt
 
       - name: Install dependencies
-        run: pip install -r requirements-dev.txt
+        run: pip install -c requirements.lock -r requirements-dev.txt
 
-      - name: Syntax and undefined-name check (ruff)
-        run: pip install ruff && ruff check app tests --select E9,F63,F7,F82
+      - name: Lint (ruff)
+        run: ruff check app tests scripts
 
       - name: Run tests
-        run: python -m pytest -q
+        run: python -m pytest -q --cov=app --cov-report=term
 
   e2e:
     name: Browser end-to-end (Playwright)
@@ -63,7 +63,7 @@ jobs:
 
       - name: Install dependencies and Chromium
         run: |
-          pip install -r requirements-e2e.txt
+          pip install -c requirements.lock -r requirements-e2e.txt
           python -m playwright install --with-deps chromium
 
       - name: Run browser journeys
@@ -91,10 +91,22 @@ jobs:
           find app/static/js extension -name '*.js' -print0 | xargs -0 -n1 node --check
 
   docker:
-    name: Docker build
+    name: Docker build and smoke test
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - name: Build image
         run: docker build --pull -t apex-vox:ci .
+      - name: Start the image and wait for its health check
+        run: |
+          docker run -d --name apex-vox-smoke -e ENVIRONMENT=development -e GROQ_API_KEY=gsk_ci_placeholder apex-vox:ci
+          for _ in $(seq 1 30); do
+            status="$(docker inspect --format '{{.State.Health.Status}}' apex-vox-smoke)"
+            echo "health: $status"
+            [ "$status" = "healthy" ] && exit 0
+            [ "$status" = "unhealthy" ] && break
+            sleep 5
+          done
+          docker logs apex-vox-smoke
+          exit 1

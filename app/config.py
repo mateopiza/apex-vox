@@ -380,6 +380,12 @@ class Settings:
     SUPABASE_ANON_KEY: str = field(
         default_factory=lambda: os.getenv("SUPABASE_ANON_KEY", "").strip()
     )
+    STATE_BACKEND: str = field(
+        default_factory=lambda: os.getenv("STATE_BACKEND", "json").strip().lower()
+    )
+    STATE_PG_FLUSH_SECONDS: float = field(
+        default_factory=lambda: float(os.getenv("STATE_PG_FLUSH_SECONDS", "2"))
+    )
     SUPABASE_SERVICE_ROLE_KEY: str = field(
         default_factory=lambda: os.getenv("SUPABASE_SERVICE_ROLE_KEY", "").strip()
     )

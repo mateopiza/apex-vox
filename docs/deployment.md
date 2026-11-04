@@ -105,6 +105,27 @@ Do not cache `/api/*`, `/oauth/*` or `/mcp`. Static assets under `/static/` are 
 
 The sweep starts in simulation (`RETENTION_DRY_RUN=true`). Look for `Retention sweep (dry run` in the logs, check what it would delete, and only then set `RETENTION_DRY_RUN=false`. **Deletions are permanent**, including from object storage. Expired results stop being served from the first deploy, whether or not anything is deleted.
 
+## Postgres replica of the account state (optional)
+
+With `STATE_BACKEND=postgres`, each save of `outputs/supabase_cloud_state.json` is also sent to Supabase, and the app restores the file from there at start-up if the volume is lost.
+
+- **What it is:** an asynchronous copy. Reads stay local and the local file is what counts.
+- **What it is not:** a move to Postgres. Losing the volume loses up to `STATE_PG_FLUSH_SECONDS` of changes, which can include a payment. It does not allow a second replica of the app, and writes cost the same. If two copies do run, the older one stops replicating and fails `/api/health`.
+
+**This has only been tested against a fake Supabase.** Try it on a Supabase branch before production.
+
+**Cutover**
+
+1. Apply `supabase/migrations/20261104120000_app_state.sql`.
+2. Back up `outputs/`.
+3. Set a fixed `APP_SECRET_KEY` if you do not have one: the replica holds digests made with it, so restoring on a new volume without the same key signs everyone out.
+4. `python scripts/import_state_to_postgres.py --dry-run` and check the counts.
+5. Stop the app, and run the import without `--dry-run`.
+6. Set `STATE_BACKEND=postgres` and start the app.
+7. Check `/api/health` with `X-Admin-Key`: `state_replica_healthy` must be `true`.
+
+**Rollback:** unset `STATE_BACKEND`. The local file is complete, so nothing is lost. To turn the replica on again later, repeat from step 4 with `--force`.
+
 ## Volumes and backups
 
 Everything that matters lives in `outputs/`:
@@ -131,7 +152,7 @@ docker compose cp web:/tmp/state.json ./backup/state-$(date +%F).json
 tar -czf backup/outputs-$(date +%F).tgz outputs/
 ```
 
-Encrypt backups at rest: the state file contains password hashes, session tokens and email addresses.
+Encrypt backups at rest: the state file contains password hashes, session digests and email addresses.
 
 ## Healthcheck
 
