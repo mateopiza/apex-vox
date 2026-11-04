@@ -43,6 +43,7 @@
     searchQuery: "",
     dragSrcIndex: null,
     pollTimer: null,
+    polledJobId: null,
     authMode: "login",
   };
 
@@ -1577,7 +1578,11 @@
       body: body ? JSON.stringify(body) : undefined,
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.detail || t("No se pudo completar.", "Could not complete."));
+    if (!res.ok) {
+      const error = new Error(data.detail || t("No se pudo completar.", "Could not complete."));
+      error.status = res.status;
+      throw error;
+    }
     return data;
   }
 
@@ -1606,10 +1611,13 @@
     if (!callState.active) return;
     try {
       const call = await callApi(`/api/calls/${encodeURIComponent(callState.active.call_id)}`);
+      callState.failedRefreshes = 0;
       renderActiveCall(call);
       if (!CALL_ACTIVE.includes(call.status)) loadCalls();
     } catch (err) {
-      renderActiveCall(null);
+      // A dropped connection does not end the call: the card stays until the server says so.
+      callState.failedRefreshes = (callState.failedRefreshes || 0) + 1;
+      if (err.status === 401 || err.status === 404 || callState.failedRefreshes >= 20) renderActiveCall(null);
     }
   }
 
@@ -2265,50 +2273,121 @@
     if (subText) progressSubtext.textContent = subText;
   }
 
-  function pollJobStatus(jobId) {
-    if (state.pollTimer) clearInterval(state.pollTimer);
+  const POLL_INTERVAL_MS = 900;
+  const POLL_MAX_INTERVAL_MS = 15000;
+  const POLL_GIVE_UP_MS = 5 * 60 * 1000;
 
-    state.pollTimer = setInterval(async () => {
-      try {
-        const res = await authFetch(`/api/jobs/${jobId}/status`);
-        const statusData = await res.json();
-        if (!res.ok) {
-          throw new Error(statusData.detail || t("No se pudo consultar el estado.", "Could not check the status."));
-        }
-
-        const chunkInfo =
-          statusData.total_chunks > 0
-            ? `Fragmentos procesados: ${statusData.completed_chunks}/${statusData.total_chunks} · Almacenando`
-            : "Potenciado por Groq · Procesando audio e inteligencia Apex Summa...";
-
-        updateProgressUI(statusData.progress, statusData.current_step, chunkInfo);
-
-        if (statusData.status === "completed") {
-          clearInterval(state.pollTimer);
-          state.pollTimer = null;
-          await loadJobResult(jobId);
-          transcribeBtn.disabled = false;
-        } else if (statusData.status === "failed") {
-          clearInterval(state.pollTimer);
-          state.pollTimer = null;
-          showAlert(statusData.error || "El proceso de transcripción falló.");
-          transcribeBtn.disabled = false;
-        }
-      } catch (err) {
-        clearInterval(state.pollTimer);
-        state.pollTimer = null;
-        showAlert(err.message);
-        transcribeBtn.disabled = false;
-      }
-    }, 900);
+  function stopPolling() {
+    if (state.pollTimer) clearTimeout(state.pollTimer);
+    state.pollTimer = null;
+    state.polledJobId = null;
   }
 
+  function endJobWithError(message) {
+    stopPolling();
+    progressBox.classList.add("hidden");
+    transcribeBtn.disabled = false;
+    if (message) showAlert(message);
+  }
+
+  // One request at a time. A dropped connection or a server restarting is not the job failing:
+  // it keeps running, so the page waits longer between tries and only gives up after minutes.
+  function pollJobStatus(jobId) {
+    stopPolling();
+    state.polledJobId = jobId;
+    let delay = POLL_INTERVAL_MS;
+    let troubleSince = null;
+
+    const tryAgainLater = () => {
+      troubleSince = troubleSince || Date.now();
+      if (Date.now() - troubleSince > POLL_GIVE_UP_MS) {
+        endJobWithError(t(
+          "No pudimos comprobar el estado de tu audio. Puede seguir procesándose: revisa tu historial en unos minutos.",
+          "We could not check on your audio. It may still be processing: look in your history in a few minutes."
+        ));
+        return;
+      }
+      delay = Math.min(delay * 2, POLL_MAX_INTERVAL_MS);
+      state.pollTimer = setTimeout(tick, delay);
+    };
+
+    const tick = async () => {
+      let res;
+      let statusData = null;
+      try {
+        res = await authFetch(`/api/jobs/${jobId}/status`);
+        statusData = await res.json().catch(() => null);
+      } catch (err) {
+        res = null;
+      }
+      if (state.polledJobId !== jobId) return; // another job started meanwhile
+
+      if (!res || res.status >= 500 || (res.ok && !statusData)) {
+        tryAgainLater();
+        return;
+      }
+      if (res.status === 404) {
+        // The status can be gone (a restart, for example) while the result is there.
+        const found = await loadJobResult(jobId);
+        if (found) stopPolling();
+        endJobWithError(null);
+        return;
+      }
+      if (!res.ok) {
+        endJobWithError((statusData && statusData.detail) || t("No se pudo consultar el estado.", "Could not check the status."));
+        return;
+      }
+
+      troubleSince = null;
+      delay = POLL_INTERVAL_MS;
+      const chunkInfo =
+        statusData.total_chunks > 0
+          ? t(
+              `Fragmentos procesados: ${statusData.completed_chunks}/${statusData.total_chunks} · Almacenando`,
+              `Chunks processed: ${statusData.completed_chunks}/${statusData.total_chunks} · Storing`
+            )
+          : t(
+              "Potenciado por Groq · Procesando audio e inteligencia Apex Summa...",
+              "Powered by Groq · Processing audio and Apex Summa intelligence..."
+            );
+
+      updateProgressUI(statusData.progress, statusData.current_step, chunkInfo);
+
+      if (statusData.status === "completed") {
+        stopPolling();
+        await loadJobResult(jobId);
+        transcribeBtn.disabled = false;
+      } else if (statusData.status === "failed") {
+        endJobWithError(statusData.error || t("El proceso de transcripción falló.", "The transcription failed."));
+      } else {
+        state.pollTimer = setTimeout(tick, delay);
+      }
+    };
+
+    state.pollTimer = setTimeout(tick, delay);
+  }
+
+  // Returns whether the result is on screen.
   async function loadJobResult(jobId) {
     try {
       const res = await authFetch(`/api/jobs/${jobId}/result`);
-      const result = await res.json();
-      if (!res.ok) {
-        throw new Error(result.detail || t("No se pudo obtener el resultado.", "Could not load the result."));
+      const result = await res.json().catch(() => null);
+      if (res.status === 202) {
+        // Still being processed (opened from a link): follow it instead of showing nothing.
+        progressBox.classList.remove("hidden");
+        pollJobStatus(jobId);
+        return false;
+      }
+      if (res.status === 410) {
+        progressBox.classList.add("hidden");
+        showAlert(t(
+          "Esta transcripción ya venció y no está disponible.",
+          "This transcription has expired and is no longer available."
+        ));
+        return false;
+      }
+      if (!res.ok || !result) {
+        throw new Error((result && result.detail) || t("No se pudo obtener el resultado.", "Could not load the result."));
       }
 
       state.currentResult = result;
@@ -2320,8 +2399,11 @@
           : "¡Transcripción Apex Vox y Resumen Inteligente Apex Summa completados!",
         "success"
       );
+      return true;
     } catch (err) {
+      progressBox.classList.add("hidden");
       showAlert(err.message);
+      return false;
     }
   }
 

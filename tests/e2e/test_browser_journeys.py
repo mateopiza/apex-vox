@@ -17,7 +17,7 @@ import httpx
 import pytest
 
 pytest.importorskip("playwright.sync_api")
-from playwright.sync_api import Page, expect  # noqa: E402
+from playwright.sync_api import Route, Page, expect  # noqa: E402
 
 pytestmark = pytest.mark.e2e
 
@@ -302,3 +302,95 @@ def test_accounts_cannot_open_each_others_jobs(
     # B's own account history stays empty.
     page.locator("#open-auth-btn").click()
     expect(page.locator("#portal-kpi-jobs-count")).to_have_text("0")
+
+
+def test_progress_survives_a_dropped_connection_and_server_errors(
+    open_page: Callable[..., Page], audio_files: dict
+) -> None:
+    """Before, a single failed status check stopped the progress for good, with the job still running."""
+    page = open_page("/?lang=es")
+    page.errors.expect(r"503|ERR_FAILED|Failed to load resource")  # type: ignore[attr-defined]
+    failures = {"left": 3}
+
+    def flaky(route: Route) -> None:
+        if failures["left"] == 0:
+            route.continue_()
+            return
+        failures["left"] -= 1
+        if failures["left"] == 2:
+            route.abort("failed")
+        else:
+            route.fulfill(status=503, content_type="text/html", body="<html>Bad gateway</html>")
+
+    page.route("**/api/jobs/*/status", flaky)
+    _go_studio(page)
+    _upload(page, audio_files["entrevista"])
+    _transcribe_and_wait(page)
+    assert failures["left"] == 0
+    expect(page.locator("#alert-box")).not_to_contain_text("JSON")
+    expect(page.locator("#progress-box")).to_be_visible()
+
+
+def test_status_gone_after_a_restart_still_shows_the_result(open_page: Callable[..., Page], audio_files: dict) -> None:
+    page = open_page("/?lang=es")
+    page.errors.expect(r"404")  # type: ignore[attr-defined]
+    page.route("**/api/jobs/*/status", lambda route: route.fulfill(status=404, json={"detail": "Trabajo no encontrado."}))
+    results = {"calls": 0}
+
+    def wait_for_result(route: Route) -> None:
+        results["calls"] += 1
+        route.continue_()
+
+    page.route("**/api/jobs/*/result", wait_for_result)
+    _go_studio(page)
+    _upload(page, audio_files["entrevista"])
+    page.locator("#transcribe-btn").click()
+    expect(page.locator("#progress-box")).to_be_hidden(timeout=JOB_TIMEOUT_MS)
+    expect(page.locator("#transcribe-btn")).to_be_enabled()
+    assert results["calls"] == 1
+
+
+def test_expired_link_says_so(open_page: Callable[..., Page], live_server: str, audio_files: dict) -> None:
+    from app.services.job_manager import job_manager
+
+    email = _email("expired")
+    reg = httpx.post(
+        f"{live_server}/api/auth/register", json={"email": email, "password": PASSWORD, "full_name": "Owner"}
+    ).json()
+    auth = {"Authorization": f"Bearer {reg['access_token']}"}
+    with open(audio_files["entrevista"], "rb") as fh:
+        up = httpx.post(
+            f"{live_server}/api/upload", headers=auth, files=[("files", ("a.wav", fh, "audio/wav"))], timeout=30
+        )
+    job = httpx.post(
+        f"{live_server}/api/transcribe?sync=true", headers=auth, timeout=60,
+        json={"session_id": up.json()["session_id"], "file_order": [f["file_id"] for f in up.json()["files"]]},
+    ).json()["job_id"]
+    job_manager.get_job_result(job).expires_at = "2020-01-01T00:00:00+00:00"
+
+    page = open_page("/?lang=es")
+    page.errors.expect(r"410")  # type: ignore[attr-defined]
+    page.evaluate("(token) => localStorage.setItem('apex_vox_token', token)", reg["access_token"])
+    page.goto(f"/?lang=es&job={job}")
+    expect(page.locator("#alert-box")).to_contain_text("venció")
+    expect(page.locator("#result-container")).to_be_hidden()
+    page.goto(f"/?lang=en&job={job}")
+    expect(page.locator("#alert-box")).to_contain_text("expired")
+
+
+def test_link_to_a_job_still_running_follows_it(open_page: Callable[..., Page], audio_files: dict, live_server: str) -> None:
+    page = open_page("/?lang=es")
+    answers = {"result": 0}
+
+    def still_running_once(route: Route) -> None:
+        answers["result"] += 1
+        if answers["result"] == 1:
+            route.fulfill(status=202, json={"detail": "El trabajo aún está en estado 'processing' (40%)."})
+        else:
+            route.continue_()
+
+    _go_studio(page)
+    _upload(page, audio_files["entrevista"])
+    page.route("**/api/jobs/*/result", still_running_once)
+    _transcribe_and_wait(page)
+    assert answers["result"] >= 2
