@@ -43,6 +43,7 @@
     searchQuery: "",
     dragSrcIndex: null,
     pollTimer: null,
+    authMode: "login",
   };
 
   // ---------------------------------------------------------------------------
@@ -219,6 +220,12 @@
       btn_print_minutes: "Imprimir / Guardar PDF",
       auth_modal_title: "Crea tu cuenta: 2 horas gratis al día",
       auth_modal_subtitle: "Al registrarte obtienes <strong>2 horas gratis cada día</strong> (en 1 o varios audios). Lo transcrito lo almacenamos por 24 horas: descárgalo si lo necesitas.",
+      auth_login_title: "Entra a tu cuenta",
+      auth_login_subtitle: "Usa el correo y la contraseña con los que creaste tu cuenta de Apex Vox.",
+      auth_forgot_subtitle: "Te enviaremos un enlace si ese correo tiene una cuenta.",
+      auth_reset_subtitle: "Elige una contraseña de al menos 8 caracteres. Cerraremos tus otras sesiones.",
+      auth_switch_to_login: "¿Ya tienes cuenta? Entrar",
+      auth_switch_to_register: "¿No tienes cuenta? Crear cuenta gratis",
       lbl_full_name: "Nombre Completo",
       lbl_password: "Contraseña",
       btn_create_free_account: "Crear cuenta",
@@ -435,10 +442,16 @@
       btn_print_minutes: "Print / Save PDF",
       auth_modal_title: "Create your account: 2 free hours a day",
       auth_modal_subtitle: "Register to get <strong>2 free hours every day</strong> (in 1 or multiple audios). We store your transcripts for 24 hours: download them if you need them.",
+      auth_login_title: "Sign in to your account",
+      auth_login_subtitle: "Use the email and password you created your Apex Vox account with.",
+      auth_forgot_subtitle: "We'll email a link if that address has an account.",
+      auth_reset_subtitle: "Choose a password of at least 8 characters. We'll sign out your other sessions.",
+      auth_switch_to_login: "Already have an account? Log in",
+      auth_switch_to_register: "No account yet? Create one free",
       lbl_full_name: "Full Name",
       lbl_password: "Password",
       btn_create_free_account: "Create account",
-      btn_login_existing: "Log In",
+      btn_login_existing: "Log in",
       plan_pro_f6: "<strong>Telegram bot:</strong> send voice notes and get the transcript in your chat (1 per subscription)",
       kpi_plan: "Plan",
       kpi_networks: "Networks this month",
@@ -799,6 +812,7 @@
     if (state.currentResult && state.currentResult.plan !== "guest") {
       renderApexSumma(state.currentResult);
     }
+    if (state.authMode) setAuthMode(state.authMode);
   }
 
   function switchView(viewName) {
@@ -970,13 +984,13 @@
 
   function requireSession(message) {
     if (state.token) return true;
+    openAuth("login");
     const fbBox = document.getElementById("auth-feedback-box");
     if (fbBox && message) {
       fbBox.textContent = message;
       fbBox.className = "alert-box alert-success";
       fbBox.classList.remove("hidden");
     }
-    if (authDialog && !authDialog.open) authDialog.showModal();
     return false;
   }
 
@@ -1005,7 +1019,8 @@
       el.classList.toggle("hidden", !on);
       if (on) shown += 1;
     });
-    if (oauthBox) oauthBox.classList.toggle("hidden", shown === 0);
+    const emailAuth = state.authMode === "login" || state.authMode === "register";
+    if (oauthBox) oauthBox.classList.toggle("hidden", shown === 0 || !emailAuth);
   }
 
   async function handleRedirectParams() {
@@ -1077,12 +1092,36 @@
   // Auth, User Portal & Bold API Subscription
   // ---------------------------------------------------------------------------
 
+  function authErrorText(data, fallback) {
+    const detail = data && data.detail;
+    if (typeof detail === "string" && detail) return detail;
+    if (Array.isArray(detail) && detail.length) {
+      const first = detail[0];
+      if (typeof first === "string") return first;
+      if (first && first.msg) return String(first.msg);
+    }
+    return fallback;
+  }
+
+  function showAuthError(message) {
+    const fbBox = document.getElementById("auth-feedback-box");
+    if (!fbBox) return;
+    fbBox.textContent = message;
+    fbBox.className = "alert-box alert-error";
+    fbBox.classList.remove("hidden");
+  }
+
   async function handleRegisterUser() {
+    if (state.authBusy) return;
     const nameEl = document.getElementById("auth-name-input");
     const emailEl = document.getElementById("auth-email-input");
     const pwdEl = document.getElementById("auth-password-input");
-    const fbBox = document.getElementById("auth-feedback-box");
+    if (!emailEl.value.trim() || !pwdEl.value) {
+      showAuthError(t("Escribe tu correo y una contraseña de al menos 8 caracteres.", "Enter your email and a password of at least 8 characters."));
+      return;
+    }
 
+    state.authBusy = true;
     try {
       const res = await fetch("/api/auth/register", {
         method: "POST",
@@ -1095,7 +1134,7 @@
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || t("Error al registrar la cuenta.", "Could not create the account."));
+      if (!res.ok) throw new Error(authErrorText(data, t("Error al registrar la cuenta.", "Could not create the account.")));
 
       storeSession(data);
       if (authDialog) authDialog.close();
@@ -1107,19 +1146,22 @@
       );
       loadUserPortalSummary();
     } catch (err) {
-      if (fbBox) {
-        fbBox.textContent = err.message;
-        fbBox.className = "alert-box alert-error";
-        fbBox.classList.remove("hidden");
-      }
+      showAuthError(err.message);
+    } finally {
+      state.authBusy = false;
     }
   }
 
   async function handleLoginUser() {
+    if (state.authBusy) return;
     const emailEl = document.getElementById("auth-email-input");
     const pwdEl = document.getElementById("auth-password-input");
-    const fbBox = document.getElementById("auth-feedback-box");
+    if (!emailEl.value.trim() || !pwdEl.value) {
+      showAuthError(t("Escribe tu correo y tu contraseña.", "Enter your email and password."));
+      return;
+    }
 
+    state.authBusy = true;
     try {
       const res = await fetch("/api/auth/login", {
         method: "POST",
@@ -1130,17 +1172,19 @@
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || t("Correo o contraseña incorrectos.", "Wrong email or password."));
+      if (!res.ok) throw new Error(authErrorText(data, t("Correo o contraseña incorrectos.", "Wrong email or password.")));
 
       storeSession(data);
       if (authDialog) authDialog.close();
+      showAlert(
+        t(`Hola ${data.full_name}. Sesión iniciada.`, `Hi ${data.full_name}. You're signed in.`),
+        "success"
+      );
       loadUserPortalSummary();
     } catch (err) {
-      if (fbBox) {
-        fbBox.textContent = err.message;
-        fbBox.className = "alert-box alert-error";
-        fbBox.classList.remove("hidden");
-      }
+      showAuthError(err.message);
+    } finally {
+      state.authBusy = false;
     }
   }
 
@@ -1345,23 +1389,69 @@
   // --- password recovery ---------------------------------------------------------
   function setAuthMode(mode) {
     const show = (id, on) => { const el = document.getElementById(id); if (el) el.classList.toggle("hidden", !on); };
+    const emailAuth = mode === "register" || mode === "login";
     show("auth-name-group", mode === "register");
     show("auth-email-group", mode !== "reset");
     show("auth-password-group", mode !== "forgot");
-    show("auth-main-actions", mode === "register");
+    show("auth-register-actions", mode === "register");
+    show("auth-login-actions", mode === "login");
     show("auth-forgot-actions", mode === "forgot");
     show("auth-reset-actions", mode === "reset");
-    show("forgot-password-btn", mode === "register");
-    show("oauth-options", mode === "register" && (state.config.oauth_providers || []).length > 0);
+    show("auth-switch-foot", emailAuth);
+    show("switch-to-login-btn", mode === "register");
+    show("switch-to-register-btn", mode === "login");
+    show("auth-forgot-foot", emailAuth);
+    show("forgot-password-btn", emailAuth);
+    ["submit-login-btn", "submit-register-btn", "submit-forgot-btn", "submit-reset-btn"].forEach((id) => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      const active = (id === "submit-login-btn" && mode === "login")
+        || (id === "submit-register-btn" && mode === "register")
+        || (id === "submit-forgot-btn" && mode === "forgot")
+        || (id === "submit-reset-btn" && mode === "reset");
+      btn.type = active ? "submit" : "button";
+    });
+    show("oauth-options", emailAuth && (state.config.oauth_providers || []).length > 0);
+    const pwd = document.getElementById("auth-password-input");
+    if (pwd) pwd.autocomplete = mode === "register" || mode === "reset" ? "new-password" : "current-password";
+    const dict = I18N[state.lang] || I18N.es;
     const title = document.getElementById("auth-dialog-title");
+    const lead = document.getElementById("auth-dialog-lead");
     if (title) {
       title.textContent = mode === "forgot"
         ? t("Recupera tu contraseña", "Recover your password")
         : mode === "reset"
           ? t("Elige una nueva contraseña", "Choose a new password")
-          : (I18N[state.lang] || I18N.es).auth_modal_title;
+          : mode === "login"
+            ? dict.auth_login_title
+            : dict.auth_modal_title;
+    }
+    if (lead) {
+      const html = mode === "login"
+        ? dict.auth_login_subtitle
+        : mode === "register"
+          ? dict.auth_modal_subtitle
+          : mode === "forgot"
+            ? dict.auth_forgot_subtitle
+            : dict.auth_reset_subtitle;
+      if (html) lead.innerHTML = html;
+    }
+    if (state.authMode !== mode) {
+      const fb = document.getElementById("auth-feedback-box");
+      if (fb) {
+        fb.textContent = "";
+        fb.classList.add("hidden");
+      }
     }
     state.authMode = mode;
+  }
+
+  function openAuth(mode) {
+    setAuthMode(mode || "login");
+    if (authDialog && !authDialog.open) authDialog.showModal();
+    const focusId = mode === "register" ? "auth-name-input" : mode === "reset" ? "auth-password-input" : "auth-email-input";
+    const focusEl = document.getElementById(focusId);
+    if (focusEl) window.setTimeout(() => focusEl.focus(), 0);
   }
 
   async function submitForgotPassword() {
@@ -1392,7 +1482,7 @@
       storeSession(data);
       state.resetToken = null;
       if (authDialog) authDialog.close();
-      setAuthMode("register");
+      setAuthMode("login");
       showAlert(t("Contraseña actualizada. Cerramos tus otras sesiones.", "Password updated. Your other sessions were signed out."), "success");
     } catch (err) {
       if (fb) { fb.textContent = err.message; fb.className = "alert-box alert-error"; }
@@ -2759,7 +2849,7 @@
       if (state.user) {
         switchView("portal");
       } else {
-        authDialog.showModal();
+        openAuth("login");
       }
     });
   }
@@ -2769,14 +2859,24 @@
   on("tg-unlink-btn", "click", unlinkTelegram);
   on("delete-account-btn", "click", deleteAccount);
   on("forgot-password-btn", "click", () => setAuthMode("forgot"));
-  on("back-to-login-btn", "click", () => setAuthMode("register"));
-  on("submit-forgot-btn", "click", submitForgotPassword);
-  on("submit-reset-btn", "click", submitResetPassword);
+  on("back-to-login-btn", "click", () => setAuthMode("login"));
+  on("switch-to-login-btn", "click", () => setAuthMode("login"));
+  on("switch-to-register-btn", "click", () => setAuthMode("register"));
   on("newsletter-form", "submit", submitNewsletter);
-  const openSignup = () => { setAuthMode("register"); if (authDialog && !authDialog.open) authDialog.showModal(); };
+  const authForm = document.getElementById("auth-form");
+  if (authForm) {
+    authForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      if (state.authMode === "register") handleRegisterUser();
+      else if (state.authMode === "forgot") submitForgotPassword();
+      else if (state.authMode === "reset") submitResetPassword();
+      else handleLoginUser();
+    });
+  }
+  const openSignup = () => openAuth("register");
   on("guest-signup-btn", "click", openSignup);
   on("guest-result-signup-btn", "click", openSignup);
-  if (authDialog) authDialog.addEventListener("close", () => { if (state.authMode !== "reset") setAuthMode("register"); });
+  if (authDialog) authDialog.addEventListener("close", () => { if (state.authMode !== "reset") setAuthMode("login"); });
 
   const portalLogoutBtn = document.getElementById("portal-logout-btn");
   if (portalLogoutBtn) {
@@ -2822,23 +2922,17 @@
   }
   const heroRegisterBtn = document.getElementById("hero-register-btn");
   if (heroRegisterBtn && authDialog) {
-    heroRegisterBtn.addEventListener("click", () => authDialog.showModal());
+    heroRegisterBtn.addEventListener("click", () => openAuth("register"));
   }
   const pricingFreeBtn = document.getElementById("pricing-free-btn");
   if (pricingFreeBtn && authDialog) {
-    pricingFreeBtn.addEventListener("click", () => authDialog.showModal());
+    pricingFreeBtn.addEventListener("click", () => openAuth("register"));
   }
 
   const heroTrialBtn = document.getElementById("hero-trial-btn");
   if (heroTrialBtn) heroTrialBtn.addEventListener("click", openProCheckout);
   const pricingProBtn = document.getElementById("pricing-pro-btn");
   if (pricingProBtn) pricingProBtn.addEventListener("click", openProCheckout);
-
-  const submitRegisterBtn = document.getElementById("submit-register-btn");
-  if (submitRegisterBtn) submitRegisterBtn.addEventListener("click", handleRegisterUser);
-
-  const submitLoginBtn = document.getElementById("submit-login-btn");
-  if (submitLoginBtn) submitLoginBtn.addEventListener("click", handleLoginUser);
 
   const portalGenerateBoldLinkBtn = document.getElementById("portal-generate-bold-link-btn");
   if (portalGenerateBoldLinkBtn) {
@@ -3922,7 +4016,7 @@
 
   // ?login=1 (desde la extensión): pide iniciar sesión si no hay sesión activa
   if (urlParams.get("login") && !state.token && authDialog && !authDialog.open) {
-    authDialog.showModal();
+    openAuth("login");
   }
 
   // Deep link ?job=<job_id> (enlace final del grabador de la extensión): abre notas, resumen y acta

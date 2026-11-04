@@ -1055,12 +1055,12 @@
 
   <!-- Auth dialog -->
   <dialog id="auth-dialog" closedby="any" aria-labelledby="auth-dialog-title" class="apex-dialog">
-    <form class="dialog-inner" method="dialog" novalidate>
+    <form class="dialog-inner" id="auth-form" novalidate>
       <div class="dialog-header">
-        <h3 id="auth-dialog-title" data-i18n="auth_modal_title">Regístrate en Apex Vox — 2 Horas Gratis al Día</h3>
+        <h3 id="auth-dialog-title" data-i18n="auth_login_title">Entra a tu cuenta</h3>
         <button type="button" class="icon-btn" id="close-auth-dialog-btn" aria-label="Cerrar">×</button>
       </div>
-      <p class="dialog-lead" data-i18n="auth_modal_subtitle">Al registrarte obtienes <strong>2 horas gratis cada día</strong> (en 1 o varios audios). Lo transcrito lo almacenamos por 24 horas: descárgalo si lo necesitas.</p>
+      <p class="dialog-lead" id="auth-dialog-lead" data-i18n="auth_login_subtitle">Usa el correo y la contraseña con los que creaste tu cuenta de Apex Vox.</p>
 
       <div id="oauth-options" class="oauth-options hidden">
         <a class="oauth-btn hidden" data-oauth-provider="google" href="/api/auth/oauth/google">
@@ -1074,7 +1074,7 @@
         <div class="oauth-divider"><span data-i18n="oauth_divider">o con tu correo</span></div>
       </div>
 
-      <div class="form-group" id="auth-name-group">
+      <div class="form-group hidden" id="auth-name-group">
         <label class="form-label" for="auth-name-input" data-i18n="lbl_full_name">Nombre Completo</label>
         <input type="text" id="auth-name-input" class="form-control" placeholder="Ej. Carlos Mendoza" autocomplete="name" maxlength="120" />
       </div>
@@ -1089,9 +1089,11 @@
 
       <div id="auth-feedback-box" class="alert-box hidden" role="alert"></div>
 
-      <div class="dialog-actions" id="auth-main-actions">
-        <button type="button" id="submit-register-btn" class="btn-primary" data-i18n="btn_create_free_account">Crear Cuenta (2h Gratis / Día)</button>
-        <button type="button" id="submit-login-btn" class="btn-secondary" data-i18n="btn_login_existing">Entrar</button>
+      <div class="dialog-actions hidden" id="auth-register-actions">
+        <button type="button" id="submit-register-btn" class="btn-primary" data-i18n="btn_create_free_account">Crear cuenta</button>
+      </div>
+      <div class="dialog-actions" id="auth-login-actions">
+        <button type="button" id="submit-login-btn" class="btn-primary" data-i18n="btn_login_existing">Entrar</button>
       </div>
       <div class="dialog-actions hidden" id="auth-forgot-actions">
         <button type="button" id="submit-forgot-btn" class="btn-primary" data-i18n="btn_send_reset">Enviar enlace</button>
@@ -1100,7 +1102,11 @@
       <div class="dialog-actions hidden" id="auth-reset-actions">
         <button type="button" id="submit-reset-btn" class="btn-primary" data-i18n="btn_save_password">Guardar nueva contraseña</button>
       </div>
-      <p class="dialog-foot">
+      <p class="dialog-foot" id="auth-switch-foot">
+        <button type="button" class="text-link-strong hidden" id="switch-to-login-btn" data-i18n="auth_switch_to_login">¿Ya tienes cuenta? Entrar</button>
+        <button type="button" class="text-link-strong" id="switch-to-register-btn" data-i18n="auth_switch_to_register">¿No tienes cuenta? Crear cuenta gratis</button>
+      </p>
+      <p class="dialog-foot" id="auth-forgot-foot">
         <button type="button" class="text-link-strong" id="forgot-password-btn" data-i18n="forgot_link">¿Olvidaste tu contraseña?</button>
       </p>
       <p class="dialog-legal" data-i18n="auth_legal">Al continuar aceptas los <a href="/legal/terminos" target="_blank">Términos y Condiciones</a> y autorizas el tratamiento de tus datos, incluida tu voz, según la <a href="/legal/habeas-data" target="_blank">Política de Tratamiento de Datos (Habeas Data)</a>.</p>
