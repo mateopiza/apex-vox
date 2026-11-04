@@ -36,12 +36,12 @@ RUN python -m venv /opt/venv
 # 4. Set application working directory
 WORKDIR /app
 
-# 5. Copy dependency definitions first (cached unless requirements.txt changes)
-COPY requirements.txt requirements-dev.txt ./
+# 5. Copy dependency definitions first (cached unless they change); the image installs exact versions
+COPY requirements.txt requirements.lock requirements-dev.txt ./
 
 # 6. Install Python dependencies inside virtual environment
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir -r requirements.lock && \
     if [ "$INSTALL_DEV_DEPS" = "true" ]; then pip install --no-cache-dir -r requirements-dev.txt; fi
 
 # 7. Create storage directories for audio uploads, outputs, and temp chunk processing

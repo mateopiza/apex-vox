@@ -29,7 +29,7 @@ uvicorn app.main:app --reload --port 8000
 ```bash
 python -m pytest -q                                           # full test suite (needs ffmpeg/ffprobe)
 python -m pytest tests/test_mcp_oauth.py -q                   # a single file
-pip install ruff && ruff check app tests --select E9,F63,F7,F82   # same lint as CI
+ruff check app tests scripts                                  # same lint as CI (rules in ruff.toml)
 find app/static/js extension -name '*.js' -print0 | xargs -0 -n1 node --check
 docker build -t apex-vox:dev .                                # image builds
 
@@ -37,6 +37,8 @@ docker build -t apex-vox:dev .                                # image builds
 pip install -r requirements-e2e.txt && python -m playwright install chromium
 python -m pytest tests/e2e -q                                 # E2E_HEADED=1 to watch the browser
 ```
+
+The Docker image and CI install the exact versions in `requirements.lock`. After changing `requirements.txt`, regenerate it with `uv pip compile requirements.txt -o requirements.lock --python-version 3.11`.
 
 External services are mocked in the tests, so you need no real keys. `tests/conftest.py` forces `ENVIRONMENT=development`, sets a placeholder Groq key, blanks third-party keys and sets `APEX_VOX_SKIP_DOTENV=1`, so your `.env` (and its production keys) is never loaded during a test run. It also points `UPLOAD_DIR`, `OUTPUT_DIR` and `TEMP_DIR` at a temporary directory and refuses outbound network, so a run leaves your local accounts and audio untouched.
 

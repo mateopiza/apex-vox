@@ -403,10 +403,10 @@ async def sitemap(request: Request) -> Response:
     for path, prio in pages:
         sep = "&" if "?" in path else "?"
         alts = "".join(
-            f'<xhtml:link rel="alternate" hreflang="{l}" href="{base}{path}{sep}lang={l}"/>' for l in ("es", "en")
+            f'<xhtml:link rel="alternate" hreflang="{lang}" href="{base}{path}{sep}lang={lang}"/>' for lang in ("es", "en")
         )
-        for l in ("es", "en"):
-            urls.append(f"<url><loc>{base}{path}{sep}lang={l}</loc>{alts}<priority>{prio}</priority></url>")
+        for lang in ("es", "en"):
+            urls.append(f"<url><loc>{base}{path}{sep}lang={lang}</loc>{alts}<priority>{prio}</priority></url>")
     xml = ('<?xml version="1.0" encoding="UTF-8"?>'
            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">'
            + "".join(urls) + "</urlset>")

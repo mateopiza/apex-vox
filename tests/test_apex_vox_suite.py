@@ -124,7 +124,10 @@ def test_bold_checkout_usd_welcome_promo_and_signed_webhook(monkeypatch: pytest.
     - A signed SALE_APPROVED webhook grants 30 days, idempotently, and consumes the promo.
     - The same network (IP) cannot get the promo again within 90 days; the next month costs USD 10.
     """
-    import base64, hashlib, hmac, json as _json
+    import base64
+    import hashlib
+    import hmac
+    import json as _json
     from app.config import settings as _settings
     from app.services import bold_service
     from app.services.supabase_service import supabase_service
