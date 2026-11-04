@@ -16,14 +16,16 @@ import datetime
 import json
 import logging
 import subprocess
+import threading
 import uuid
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 
 from app.config import settings
 from app.models.schemas import VoiceProfile, WhisperSegment
+from app.services.state_store import StateCorruptError, atomic_write_json, read_json
 
 logger = logging.getLogger("app.services.acoustic_diarizer")
 
@@ -288,23 +290,38 @@ def list_voice_profiles(owner_id: Optional[str] = None) -> List[VoiceProfile]:
     return [p for p in _load_all_profiles() if p.owner_id == owner_id]
 
 
-def _load_all_profiles() -> List[VoiceProfile]:
+_profiles_lock = threading.RLock()
+
+
+def _read_profiles() -> List[VoiceProfile]:
+    """All profiles, or StateCorruptError if the file or any record in it is damaged."""
     path = _profiles_file_path()
     if not path.exists():
         return []
+    raw = read_json(path)
+    if not isinstance(raw, list):
+        raise StateCorruptError(path.name)
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        return [VoiceProfile(**item) for item in raw if isinstance(item, dict)]
-    except Exception as exc:
-        logger.warning("Failed to load voice profiles: %s", exc)
-        return []
+        return [VoiceProfile(**item) for item in raw]
+    except (TypeError, ValueError) as exc:
+        raise StateCorruptError(f"{path.name}: {type(exc).__name__}") from exc
 
 
-def save_voice_profiles(profiles: List[VoiceProfile]) -> None:
-    path = _profiles_file_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    data = [p.model_dump(mode="json") for p in profiles]
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+def _load_all_profiles() -> List[VoiceProfile]:
+    """Read path: damaged profiles match nobody, but are logged and left for an operator."""
+    with _profiles_lock:
+        try:
+            return _read_profiles()
+        except StateCorruptError as exc:
+            logger.error("Voice profiles are unreadable, leaving them untouched: %s", exc)
+            return []
+
+
+def update_voice_profiles(change: Callable[[List[VoiceProfile]], List[VoiceProfile]]) -> None:
+    """Read-modify-write under the lock. Raises rather than overwrite other accounts' profiles."""
+    with _profiles_lock:
+        profiles = change(_read_profiles())
+        atomic_write_json(_profiles_file_path(), [p.model_dump(mode="json") for p in profiles], indent=2)
 
 
 def enroll_voice_profile(
@@ -339,13 +356,6 @@ def enroll_voice_profile(
 
     if not owner_id:
         raise ValueError("Inicia sesión para registrar perfiles de voz.")
-    profiles = _load_all_profiles()
-    # Replace this owner's existing profile with the same name (case-insensitive)
-    profiles = [
-        p for p in profiles
-        if not (p.owner_id == owner_id and p.name.lower() == clean_name.lower())
-    ]
-
     profile = VoiceProfile(
         profile_id=f"vp_{uuid.uuid4().hex[:8]}",
         name=clean_name,
@@ -356,17 +366,20 @@ def enroll_voice_profile(
         created_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
         owner_id=owner_id,
     )
-    profiles.append(profile)
-    save_voice_profiles(profiles)
+    # Replace this owner's existing profile with the same name (case-insensitive)
+    update_voice_profiles(
+        lambda profiles: [
+            p for p in profiles
+            if not (p.owner_id == owner_id and p.name.lower() == clean_name.lower())
+        ] + [profile]
+    )
     return profile
 
 
 def delete_voice_profile(profile_id: str, owner_id: Optional[str]) -> List[VoiceProfile]:
-    profiles = [
-        p for p in _load_all_profiles()
-        if not (p.profile_id == profile_id and p.owner_id == owner_id)
-    ]
-    save_voice_profiles(profiles)
+    update_voice_profiles(
+        lambda profiles: [p for p in profiles if not (p.profile_id == profile_id and p.owner_id == owner_id)]
+    )
     return list_voice_profiles(owner_id)
 
 

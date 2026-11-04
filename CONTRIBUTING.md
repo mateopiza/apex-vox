@@ -21,7 +21,7 @@ uvicorn app.main:app --reload --port 8000
 
 - Open <http://localhost:8000>. API docs are at <http://localhost:8000/docs> in development.
 - Every integration except Groq is optional. Without its keys, a feature is disabled or falls back to local behaviour (see [docs/configuration.md](docs/configuration.md)).
-- Runtime data is written to `uploads/`, `outputs/` and `temp/`, which are git-ignored. Delete `outputs/supabase_cloud_state.json` to reset local accounts.
+- Runtime data is written to `uploads/`, `outputs/` and `temp/`, which are git-ignored. To reset local accounts, stop the server and delete `outputs/supabase_cloud_state.json` (deleting it while the server runs makes the app answer 503).
 - To work on the Chrome extension, load `extension/` unpacked (see [docs/extension.md](docs/extension.md)). It talks to `http://localhost:8000` once you set that as its server.
 
 ## Running checks

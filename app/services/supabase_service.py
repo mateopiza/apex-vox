@@ -37,6 +37,7 @@ import httpx
 
 from app.config import settings
 from app.models.schemas import QuotaUsageResponse, UserProfileResponse
+from app.services.state_store import StateCorruptError, atomic_write_bytes, atomic_write_json, read_json
 
 logger = logging.getLogger("app.services.supabase_service")
 
@@ -125,48 +126,43 @@ class SupabaseCloudService:
         }
 
     def _ensure_seed_state(self) -> None:
+        """Create the state file on first start only: at runtime a missing file is an error, not a reset."""
         with self._lock:
-            if not self._db_file.exists():
-                self._db_file.parent.mkdir(parents=True, exist_ok=True)
-                initial = {
-                    "users": {},
-                    "tokens": {},
-                    "daily_usage": {},
-                    "subscriptions": {},
-                    "transcriptions": {},
-                }
-                self._db_file.write_text(
-                    json.dumps(initial, ensure_ascii=False, indent=2),
-                    encoding="utf-8",
+            if self._db_file.exists():
+                return
+            if next(self._db_file.parent.glob("*_result.json"), None):
+                logger.error(
+                    "%s is missing but transcriptions exist: starting with no accounts. "
+                    "Check the data volume or restore a backup.",
+                    self._db_file.name,
                 )
+            atomic_write_json(
+                self._db_file,
+                {"users": {}, "tokens": {}, "daily_usage": {}, "subscriptions": {}, "transcriptions": {}},
+            )
 
     def _load_db(self) -> Dict[str, Any]:
+        """A fresh copy of the state, or StateCorruptError. Never an empty stand-in: the next save would keep it."""
         with self._lock:
-            self._ensure_seed_state()
-            try:
-                db = json.loads(self._db_file.read_text(encoding="utf-8"))
-                for key in ("users", "tokens", "daily_usage", "subscriptions", "transcriptions", "payments", "handoffs", "promo_ips"):
-                    db.setdefault(key, {})
-                return db
-            except Exception:
-                return {
-                    "users": {},
-                    "tokens": {},
-                    "daily_usage": {},
-                    "subscriptions": {},
-                    "transcriptions": {},
-                    "payments": {},
-                    "handoffs": {},
-                    "promo_ips": {},
-                }
+            db = read_json(self._db_file)
+            if not isinstance(db, dict):
+                raise StateCorruptError(self._db_file.name)
+            for key in ("users", "tokens", "daily_usage", "subscriptions", "transcriptions", "payments", "handoffs", "promo_ips"):
+                db.setdefault(key, {})
+            return db
 
     def _save_db(self, db: Dict[str, Any]) -> None:
         with self._lock:
-            self._db_file.parent.mkdir(parents=True, exist_ok=True)
-            self._db_file.write_text(
-                json.dumps(db, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
+            atomic_write_json(self._db_file, db)
+
+    def state_readable(self) -> bool:
+        """Health check: can the accounts file be read?"""
+        try:
+            self._load_db()
+            return True
+        except StateCorruptError as exc:
+            logger.error("Account state is unreadable: %s", exc)
+            return False
 
     def _sync_to_supabase_table(
         self, table: str, record: Dict[str, Any], upsert_col: Optional[str] = None
@@ -848,14 +844,14 @@ class SupabaseCloudService:
             return env_secret.encode("utf-8")
         path = settings.OUTPUT_DIR / ".app_secret"
         with self._lock:
-            if not path.exists():
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(secrets.token_hex(32), encoding="utf-8")
-                try:
-                    path.chmod(0o600)
-                except OSError:
-                    logger.debug("Could not restrict permissions of %s", path)  # p. ej. sistemas sin chmod
-            return path.read_text(encoding="utf-8").strip().encode("utf-8")
+            secret = path.read_bytes().strip() if path.exists() else b""
+            if not secret:
+                if path.exists():
+                    # Solo pasa con un archivo dañado por una versión anterior; una clave vacía sería pública.
+                    logger.error("%s was empty: generating a new secret (existing sessions stop working).", path.name)
+                secret = secrets.token_hex(32).encode("utf-8")
+                atomic_write_bytes(path, secret)
+            return secret
 
     def _digest(self, value: str) -> str:
         return hmac.new(self._app_secret(), value.encode("utf-8"), hashlib.sha256).hexdigest()
@@ -1069,9 +1065,9 @@ class SupabaseCloudService:
             for suffix in ("_result.json", "_merged.mp3"):
                 (settings.OUTPUT_DIR / f"{jid}{suffix}").unlink(missing_ok=True)
         try:
-            from app.services.acoustic_diarizer import _load_all_profiles, save_voice_profiles
+            from app.services.acoustic_diarizer import update_voice_profiles
 
-            save_voice_profiles([p for p in _load_all_profiles() if p.owner_id != user_id])
+            update_voice_profiles(lambda profiles: [p for p in profiles if p.owner_id != user_id])
         except Exception as exc:
             logger.warning("Voice profile cleanup failed: %s", exc)
         return {"email": user.get("email", ""), "jobs_deleted": len(removed_jobs)}
