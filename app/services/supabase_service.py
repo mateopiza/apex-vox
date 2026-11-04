@@ -278,8 +278,12 @@ class SupabaseCloudService:
                     matched_user = u
                     break
 
-            if not matched_user or not _verify_password(password, matched_user.get("password_hash", "")):
-                raise ValueError("Credenciales inválidas. Verifica tu correo y contraseña.")
+            local_ok = bool(matched_user) and _verify_password(password, matched_user.get("password_hash", ""))
+            if not local_ok:
+                cloud = self._gotrue_user(clean_email, password) if self.is_cloud_configured else None
+                if not cloud:
+                    raise ValueError("Credenciales inválidas. Verifica tu correo y contraseña.")
+                matched_user = self._bind_cloud_user(db, cloud, password)
 
             # Transparently migrate legacy SHA-256 hashes to PBKDF2.
             if not str(matched_user.get("password_hash", "")).startswith("pbkdf2_sha256$"):
@@ -1072,8 +1076,75 @@ class SupabaseCloudService:
         remote = {k: v for k, v in record.items() if k in TRANSCRIPTION_COLUMNS}
         self._sync_to_supabase_table("transcriptions", remote, upsert_col="job_id")
 
+    def _gotrue_user(self, email: str, password: str) -> Optional[Dict[str, Any]]:
+        """Confirm email and password with Supabase Auth. Returns the Auth user or None."""
+        anon = (settings.SUPABASE_ANON_KEY or "").strip()
+        if not settings.SUPABASE_URL or not anon:
+            return None
+        url = settings.SUPABASE_URL.rstrip("/") + "/auth/v1/token?grant_type=password"
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                resp = client.post(
+                    url,
+                    headers={"apikey": anon, "Content-Type": "application/json"},
+                    json={"email": email, "password": password},
+                )
+            if resp.status_code != 200:
+                return None
+            user = (resp.json() or {}).get("user") or {}
+            return user if user.get("id") and user.get("email") else None
+        except Exception as exc:
+            logger.debug("Supabase Auth login skipped: %s", exc)
+            return None
+
+    def _bind_cloud_user(self, db: Dict[str, Any], user: Dict[str, Any], password: str) -> Dict[str, Any]:
+        """Attach a Supabase Auth account to the local session store, keeping that account's id."""
+        user_id = str(user["id"])
+        email = str(user["email"]).strip().lower()
+        meta = user.get("user_metadata") if isinstance(user.get("user_metadata"), dict) else {}
+        now_iso = _now().isoformat()
+        existing = None
+        for record in db["users"].values():
+            if str(record.get("email", "")).lower() == email:
+                existing = record
+                break
+        # A cloud account that already has local history keeps its local id.
+        if existing and existing.get("user_id") != user_id:
+            existing["password_hash"] = _hash_password(password)
+            self._apply_lifetime_pro(existing, user)
+            return existing
+        record = db["users"].get(user_id) or {
+            "user_id": user_id,
+            "email": email,
+            "full_name": str(meta.get("full_name") or email.split("@")[0]).strip() or email,
+            "plan": "free",
+            "preferred_language": "es",
+            "trial_started_at": None,
+            "trial_ends_at": None,
+            "trial_used": False,
+            "pro_until": None,
+            "auto_billing_enabled": False,
+            "auth_providers": ["email"],
+            "created_at": user.get("created_at") or now_iso,
+        }
+        record["email"] = email
+        record["password_hash"] = _hash_password(password)
+        self._apply_lifetime_pro(record, user)
+        db["users"][user_id] = record
+        return record
+
+    @staticmethod
+    def _apply_lifetime_pro(record: Dict[str, Any], user: Dict[str, Any]) -> None:
+        """A Supabase account marked plan=pro with no end date stays Pro. An expiry is not invented."""
+        app_meta = user.get("app_metadata") if isinstance(user.get("app_metadata"), dict) else {}
+        if app_meta.get("plan") == "pro" and not app_meta.get("pro_until"):
+            record["plan"] = "pro"
+            record["pro_until"] = None
+
     def list_user_transcriptions(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Return non-expired transcription records for the user portal."""
+        """Return non-expired transcription records for one account. No account, no rows."""
+        if not user_id:
+            return []
         now = dt.datetime.now(dt.timezone.utc)
         with self._lock:
             db = self._load_db()
