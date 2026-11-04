@@ -196,8 +196,35 @@ def _start_background_services() -> None:
 
     threading.Thread(target=boot, name="background-services", daemon=True).start()
     threading.Thread(target=_billing_email_loop, name="billing-emails", daemon=True).start()
+    threading.Thread(target=_recover_then_maintain, name="maintenance", daemon=True).start()
     if not settings.is_email_configured:
         logger.warning("RESEND_API_KEY no está configurada: no se enviará ningún correo.")
+
+
+def _recover_then_maintain() -> None:
+    """After a restart, settle interrupted work; then, each minute, free what is no longer needed."""
+    from app.api.deps import prune_throttle
+    from app.services import recall_service, twilio_service
+    from app.services.apex_box import apex_box_manager
+    from app.services.job_manager import job_manager
+
+    for recover in (
+        job_manager.recover_interrupted_jobs,
+        recall_service.resume_interrupted_bots,
+        twilio_service.resume_interrupted_calls,
+    ):
+        try:
+            recover()
+        except Exception:
+            logger.exception("Could not recover interrupted work")
+
+    while not _stop_background.wait(60):
+        try:
+            job_manager.evict()
+            apex_box_manager.evict_completed()
+            prune_throttle()
+        except Exception:
+            logger.exception("Maintenance failed")
 
 
 def _billing_email_loop() -> None:

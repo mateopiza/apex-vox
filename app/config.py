@@ -551,6 +551,9 @@ class Settings:
     # -------------------------------------------------------------------------
     # Job Management & Lifecycle
     # -------------------------------------------------------------------------
+    JOB_CONCURRENCY: int = field(
+        default_factory=lambda: int(os.getenv("JOB_CONCURRENCY", "2"))
+    )
     JOB_TIMEOUT_SECONDS: int = field(
         default_factory=lambda: int(os.getenv("JOB_TIMEOUT_SECONDS", "1800"))
     )

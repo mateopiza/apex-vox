@@ -291,6 +291,14 @@ class ApexBoxManager:
             self._sessions[box_id] = session
             return self._to_state_response(session)
 
+    def evict_completed(self, max_age_seconds: float = 3600.0) -> None:
+        """Forget finished recordings: their result lives on disk. Runs periodically."""
+        cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(seconds=max_age_seconds)
+        with self._lock:
+            for box_id, session in list(self._sessions.items()):
+                if session.status == "completed" and dt.datetime.fromisoformat(session.updated_at) <= cutoff:
+                    del self._sessions[box_id]
+
     def get_session(self, box_session_id: str) -> BoxSession:
         with self._lock:
             session = self._sessions.get(box_session_id)

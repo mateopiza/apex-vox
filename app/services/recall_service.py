@@ -25,12 +25,14 @@ from urllib.parse import urlparse
 
 import httpx
 
-from app.errors import UserFacingError, public_error
+from app.errors import GENERIC_ERROR, UserFacingError, public_error
 from app.logsafe import clean
 from app.config import settings
 from app.services.supabase_service import supabase_service
 
 logger = logging.getLogger("app.services.recall_service")
+
+MAX_PROCESSING_ATTEMPTS = 3
 
 MEETING_URL_RE = re.compile(
     r"https://(?:[\w-]+\.)?(?:meet\.google\.com/[a-z]{3}-[a-z]{4}-[a-z]{3}"
@@ -218,11 +220,44 @@ def handle_status_event(payload: Dict[str, Any]) -> Dict[str, Any]:
     }
     if event in status_map:
         _update(bot_id, status=status_map[event])
-    if event == "bot.done":
-        rec = _update(bot_id, status="processing")
-        if rec and not rec.get("job_id"):
-            threading.Thread(target=process_finished_bot, args=(bot_id,), daemon=True).start()
+    if event == "bot.done" and _claim_processing(bot_id):
+        threading.Thread(target=process_finished_bot, args=(bot_id,), daemon=True).start()
     return {"status": "ok", "event": event}
+
+
+def _claim_processing(bot_id: str) -> bool:
+    """Webhooks get repeated: only the first `bot.done` processes the recording."""
+    with supabase_service._lock:
+        db = supabase_service._load_db()
+        rec = _bots(db).get(bot_id)
+        if not rec or rec.get("job_id") or rec.get("processing_started_at"):
+            return False
+        rec.update(status="processing", processing_started_at=dt.datetime.now(dt.timezone.utc).isoformat())
+        supabase_service._save_db(db)
+        return True
+
+
+def resume_interrupted_bots() -> int:
+    """At start-up: process again what a restart cut off, a limited number of times."""
+    resumed = []
+    with supabase_service._lock:
+        db = supabase_service._load_db()
+        changed = False
+        for bot_id, rec in _bots(db).items():
+            if rec.get("status") != "processing" or rec.get("job_id") or not rec.get("processing_started_at"):
+                continue
+            attempts = int(rec.get("processing_attempts") or 0) + 1
+            rec["processing_attempts"] = attempts
+            if attempts > MAX_PROCESSING_ATTEMPTS:
+                rec.update(status="failed", error=GENERIC_ERROR)
+            else:
+                resumed.append(bot_id)
+            changed = True
+        if changed:
+            supabase_service._save_db(db)
+    for bot_id in resumed:
+        threading.Thread(target=process_finished_bot, args=(bot_id,), daemon=True).start()
+    return len(resumed)
 
 
 # ---------------------------------------------------------------------------
@@ -241,6 +276,13 @@ def _audio_url(bot: Dict[str, Any]) -> Optional[str]:
 
 def process_finished_bot(bot_id: str) -> Optional[str]:
     """Descarga el audio del bot, lo transcribe en bloques de 3 min y crea el resumen."""
+    from app.services.job_manager import pipeline_slot
+
+    with pipeline_slot():
+        return _process_finished_bot(bot_id)
+
+
+def _process_finished_bot(bot_id: str) -> Optional[str]:
     from app.models.schemas import BoxCreateSessionRequest, BoxFinalizeRequest
     from app.services import email_service
     from app.services.apex_box import apex_box_manager

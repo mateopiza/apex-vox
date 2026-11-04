@@ -11,13 +11,16 @@ from __future__ import annotations
 import datetime
 import json
 import logging
+import re
 import shutil
 import subprocess
 import threading
+import time
 import uuid
-from dataclasses import dataclass, field
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import BinaryIO, Dict, List, Optional, Union
+from typing import BinaryIO, Dict, Iterator, List, Optional, Union
 
 from app.errors import UserFacingError, public_error
 from app.logsafe import clean
@@ -35,7 +38,7 @@ from app.models.schemas import (
 )
 from app.services.acoustic_diarizer import cluster_segments_acoustically
 from app.services.apex_summa import generate_apex_summa_report
-from app.services.state_store import atomic_write_bytes, atomic_write_json
+from app.services.state_store import StateCorruptError, atomic_write_bytes, atomic_write_json, read_json
 from app.services.audio_engine import (
     ProbedAudio,
     format_timestamp_hhmmss,
@@ -55,6 +58,33 @@ from app.services.transcript_cleaner import filter_hallucinated_segments
 logger = logging.getLogger("app.services.job_manager")
 
 _COPY_CHUNK_BYTES = 1024 * 1024
+_SAFE_JOB_ID = re.compile(r"[A-Za-z0-9_-]{1,64}")
+_TERMINAL_STATUSES = ("completed", "failed")
+_ACTIVE_STATUSES = ("queued", "processing")
+_FINISHED_JOB_MEMORY_SECONDS = 3600.0
+_MAX_RESULTS_IN_MEMORY = 200
+_INTERRUPTED_MESSAGE = (
+    "El servidor se reinició mientras se procesaba este audio. Súbelo de nuevo; no se descontó de tu cuota. / "
+    "The server restarted while processing this audio. Please upload it again; it did not count against your quota."
+)
+_TIMED_OUT_MESSAGE = (
+    "Este audio tardó demasiado en procesarse. Intenta de nuevo; no se descontó de tu cuota. / "
+    "This audio took too long to process. Please try again; it did not count against your quota."
+)
+
+# ffmpeg and the provider calls are heavy: only this many recordings are processed at once. Jobs
+# stay "queued" while they wait. Nothing that holds a slot asks for another, so it cannot deadlock.
+_pipeline_slots = threading.BoundedSemaphore(max(1, settings.JOB_CONCURRENCY))
+
+
+@contextmanager
+def pipeline_slot() -> Iterator[None]:
+    with _pipeline_slots:
+        yield
+
+
+class JobTimeoutError(UserFacingError):
+    """The job went over JOB_TIMEOUT_SECONDS."""
 
 
 class UploadTooLargeError(ValueError):
@@ -127,6 +157,8 @@ class JobManager:
         self._job_owners: Dict[str, str] = {}  # job id -> cuenta o clave del invitado
         self._charges: Dict[str, QuotaCharge] = {}  # job id -> cargo pendiente de un trabajo en curso
         self._result_edit_locks: Dict[str, threading.Lock] = {}
+        self._finished_at: Dict[str, float] = {}  # job id -> cuándo terminó (monotonic)
+        self._guest_expiry: Dict[str, float] = {}  # job id -> cuándo se borra el resultado del invitado
 
     # -------------------------------------------------------------------------
     # Session Management
@@ -165,7 +197,104 @@ class JobManager:
             self._results.pop(job_id, None)
             self._jobs.pop(job_id, None)
             self._job_owners.pop(job_id, None)
+            self._finished_at.pop(job_id, None)
+            self._guest_expiry.pop(job_id, None)
+            self._result_edit_locks.pop(job_id, None)
         (settings.OUTPUT_DIR / f"{job_id}_merged.mp3").unlink(missing_ok=True)
+        job_file = self._job_file(job_id)
+        if job_file:
+            job_file.unlink(missing_ok=True)
+
+    # -------------------------------------------------------------------------
+    # Job status on disk: it survives a restart, and interrupted jobs fail honestly
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def _job_file(job_id: str) -> Optional[Path]:
+        if not _SAFE_JOB_ID.fullmatch(job_id or ""):
+            return None
+        return settings.OUTPUT_DIR / "jobs" / f"{job_id}.json"
+
+    def _persist_job(self, job_id: str) -> None:
+        """Save the job's status. A failure here must never stop the job itself."""
+        job_file = self._job_file(job_id)
+        with self._lock:
+            status = self._jobs.get(job_id)
+            if not status or not job_file:
+                return
+            charge = self._charges.get(job_id)
+            record = {
+                "status": status.model_dump(mode="json"),
+                "owner": self._job_owners.get(job_id),
+                "charge": asdict(charge) if charge else None,
+            }
+        try:
+            atomic_write_json(job_file, record)
+        except OSError as exc:
+            logger.warning("Could not save the status of job %s: %s", clean(job_id), type(exc).__name__)
+
+    def _read_job_file(self, job_id: str) -> Optional[Dict]:
+        job_file = self._job_file(job_id)
+        if not job_file or not job_file.exists():
+            return None
+        try:
+            record = read_json(job_file)
+        except StateCorruptError as exc:
+            logger.warning("Unreadable job status: %s", exc)
+            return None
+        return record if isinstance(record, dict) else None
+
+    def recover_interrupted_jobs(self) -> int:
+        """At start-up: jobs that were running when the process stopped failed. Give back their quota."""
+        recovered = 0
+        for job_file in sorted((settings.OUTPUT_DIR / "jobs").glob("*.json")):
+            job_id = job_file.stem
+            with self._lock:
+                if job_id in self._jobs:
+                    continue  # lo está ejecutando este proceso
+            record = self._read_job_file(job_id)
+            if not record or (record.get("status") or {}).get("status") not in _ACTIVE_STATUSES:
+                continue
+            charge = record.get("charge")
+            status = JobStatusResponse(**{
+                **record["status"], "status": "failed", "error": _INTERRUPTED_MESSAGE,
+                "current_step": f"Error: {_INTERRUPTED_MESSAGE}",
+            })
+            with self._lock:
+                self._jobs[job_id] = status
+                self._finished_at[job_id] = time.monotonic()
+                if record.get("owner"):
+                    self._job_owners[job_id] = record["owner"]
+                if charge:
+                    self._charges[job_id] = QuotaCharge(**charge)
+            self._settle_charge(job_id, refund=True)
+            self._persist_job(job_id)
+            recovered += 1
+        if recovered:
+            logger.warning("Marked %d interrupted job(s) as failed after a restart.", recovered)
+        return recovered
+
+    def evict(self) -> None:
+        """Drop what can be read back from disk, and expired guest results. Runs periodically."""
+        now_wall, now = time.time(), time.monotonic()
+        with self._lock:
+            expired_guests = [j for j, at in self._guest_expiry.items() if at <= now_wall]
+        for job_id in expired_guests:
+            self._purge_guest_job(job_id)
+        with self._lock:
+            for job_id, finished in list(self._finished_at.items()):
+                if job_id not in self._guest_expiry and now - finished >= _FINISHED_JOB_MEMORY_SECONDS:
+                    self._jobs.pop(job_id, None)
+                    self._job_owners.pop(job_id, None)
+                    self._result_edit_locks.pop(job_id, None)
+                    self._finished_at.pop(job_id, None)
+            excess = len(self._results) - _MAX_RESULTS_IN_MEMORY
+            for job_id in list(self._results):  # los menos usados primero
+                if excess <= 0:
+                    break
+                if job_id not in self._guest_expiry and (settings.OUTPUT_DIR / f"{job_id}_result.json").exists():
+                    del self._results[job_id]
+                    excess -= 1
 
     def get_session(self, session_id: str) -> Optional[UploadSession]:
         with self._lock:
@@ -312,7 +441,8 @@ class JobManager:
             self._jobs[job_id] = status
             if session.owner:
                 self._job_owners[job_id] = session.owner
-            return status
+        self._persist_job(job_id)
+        return status
 
     def register_job(
         self, status: JobStatusResponse, result: Optional[TranscriptionResult], owner: Optional[str]
@@ -324,15 +454,23 @@ class JobManager:
                 self._results[status.job_id] = result
             if owner:
                 self._job_owners[status.job_id] = owner
+            if status.status in _TERMINAL_STATUSES:
+                self._finished_at[status.job_id] = time.monotonic()
+        self._persist_job(status.job_id)
 
     def job_owner(self, job_id: str) -> Optional[str]:
         """Quién creó el trabajo (se guarda al crearlo: la sesión de un invitado se descarta al terminar)."""
         with self._lock:
-            return self._job_owners.get(job_id)
+            owner = self._job_owners.get(job_id)
+        if owner:
+            return owner
+        record = self._read_job_file(job_id)
+        return record.get("owner") if record else None
 
     def record_charge(self, job_id: str, charge: QuotaCharge) -> None:
         with self._lock:
             self._charges[job_id] = charge
+        self._persist_job(job_id)
 
     def _settle_charge(self, job_id: str, refund: bool) -> None:
         """Forget a job's charge, giving it back if the job failed. Safe to call more than once."""
@@ -375,6 +513,10 @@ class JobManager:
                 job.total_chunks = total_chunks
             if completed_chunks is not None:
                 job.completed_chunks = completed_chunks
+            if status in _TERMINAL_STATUSES:
+                self._finished_at[job_id] = time.monotonic()
+        if status is not None:  # solo los cambios de estado; el progreso no se escribe a disco
+            self._persist_job(job_id)
 
     def _build_merged_preview_audio(
         self, chunk_paths: List[Path], output_path: Path
@@ -417,8 +559,18 @@ class JobManager:
     def execute_job(self, job_id: str, req: TranscribeRequest) -> TranscriptionResult:
         """
         Execute the full end-to-end audio processing, Groq transcription, and
-        speaker diarization pipeline for a job.
+        speaker diarization pipeline for a job, once a pipeline slot is free.
         """
+        with pipeline_slot():
+            return self._run_job(job_id, req)
+
+    def _run_job(self, job_id: str, req: TranscribeRequest) -> TranscriptionResult:
+        deadline = time.monotonic() + settings.JOB_TIMEOUT_SECONDS
+
+        def check_deadline() -> None:
+            if time.monotonic() > deadline:
+                raise JobTimeoutError(_TIMED_OUT_MESSAGE)
+
         job_temp_dir = settings.TEMP_DIR / job_id
         job_temp_dir.mkdir(parents=True, exist_ok=True)
         is_guest = bool(req.guest_key) and not req.user_id
@@ -498,6 +650,7 @@ class JobManager:
             has_dg_key = bool((req.deepgram_api_key or settings.DEEPGRAM_API_KEY or "").strip())
 
             def on_chunk_progress(idx: int, total: int, msg: str) -> None:
+                check_deadline()
                 pct = 20 + int(((idx + 0.5) / max(1, total)) * 45)
                 self._update_job(
                     job_id,
@@ -564,6 +717,7 @@ class JobManager:
                     if engine in ("acoustic_local", "deepgram"):
                         trust_acoustic = True
 
+            check_deadline()
             # Step 2.5: Clean silence hallucinations & noise before diarization
             self._update_job(
                 job_id,
@@ -583,6 +737,7 @@ class JobManager:
                 current_step="Identificando oradores y perfiles de voz registrados...",
             )
 
+            check_deadline()
             # 3. Speaker Diarization & Enrolled Voice Profile Matching
             diarized_segs, speaker_count, speaker_roles = diarize_segments(
                 segments=whisper_segments,
@@ -607,6 +762,7 @@ class JobManager:
                 for s in diarized_segs
             )
 
+            check_deadline()
             # 4. Store in MEGA S4 with plan-based retention (24h for free, unlimited for pro/trial)
             expires_at = mega_s4_storage.compute_expiration_iso(effective_plan)
             s4_result_key = f"users/{resolved_uid or 'public'}/jobs/{job_id}/result.json"
@@ -644,9 +800,7 @@ class JobManager:
                 result.summa_report = None
                 with self._lock:
                     self._results[job_id] = result
-                timer = threading.Timer(ttl * 60, self._purge_guest_job, args=(job_id,))
-                timer.daemon = True
-                timer.start()
+                    self._guest_expiry[job_id] = time.time() + ttl * 60
                 self.discard_session(req.session_id)
                 self._settle_charge(job_id, refund=False)
                 self._update_job(
@@ -753,11 +907,23 @@ class JobManager:
 
     def get_job_status(self, job_id: str) -> Optional[JobStatusResponse]:
         with self._lock:
-            return self._jobs.get(job_id)
+            status = self._jobs.get(job_id)
+        if status:
+            return status
+        record = self._read_job_file(job_id)
+        if record and record.get("status"):
+            return JobStatusResponse(**record["status"])
+        # Trabajos anteriores a estos archivos: si hay resultado, terminó.
+        if _SAFE_JOB_ID.fullmatch(job_id or "") and (settings.OUTPUT_DIR / f"{job_id}_result.json").exists():
+            return JobStatusResponse(
+                job_id=job_id, session_id="", status="completed", progress=100, current_step="Transcripción lista."
+            )
+        return None
 
     def get_job_result(self, job_id: str) -> Optional[TranscriptionResult]:
         with self._lock:
             if job_id in self._results:
+                self._results[job_id] = self._results.pop(job_id)  # el más reciente va al final
                 return self._results[job_id]
 
         # Check disk persistence

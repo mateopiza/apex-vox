@@ -27,6 +27,8 @@ Preparation of the public open-source release.
 
 ### Fixed
 
+- Job status survives a restart: finished jobs keep answering, and jobs a restart interrupted fail with a clear message and give back their quota, instead of vanishing. Calls and meeting bots being processed are retried up to 3 times at start-up, and a repeated `bot.done` webhook no longer processes a recording twice.
+- Recordings processed at once are limited by `JOB_CONCURRENCY`, jobs fail after `JOB_TIMEOUT_SECONDS`, and finished results, job statuses, Box sessions and rate-limit entries are freed from memory.
 - The documented `ALLOWED_HOSTS` value no longer makes the container health check fail: `localhost` and `127.0.0.1` are always allowed. Production logs a warning while `ALLOWED_HOSTS` or `CORS_ORIGINS` are `*`.
 - API errors no longer show messages wrapped in stray quotes.
 - One slow request no longer freezes the whole server. Upload, Apex Box, login, minutes, webhooks and other routes ran ffmpeg, Groq calls, password hashing or file reads on the only event loop. They now run in worker threads, with long work limited by `HEAVY_ROUTE_CONCURRENCY`.
