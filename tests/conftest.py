@@ -25,6 +25,7 @@ os.environ["ENVIRONMENT"] = "development"
 os.environ["GROQ_API_KEY"] = "gsk_test_placeholder"
 os.environ.setdefault("GUEST_MAX_AUDIOS_PER_DAY", "1000")
 os.environ.setdefault("MAX_IPS_PER_MONTH", "1000")
+os.environ.setdefault("GROQ_PARALLEL_CHUNKS", "1")  # tests/test_provider_retries.py covers parallel mode
 
 for _name in (
     "ADMIN_API_KEY", "APP_SECRET_KEY", "BOLD_API_KEY", "BOLD_SECRET_KEY", "BOLD_WEBHOOK_SECRET", "DEEPGRAM_API_KEY",

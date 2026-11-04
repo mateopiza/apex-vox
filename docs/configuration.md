@@ -50,6 +50,7 @@ Notes on the columns below:
 | `MAX_VOICE_SAMPLE_MB` | `25` | No | Largest voice-profile sample. |
 | `MAX_REQUEST_BODY_MB` | `10` | No | Largest request body on every other endpoint. |
 | `HEAVY_ROUTE_CONCURRENCY` | `8` | No | Requests that may run long work (ffmpeg, Groq, an LLM) at the same time. Others wait without using a thread. |
+| `GROQ_PARALLEL_CHUNKS` | `3` | No | Chunks of one audio sent to Groq at once. Faster on long audio, but each chunk loses the text of the previous one as context. `1` sends them one by one and keeps that context. |
 | `JOB_CONCURRENCY` | `2` | No | Recordings processed at the same time. Others wait with status `queued`. |
 | `JOB_TIMEOUT_SECONDS` | `1800` | No | A job over this time fails and gives back its quota. Measured from when it starts running, not while queued. |
 | `CHUNK_DURATION_MINUTES` | `10` | No | Target chunk length. Used only if `CHUNK_TARGET_DURATION_SEC` is unset. |
@@ -183,7 +184,7 @@ These are read by the code but rarely need changing.
 | `STATIC_CACHE_SECONDS` | `604800` | `Cache-Control` max-age for versioned static assets (`?v=`). |
 | `UPLOAD_DIR` / `OUTPUT_DIR` / `TEMP_DIR` | `uploads/`, `outputs/`, `temp/` under the project root | Data directories. |
 | `GROQ_BASE_URL` | Groq SDK default | Custom Groq-compatible base URL. |
-| `GROQ_TIMEOUT_SECONDS` / `GROQ_MAX_RETRIES` | `120` / `3` | Groq client timeout and retries. |
+| `GROQ_TIMEOUT_SECONDS` / `GROQ_MAX_RETRIES` | `120` / `3` | Groq client timeout, and attempts per chunk (also used for Deepgram). Requests that cannot succeed (such as a bad key) are not retried, and `Retry-After` is respected. |
 | `DEEPGRAM_MODEL` | `nova-2` | Deepgram model. |
 | `FALLBACK_LLM_MODEL` | `llama-3.1-8b-instant` | LLM used when the default LLM call fails. |
 | `CHUNK_TARGET_DURATION_SEC` | `600` | Takes precedence over `CHUNK_DURATION_MINUTES`. |

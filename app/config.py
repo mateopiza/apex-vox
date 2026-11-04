@@ -421,6 +421,9 @@ class Settings:
     GROQ_TIMEOUT_SECONDS: float = field(
         default_factory=lambda: float(os.getenv("GROQ_TIMEOUT_SECONDS", "120.0"))
     )
+    GROQ_PARALLEL_CHUNKS: int = field(
+        default_factory=lambda: int(os.getenv("GROQ_PARALLEL_CHUNKS", "3"))
+    )
     GROQ_MAX_RETRIES: int = field(
         default_factory=lambda: int(os.getenv("GROQ_MAX_RETRIES", "3"))
     )

@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import logging
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Mapping, Optional
 
 from groq import Groq
 
@@ -21,6 +22,21 @@ from app.models.schemas import WhisperSegment
 from app.services.audio_engine import AudioChunkInfo
 
 logger = logging.getLogger("app.services.groq_service")
+
+# Asking again cannot fix these: a bad request, a bad key, a missing model.
+NOT_RETRYABLE_STATUS = frozenset({400, 401, 403, 404, 413, 422})
+MAX_RETRY_AFTER_SECONDS = 60.0
+
+
+def retry_delay(attempt: int, status: Optional[int], headers: Optional[Mapping[str, str]], cap: float = 8.0) -> Optional[float]:
+    """Seconds to wait before the next attempt, or None if it is pointless to try again."""
+    if status in NOT_RETRYABLE_STATUS:
+        return None
+    try:
+        retry_after = float((headers or {}).get("retry-after", ""))
+        return min(max(0.0, retry_after), MAX_RETRY_AFTER_SECONDS)
+    except ValueError:
+        return min(2.0 ** (attempt - 1), cap)
 
 
 class GroqTranscriptionError(RuntimeError):
@@ -39,7 +55,7 @@ def get_groq_client(api_key: Optional[str] = None) -> Groq:
     kwargs: Dict[str, Any] = {
         "api_key": effective_key,
         "timeout": settings.GROQ_TIMEOUT_SECONDS,
-        "max_retries": settings.GROQ_MAX_RETRIES,
+        "max_retries": 0,  # one retry layer: transcribe_chunk, which knows what is worth retrying
     }
     if settings.GROQ_BASE_URL:
         kwargs["base_url"] = settings.GROQ_BASE_URL
@@ -150,8 +166,13 @@ def transcribe_chunk(
                 chunk_path.name,
                 exc,
             )
+            status = getattr(exc, "status_code", None)
+            headers = getattr(getattr(exc, "response", None), "headers", None)
+            delay = retry_delay(attempt, status, headers)
+            if delay is None:
+                break
             if attempt < max_attempts:
-                time.sleep(min(2.0 ** (attempt - 1), 8.0))
+                time.sleep(delay)
 
     raise GroqTranscriptionError(
         f"Error al transcribir el fragmento '{chunk_path.name}' en Groq API: {last_err}"
@@ -168,8 +189,12 @@ def transcribe_chunks_sequence(
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
 ) -> List[WhisperSegment]:
     """
-    Transcribe an ordered list of AudioChunkInfo slices sequentially via Groq Whisper
-    and map all segments to a continuous global timeline with inter-segment acoustic pauses.
+    Transcribe an ordered list of AudioChunkInfo slices via Groq Whisper and map all segments
+    to a continuous global timeline with inter-segment acoustic pauses.
+
+    With GROQ_PARALLEL_CHUNKS above 1, up to that many chunks are sent at once. Results are still
+    assembled in order, but each chunk only gets `prompt_hint`, not the end of the previous chunk.
+    Chunks are cut at silences, so little depends on that context.
     """
     if not chunks:
         return []
@@ -181,61 +206,66 @@ def transcribe_chunks_sequence(
     rolling_context = prompt_hint or ""
 
     total_chunks = len(chunks)
-    for idx, chunk in enumerate(chunks):
-        if progress_callback:
-            progress_callback(
-                idx,
-                total_chunks,
-                f"Transcribiendo fragmento {idx + 1}/{total_chunks} ({chunk.source_file_name})...",
-            )
+    workers = min(max(1, settings.GROQ_PARALLEL_CHUNKS), total_chunks)
+    pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="groq") if workers > 1 else None
 
-        raw_segs = transcribe_chunk(
-            chunk=chunk,
-            model=model,
-            language=language,
-            prompt=rolling_context if rolling_context else None,
-            api_key=api_key,
-            client=groq_client,
+    def send(chunk: AudioChunkInfo, prompt: Optional[str]) -> List[Dict[str, Any]]:
+        return transcribe_chunk(
+            chunk=chunk, model=model, language=language, prompt=prompt, api_key=api_key, client=groq_client
         )
 
-        for seg in raw_segs:
-            local_start = float(seg["start"])
-            local_end = float(seg["end"])
-            text = str(seg["text"]).strip()
-            if not text:
-                continue
+    futures = [pool.submit(send, chunk, prompt_hint or None) for chunk in chunks] if pool else []
+    try:
+        for idx, chunk in enumerate(chunks):
+            if progress_callback:
+                progress_callback(
+                    idx,
+                    total_chunks,
+                    f"Transcribiendo fragmento {idx + 1}/{total_chunks} ({chunk.source_file_name})...",
+                )
+            raw_segs = futures[idx].result() if pool else send(chunk, rolling_context or None)
 
-            g_start = round(chunk.global_start_sec + local_start, 3)
-            g_end = round(chunk.global_start_sec + local_end, 3)
-            if g_end < g_start:
-                g_end = g_start
+            for seg in raw_segs:
+                local_start = float(seg["start"])
+                local_end = float(seg["end"])
+                text = str(seg["text"]).strip()
+                if not text:
+                    continue
 
-            if prev_global_end is None:
-                pause_before = round(max(0.0, local_start), 3)
-            else:
-                pause_before = round(max(0.0, g_start - prev_global_end), 3)
+                g_start = round(chunk.global_start_sec + local_start, 3)
+                g_end = round(chunk.global_start_sec + local_end, 3)
+                if g_end < g_start:
+                    g_end = g_start
 
-            whisper_seg = WhisperSegment(
-                id=global_seg_id,
-                start=round(local_start, 3),
-                end=round(local_end, 3),
-                text=text,
-                global_start=g_start,
-                global_end=g_end,
-                source_file=chunk.source_file_name,
-                file_order_index=chunk.file_sequence_index,
-                pause_before=pause_before,
-            )
-            all_segments.append(whisper_seg)
-            global_seg_id += 1
-            prev_global_end = g_end
+                if prev_global_end is None:
+                    pause_before = round(max(0.0, local_start), 3)
+                else:
+                    pause_before = round(max(0.0, g_start - prev_global_end), 3)
 
-        # Keep last ~200 chars as context prompt for next chunk continuity
-        if all_segments:
-            recent_text = " ".join(s.text for s in all_segments[-3:])
-            if prompt_hint:
-                rolling_context = f"{prompt_hint.strip()} {recent_text}"[-400:]
-            else:
-                rolling_context = recent_text[-300:]
+                whisper_seg = WhisperSegment(
+                    id=global_seg_id,
+                    start=round(local_start, 3),
+                    end=round(local_end, 3),
+                    text=text,
+                    global_start=g_start,
+                    global_end=g_end,
+                    source_file=chunk.source_file_name,
+                    file_order_index=chunk.file_sequence_index,
+                    pause_before=pause_before,
+                )
+                all_segments.append(whisper_seg)
+                global_seg_id += 1
+                prev_global_end = g_end
+
+            # Keep last ~200 chars as context prompt for next chunk continuity
+            if all_segments:
+                recent_text = " ".join(s.text for s in all_segments[-3:])
+                if prompt_hint:
+                    rolling_context = f"{prompt_hint.strip()} {recent_text}"[-400:]
+                else:
+                    rolling_context = recent_text[-300:]
+    finally:
+        if pool:
+            pool.shutdown(wait=False, cancel_futures=True)
 
     return all_segments

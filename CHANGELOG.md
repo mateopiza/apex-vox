@@ -22,11 +22,13 @@ Preparation of the public open-source release.
 
 ### Changed
 
+- Long audio is transcribed faster: up to `GROQ_PARALLEL_CHUNKS` chunks are sent at once and assembled in order. Set it to `1` to keep the text of the previous chunk as context.
 - The web interface is fully translated into Spanish and English. The default language follows the device, then the visitor's country. The plan card adapts to the device.
 - The Chrome extension (manifest, recorder and badge) and the OAuth consent page are available in Spanish and English.
 
 ### Fixed
 
+- Groq and Deepgram calls no longer retry requests that cannot succeed (such as a bad key), respect `Retry-After`, and no longer multiply retries with the SDK's own. Deepgram response text stays out of error messages.
 - Job status survives a restart: finished jobs keep answering, and jobs a restart interrupted fail with a clear message and give back their quota, instead of vanishing. Calls and meeting bots being processed are retried up to 3 times at start-up, and a repeated `bot.done` webhook no longer processes a recording twice.
 - Recordings processed at once are limited by `JOB_CONCURRENCY`, jobs fail after `JOB_TIMEOUT_SECONDS`, and finished results, job statuses, Box sessions and rate-limit entries are freed from memory.
 - The documented `ALLOWED_HOSTS` value no longer makes the container health check fail: `localhost` and `127.0.0.1` are always allowed. Production logs a warning while `ALLOWED_HOSTS` or `CORS_ORIGINS` are `*`.
