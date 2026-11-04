@@ -27,6 +27,9 @@ Preparation of the public open-source release.
 
 ### Fixed
 
+- Authenticated requests no longer reparse the whole accounts file (about 100 ms per parse at 10k accounts): read paths share a snapshot that is reparsed only when the file changes. Password hashing and the Supabase Auth call no longer run under the global state lock.
+- State files (accounts, storage index, voice profiles, results) are replaced atomically. A damaged or missing accounts file now returns 503 and fails `/api/health` instead of being read as empty, which let the next save erase every account. A damaged storage index or voice-profile file is never overwritten.
+- The test suite no longer writes to the real `uploads/` and `outputs/` directories and refuses outbound network. The CI JavaScript check now fails on a syntax error in any file, not only the last one, and covers nested extension files.
 - `.env` loading no longer searches parent directories (a git worktree picked up the outer checkout's production keys), and the test suite never loads `.env` (`APEX_VOX_SKIP_DOTENV=1`): local test runs were writing test accounts and transcripts to the real Supabase and MEGA S4 and calling Deepgram.
 - Supabase sync of `transcriptions` sends only the columns in `supabase/schema.sql` (PostgREST rejected the extra `title` field).
 - Deleting an account also removes its meeting bots, calendar events and phone calls.
@@ -35,6 +38,8 @@ Preparation of the public open-source release.
 
 ### Security
 
+- Session tokens and OAuth hand-off codes are stored as keyed digests, so the state file and its backups hold no usable session. Existing sessions are migrated at start-up and keep working. Changing `APP_SECRET_KEY` (or losing `outputs/.app_secret`) signs everyone out.
+- Supabase Auth login requires a confirmed e-mail and an account linked by id. Before, signing up to Supabase with someone's address could replace the password of their local account.
 - Twilio webhooks and TwiML are built only from `PUBLIC_BASE_URL` (an `https://` origin is now required to enable calls). Before, an unset `PUBLIC_BASE_URL` let a client's `Host` header point Twilio at an attacker's server that could dial any number.
 - High-cost `+1` ranges (Caribbean area codes, `+1900`, `+1976`) are blocked by default (`CALL_BLOCKED_PREFIXES`) for verification SMS and calls.
 - MCP: batches capped at 10 messages and 256 KB, each message counted by the rate limit, tools run outside the event loop, and `search_meetings` scans at most the 200 most recent meetings. The consent page lists calls and calendar access.

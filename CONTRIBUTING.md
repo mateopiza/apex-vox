@@ -21,7 +21,7 @@ uvicorn app.main:app --reload --port 8000
 
 - Open <http://localhost:8000>. API docs are at <http://localhost:8000/docs> in development.
 - Every integration except Groq is optional. Without its keys, a feature is disabled or falls back to local behaviour (see [docs/configuration.md](docs/configuration.md)).
-- Runtime data is written to `uploads/`, `outputs/` and `temp/`, which are git-ignored. Delete `outputs/supabase_cloud_state.json` to reset local accounts.
+- Runtime data is written to `uploads/`, `outputs/` and `temp/`, which are git-ignored. To reset local accounts, stop the server and delete `outputs/supabase_cloud_state.json` (deleting it while the server runs makes the app answer 503).
 - To work on the Chrome extension, load `extension/` unpacked (see [docs/extension.md](docs/extension.md)). It talks to `http://localhost:8000` once you set that as its server.
 
 ## Running checks
@@ -30,7 +30,7 @@ uvicorn app.main:app --reload --port 8000
 python -m pytest -q                                           # full test suite (needs ffmpeg/ffprobe)
 python -m pytest tests/test_mcp_oauth.py -q                   # a single file
 pip install ruff && ruff check app tests --select E9,F63,F7,F82   # same lint as CI
-for f in app/static/js/*.js extension/*.js extension/**/*.js; do node --check "$f"; done
+find app/static/js extension -name '*.js' -print0 | xargs -0 -n1 node --check
 docker build -t apex-vox:dev .                                # image builds
 
 # Browser end-to-end journeys (real server + Chromium); they skip themselves without Playwright
@@ -38,7 +38,7 @@ pip install -r requirements-e2e.txt && python -m playwright install chromium
 python -m pytest tests/e2e -q                                 # E2E_HEADED=1 to watch the browser
 ```
 
-External services are mocked in the tests, so you need no real keys. `tests/conftest.py` forces `ENVIRONMENT=development`, sets a placeholder Groq key and sets `APEX_VOX_SKIP_DOTENV=1`, so your `.env` (and its production keys) is never loaded during a test run.
+External services are mocked in the tests, so you need no real keys. `tests/conftest.py` forces `ENVIRONMENT=development`, sets a placeholder Groq key, blanks third-party keys and sets `APEX_VOX_SKIP_DOTENV=1`, so your `.env` (and its production keys) is never loaded during a test run. It also points `UPLOAD_DIR`, `OUTPUT_DIR` and `TEMP_DIR` at a temporary directory and refuses outbound network, so a run leaves your local accounts and audio untouched.
 
 The browser suite in `tests/e2e/` starts the real app with uvicorn on a free port and drives the web UI in Chromium: landing and languages, layout at phone/tablet/desktop widths, guest transcription, sign-up → upload → transcribe → rename speakers → every export → history → logout, wrong-password login, and that one account can never open another account's jobs. Only the Groq transcription is faked; any outbound request from the server to an external host, any console error, uncaught exception or CSP violation fails the test. On failure, a screenshot and a Playwright trace land in `test-results/e2e/` (`python -m playwright show-trace <file>.zip`).
 

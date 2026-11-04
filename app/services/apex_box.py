@@ -79,6 +79,7 @@ from app.services.audio_engine import (
 )
 from app.services.diarization import diarize_segments
 from app.services.job_manager import job_manager
+from app.services.state_store import atomic_write_bytes
 from app.services.storage_s4 import mega_s4_storage
 from app.services.supabase_service import supabase_service
 
@@ -819,7 +820,7 @@ class ApexBoxManager:
             result.model_dump(mode="json"), ensure_ascii=False, indent=2
         ).encode("utf-8")
         result_file = settings.OUTPUT_DIR / f"{job_id}_result.json"
-        result_file.write_bytes(result_json_bytes)
+        atomic_write_bytes(result_file, result_json_bytes)
 
         mega_s4_storage.upload_object(
             object_key=s4_result_key,

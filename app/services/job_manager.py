@@ -34,6 +34,7 @@ from app.models.schemas import (
 )
 from app.services.acoustic_diarizer import cluster_segments_acoustically
 from app.services.apex_summa import generate_apex_summa_report
+from app.services.state_store import atomic_write_bytes, atomic_write_json
 from app.services.audio_engine import (
     ProbedAudio,
     format_timestamp_hhmmss,
@@ -388,7 +389,7 @@ class JobManager:
 
             # Plan comes from the account set by the server (never from the client).
             is_guest = bool(req.guest_key) and not req.user_id
-            effective_user = None if is_guest else supabase_service.get_user_by_token_or_id(req.user_id)
+            effective_user = None if is_guest else supabase_service.get_user_by_id(req.user_id)
             resolved_uid = effective_user["user_id"] if effective_user else None
             if is_guest:
                 effective_plan = "guest"
@@ -598,7 +599,7 @@ class JobManager:
 
             # Persist result to local outputs directory & MEGA S4 bucket
             result_file = settings.OUTPUT_DIR / f"{job_id}_result.json"
-            result_file.write_bytes(result_json_bytes)
+            atomic_write_bytes(result_file, result_json_bytes)
 
             mega_s4_storage.upload_object(
                 object_key=s4_result_key,
@@ -743,10 +744,7 @@ class JobManager:
             self._results[job_id] = updated_result
 
         result_file = settings.OUTPUT_DIR / f"{job_id}_result.json"
-        result_file.write_text(
-            json.dumps(updated_result.model_dump(mode="json"), ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
+        atomic_write_json(result_file, updated_result.model_dump(mode="json"), indent=2)
         return updated_result
 
 

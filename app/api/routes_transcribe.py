@@ -48,6 +48,7 @@ from app.services.apex_summa import (
     generate_meeting_minutes,
 )
 from app.services.job_manager import job_manager
+from app.services.state_store import StateCorruptError
 from app.services.supabase_service import supabase_service
 from app.services.usage_reporter import (
     compute_usage_report,
@@ -228,6 +229,8 @@ async def create_voice_profile(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except StateCorruptError:
+        raise
     except Exception as exc:
         logger.exception("Voice profile enrollment failed")
         raise HTTPException(status_code=500, detail=f"Error al registrar perfil de voz: {exc}") from exc

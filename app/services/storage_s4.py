@@ -19,15 +19,16 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import hmac
-import json
 import logging
 import re
-from typing import Any, Dict, List, Optional
+import threading
+from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import quote, urlparse
 
 import httpx
 
 from app.config import settings
+from app.services.state_store import StateCorruptError, atomic_write_json, read_json
 
 logger = logging.getLogger("app.services.storage_s4")
 
@@ -58,6 +59,7 @@ class MegaS4StorageService:
         self.mirror_dir = settings.OUTPUT_DIR / "mega_s4_bucket"
         self.mirror_dir.mkdir(parents=True, exist_ok=True)
         self.index_path = self.mirror_dir / "_s4_objects_index.json"
+        self._index_lock = threading.RLock()
 
     @property
     def endpoint_url(self) -> str:
@@ -181,23 +183,35 @@ class MegaS4StorageService:
             out_headers.update(extra_amz_headers)
         return out_headers
 
-    def _load_index(self) -> Dict[str, Any]:
+    def _read_index(self) -> Dict[str, Any]:
+        """The index, or StateCorruptError when it is damaged (a missing index is just empty)."""
         if not self.index_path.exists():
             return {}
-        try:
-            return json.loads(self.index_path.read_text(encoding="utf-8"))
-        except Exception:
-            return {}
+        index = read_json(self.index_path)
+        if not isinstance(index, dict):
+            raise StateCorruptError(self.index_path.name)
+        return index
 
-    def _save_index(self, index_data: Dict[str, Any]) -> None:
-        try:
-            self.index_path.parent.mkdir(parents=True, exist_ok=True)
-            self.index_path.write_text(
-                json.dumps(index_data, ensure_ascii=False, indent=2),
-                encoding="utf-8",
-            )
-        except Exception as exc:
-            logger.warning("Could not write MEGA S4 local index: %s", exc)
+    def _load_index(self) -> Dict[str, Any]:
+        """Read path: a damaged index lists nothing, but is logged and left for an operator."""
+        with self._index_lock:
+            try:
+                return self._read_index()
+            except StateCorruptError as exc:
+                logger.error("MEGA S4 local index is unreadable, leaving it untouched: %s", exc)
+                return {}
+
+    def _update_index(self, mutate: Callable[[Dict[str, Any]], None]) -> bool:
+        """Read-modify-write under the lock. A damaged index is never overwritten."""
+        with self._index_lock:
+            try:
+                index = self._read_index()
+                mutate(index)
+                atomic_write_json(self.index_path, index)
+                return True
+            except (StateCorruptError, OSError) as exc:
+                logger.error("MEGA S4 local index was not updated: %s", exc)
+                return False
 
     def _object_url(self, object_key: str) -> str:
         return f"{self.endpoint_url}/{self.bucket}/{quote(object_key.lstrip('/'), safe='/-_.~')}"
@@ -334,9 +348,7 @@ class MegaS4StorageService:
             "cloud_synced": cloud_synced,
         }
 
-        idx = self._load_index()
-        idx[clean_key] = meta_record
-        self._save_index(idx)
+        self._update_index(lambda idx: idx.__setitem__(clean_key, meta_record))
         return meta_record
 
     def get_object_metadata(self, object_key: str) -> Optional[Dict[str, Any]]:
@@ -359,35 +371,27 @@ class MegaS4StorageService:
         Enforce the 24-hour storage retention limit for Free plan objects.
         Paid ('pro' / 'trial') objects have expires_at = None and are never deleted.
         """
-        idx = self._load_index()
-        if not idx:
-            return 0
-
         now = dt.datetime.now(dt.timezone.utc)
-        removed_count = 0
-        remaining: Dict[str, Any] = {}
+        removed: List[str] = []
 
-        for key, meta in idx.items():
-            expires_at_str = meta.get("expires_at")
-            if not expires_at_str:
-                remaining[key] = meta
-                continue
-            try:
-                exp_dt = dt.datetime.fromisoformat(expires_at_str)
-                if exp_dt.tzinfo is None:
-                    exp_dt = exp_dt.replace(tzinfo=dt.timezone.utc)
-                if now >= exp_dt:
-                    local_file = self.mirror_dir / key
-                    local_file.unlink(missing_ok=True)
-                    removed_count += 1
+        def prune(idx: Dict[str, Any]) -> None:
+            for key, meta in list(idx.items()):
+                expires_at_str = meta.get("expires_at")
+                if not expires_at_str:
                     continue
-            except (TypeError, ValueError, OSError):
-                logger.debug("Retention index: unreadable expiry for %s, kept", key)  # ante la duda, no se borra
-            remaining[key] = meta
+                try:
+                    exp_dt = dt.datetime.fromisoformat(expires_at_str)
+                    if exp_dt.tzinfo is None:
+                        exp_dt = exp_dt.replace(tzinfo=dt.timezone.utc)
+                    if now >= exp_dt:
+                        (self.mirror_dir / key).unlink(missing_ok=True)
+                        del idx[key]
+                        removed.append(key)
+                except (TypeError, ValueError, OSError):
+                    logger.debug("Retention index: unreadable expiry for %s, kept", key)  # ante la duda, no se borra
 
-        if removed_count > 0:
-            self._save_index(remaining)
-        return removed_count
+        self._update_index(prune)
+        return len(removed)
 
 
 mega_s4_storage = MegaS4StorageService()

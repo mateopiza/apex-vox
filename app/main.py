@@ -37,6 +37,7 @@ from app.api import (
 )
 from app.api.deps import public_base_url, request_language
 from app.config import settings
+from app.services.state_store import StateCorruptError
 
 # Configure logging
 logging.basicConfig(
@@ -124,6 +125,19 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     logger.exception("Unhandled error on %s %s", request.method, request.url.path)
     detail = "Internal server error" if settings.is_production else f"{type(exc).__name__}: {exc}"
     return JSONResponse(status_code=500, content={"detail": detail})
+
+
+@app.exception_handler(StateCorruptError)
+async def state_corrupt_handler(request: Request, exc: StateCorruptError) -> JSONResponse:
+    """A damaged state file stops the app rather than letting it continue with no accounts."""
+    logger.critical("State file unreadable on %s %s: %s", request.method, request.url.path, exc)
+    return JSONResponse(
+        status_code=503,
+        content={
+            "detail": "El servicio no está disponible en este momento. Intenta de nuevo más tarde. / "
+            "The service is unavailable right now. Please try again later."
+        },
+    )
 
 
 class CachedStaticFiles(StaticFiles):
@@ -534,12 +548,17 @@ async def health_check(x_admin_key: Optional[str] = Header(default=None)) -> JSO
     if not ffprobe_available:
         logger.warning("Health check warning: 'ffprobe' binary not found in PATH")
 
+    from app.services.supabase_service import supabase_service
+
+    state_readable = supabase_service.state_readable()
+
     is_healthy = (
         uploads_writable
         and outputs_writable
         and temp_writable
         and ffmpeg_available
         and ffprobe_available
+        and state_readable
     )
 
     health_status: Dict[str, Any] = {
@@ -572,6 +591,7 @@ async def health_check(x_admin_key: Optional[str] = Header(default=None)) -> JSO
             "uploads_writable": uploads_writable,
             "outputs_writable": outputs_writable,
             "temp_writable": temp_writable,
+            "state_readable": state_readable,
         },
         "models": {
             "default_speech_model": settings.DEFAULT_MODEL,

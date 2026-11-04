@@ -11,6 +11,7 @@ Telegram audio inbox (app/services/telegram_service.py)
 
 from __future__ import annotations
 
+import copy
 import datetime as dt
 import hmac
 import logging
@@ -102,7 +103,7 @@ def bot_username() -> str:
 
 def create_link_code(user_id: str) -> Dict[str, Any]:
     """One-time code (10 min) the user sends to the bot. Paid plans only."""
-    user = supabase_service.get_user_by_token_or_id(user_id) or {}
+    user = supabase_service.get_user_by_id(user_id) or {}
     if str(user.get("plan", "free")).lower() not in PAID_PLANS:
         raise PermissionError("El bot de Telegram está incluido en Apex Pro (prueba gratis o pago).")
     if user.get("telegram_chat_id"):
@@ -163,6 +164,12 @@ def unlink(user_id: str) -> None:
 
 
 def user_for_chat(chat_id: int) -> Optional[Dict[str, Any]]:
+    users = supabase_service._read_snapshot()["users"]
+    known = next((u for u in users.values() if u.get("telegram_chat_id") == chat_id), None)
+    if not known:
+        return None
+    if not supabase_service._plan_expired(known):
+        return copy.deepcopy(known)
     with supabase_service._lock:
         db = supabase_service._load_db()
         user = next((u for u in db["users"].values() if u.get("telegram_chat_id") == chat_id), None)

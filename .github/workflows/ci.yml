@@ -88,9 +88,7 @@ jobs:
           node-version: "20"
       - name: node --check
         run: |
-          for f in app/static/js/*.js extension/*.js extension/**/*.js; do
-            [ -f "$f" ] && node --check "$f" && echo "ok $f"
-          done
+          find app/static/js extension -name '*.js' -print0 | xargs -0 -n1 node --check
 
   docker:
     name: Docker build
