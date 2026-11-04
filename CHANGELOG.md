@@ -29,6 +29,8 @@ Preparation of the public open-source release.
 
 ### Fixed
 
+- Apex Summa reads the whole meeting. It only saw the first 10,000 characters (some 10-15 minutes of speech) and missed Apex Box notes. Long meetings are now summarized in parts and combined, and failures are logged instead of silently falling back; `analysis_source` says how each report was made.
+- The report is generated once per language and kept: minutes, calendar and screen agree, no LLM call is paid for twice, and renaming speakers keeps the analysis and the live notes, which were being lost. No LLM call is made for a locked report. Without active Apex Pro, the result and report show the preview, also for reports saved earlier.
 - Expired results stop being served, with 410 on the result, exports, calendar and audio, including through download links. The 24-hour limit only hid them from the history before. When Pro lapses, files get a grace period (`RETENTION_PRO_LAPSE_GRACE_DAYS`) and then Free retention; paying keeps them.
 - Large audio reaches object storage: uploads are streamed with retries instead of read fully into memory, and failures can be retried later and are counted in the admin health check. Apex Box recordings now upload their audio, which was recorded as stored but never sent. Objects that reached the bucket are no longer kept twice on local disk.
 - Long audio no longer needs gigabytes of RAM. A job decoded the whole recording up to four times into memory (about 230 MB per hour each) with a 60 s limit that could fail it; it now decodes once to a temporary file under `temp/`, and estimating the number of speakers no longer grows with the square of the segments.

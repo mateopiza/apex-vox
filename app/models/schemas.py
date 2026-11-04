@@ -82,6 +82,7 @@ class ApexSummaReport(BaseModel):
     generated_at: str
     language: str = "es"
     is_locked: bool = False  # True if free plan and not unlocked yet
+    analysis_source: str = "heuristic"  # "llm" | "llm_partial" (part of a long meeting) | "heuristic" | "locked"
     # 1. Quién habló más
     dominant_speaker: str = ""
     dominant_speaker_pct: float = 0.0
@@ -285,6 +286,7 @@ class TranscriptionResult(BaseModel):
     s4_object_key: Optional[str] = Field(default=None, exclude=True)  # ruta interna: nunca sale en la API
     expires_at: Optional[str] = None
     summa_report: Optional[ApexSummaReport] = None
+    summa_translations: Dict[str, ApexSummaReport] = Field(default_factory=dict)  # by language, once generated
     live_notes: List[Dict[str, Any]] = Field(default_factory=list)
 
 

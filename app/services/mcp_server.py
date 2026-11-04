@@ -815,7 +815,7 @@ def tool_get_meeting_summary(user: Dict[str, Any], args: Dict[str, Any]) -> Tupl
 
 def tool_get_meeting_minutes(user: Dict[str, Any], args: Dict[str, Any]) -> Tuple[str, Any]:
     from app.models.schemas import MinutesGenerationRequest
-    from app.services.apex_summa import generate_apex_summa_report, generate_meeting_minutes
+    from app.services.apex_summa import generate_meeting_minutes
 
     _require_pro(user)
     rec = _record_for(user, str(args.get("meeting_id", "")))
@@ -825,9 +825,7 @@ def tool_get_meeting_minutes(user: Dict[str, Any], args: Dict[str, Any]) -> Tupl
     template = str(args.get("template") or "ejecutiva")
     if template not in ("ejecutiva", "seguimiento", "comite", "consejo", "asamblea"):
         raise ToolError("template debe ser ejecutiva, seguimiento, comite, consejo o asamblea.")
-    report = result.summa_report
-    if not report or report.is_locked:
-        report = generate_apex_summa_report(result=result, language=result.language or "es", is_locked=False)
+    report = job_manager.get_or_build_summa(result)
     notes = _notes_of(result)
     custom = "\n".join(
         f"- **[{n.get('timestamp_formatted', '')}] [{str(n.get('tag', 'nota')).upper()}]**: {n.get('text', '')}"

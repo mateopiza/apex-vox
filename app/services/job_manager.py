@@ -31,13 +31,14 @@ from app.config import (
     settings,
 )
 from app.models.schemas import (
+    ApexSummaReport,
     DiarizedSegment,
     JobStatusResponse,
     TranscribeRequest,
     TranscriptionResult,
 )
 from app.services.acoustic_diarizer import cluster_segments_acoustically, release_pcm
-from app.services.apex_summa import generate_apex_summa_report
+from app.services.apex_summa import generate_apex_summa_report, relabel_report
 from app.services.state_store import StateCorruptError, atomic_write_bytes, atomic_write_json, read_json
 from app.services.audio_engine import (
     ProbedAudio,
@@ -997,10 +998,52 @@ class JobManager:
         self, job_id: str, speaker_map: Dict[str, str]
     ) -> TranscriptionResult:
         """Rename speaker labels across all segments of a completed job."""
-        with self._lock:
-            edit_lock = self._result_edit_locks.setdefault(job_id, threading.Lock())
-        with edit_lock:  # dos renombres seguidos no se pisan
+        with self._edit_lock(job_id):  # dos renombres seguidos no se pisan
             return self._rename_speakers(job_id, speaker_map)
+
+    def _edit_lock(self, job_id: str) -> threading.Lock:
+        with self._lock:
+            return self._result_edit_locks.setdefault(job_id, threading.Lock())
+
+    def _save_result(self, result: TranscriptionResult) -> None:
+        """Save a changed result on disk and in the bucket, without extending its retention."""
+        job_id = result.job_id
+        with self._lock:
+            self._results[job_id] = result
+        data = json.dumps(result.model_dump(mode="json"), ensure_ascii=False, indent=2).encode("utf-8")
+        atomic_write_bytes(settings.OUTPUT_DIR / f"{job_id}_result.json", data)
+        mega_s4_storage.upload_object(
+            object_key=f"users/{result.user_id or 'public'}/jobs/{job_id}/result.json",
+            data=data,
+            content_type="application/json",
+            plan=result.plan,
+            user_id=result.user_id,
+            job_id=job_id,
+            expires_at=result.expires_at,
+        )
+
+    def get_or_build_summa(self, result: TranscriptionResult, language: Optional[str] = None) -> ApexSummaReport:
+        """
+        The full report for this language. It is generated once and kept, so that minutes, calendar
+        and screen agree, and no LLM call is paid for twice. Only for viewers entitled to it.
+        """
+        lang = (language or result.language or "es").strip().lower()
+        lang = lang if lang in ("es", "en") else "es"
+        with self._edit_lock(result.job_id):  # dos peticiones a la vez generan un solo informe
+            current = result.summa_report
+            if current and not current.is_locked:
+                if current.language == lang:
+                    return current
+                if lang in result.summa_translations:
+                    return result.summa_translations[lang]
+            report = generate_apex_summa_report(result=result, language=lang, is_locked=False)
+            if current and not current.is_locked:
+                result.summa_translations[lang] = report
+            else:  # no había informe, o era la vista previa y la cuenta ya pagó
+                result.summa_report = report
+            if result.plan != "guest":
+                self._save_result(result)
+            return report
 
     def _rename_speakers(
         self, job_id: str, speaker_map: Dict[str, str]
@@ -1025,6 +1068,7 @@ class JobManager:
             new_roles[clean_map.get(spk, spk)] = role
 
         unique_speakers = list(dict.fromkeys(s.speaker for s in updated_segments))
+        names = {old: new for old, new in clean_map.items() if old != new}
         full_text = "\n".join(
             f"[{s.start_formatted} - {s.end_formatted}] {s.speaker}: {s.text}"
             for s in updated_segments
@@ -1045,17 +1089,13 @@ class JobManager:
                 self._results[job_id] = updated_result
             return updated_result
 
-        updated_result.summa_report = generate_apex_summa_report(
-            result=updated_result,
-            language=updated_result.language or "es",
-            is_locked=(updated_result.plan == "free"),
-        )
-
-        with self._lock:
-            self._results[job_id] = updated_result
-
-        result_file = settings.OUTPUT_DIR / f"{job_id}_result.json"
-        atomic_write_json(result_file, updated_result.model_dump(mode="json"), indent=2)
+        # The analysis stays: only the names change, so no new LLM call and no lost notes.
+        if result.summa_report:
+            updated_result.summa_report = relabel_report(result.summa_report, updated_result, names)
+        updated_result.summa_translations = {
+            lang: relabel_report(report, updated_result, names) for lang, report in result.summa_translations.items()
+        }
+        self._save_result(updated_result)
         return updated_result
 
 

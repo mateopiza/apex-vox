@@ -453,6 +453,12 @@ class Settings:
     DEFAULT_LLM_MODEL: str = field(
         default_factory=lambda: os.getenv("DEFAULT_LLM_MODEL", "llama-3.3-70b-versatile")
     )
+    SUMMA_MAX_MAP_BLOCKS: int = field(
+        default_factory=lambda: int(os.getenv("SUMMA_MAX_MAP_BLOCKS", "8"))
+    )
+    SUMMA_LLM_BUDGET_SECONDS: float = field(
+        default_factory=lambda: float(os.getenv("SUMMA_LLM_BUDGET_SECONDS", "90"))
+    )
     FALLBACK_LLM_MODEL: str = field(
         default_factory=lambda: os.getenv("FALLBACK_LLM_MODEL", "llama-3.1-8b-instant")
     )

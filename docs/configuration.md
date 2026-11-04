@@ -55,6 +55,8 @@ Notes on the columns below:
 | `RETENTION_SWEEP_MINUTES` | `60` | No | Time between retention sweeps. |
 | `RETENTION_PRO_LAPSE_GRACE_DAYS` | `7` | No | After Apex Pro lapses, days before Free retention starts to count on files kept without an expiry. |
 | `JOB_RETENTION_HOURS` | `24` | No | Original uploads and leftovers are deleted this long after their last change, on every plan. Merged audio and results follow the plan's retention. |
+| `SUMMA_MAX_MAP_BLOCKS` | `8` | No | A long meeting is summarized in parts of up to 24,000 characters and then combined. Above this many parts, an even sample is used and the report says `analysis_source: llm_partial`. |
+| `SUMMA_LLM_BUDGET_SECONDS` | `90` | No | Time for all LLM calls of one report. Past it, the report uses what it has. |
 | `JOB_CONCURRENCY` | `2` | No | Recordings processed at the same time. Others wait with status `queued`. |
 | `JOB_TIMEOUT_SECONDS` | `1800` | No | A job over this time fails and gives back its quota. Measured from when it starts running, not while queued. |
 | `CHUNK_DURATION_MINUTES` | `10` | No | Target chunk length. Used only if `CHUNK_TARGET_DURATION_SEC` is unset. |

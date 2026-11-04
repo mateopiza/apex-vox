@@ -48,6 +48,7 @@ from app.services.apex_summa import (
     generate_apex_summa_report,
     generate_ics_calendar,
     generate_meeting_minutes,
+    redact_report,
 )
 from app.services.job_manager import QuotaCharge, job_manager, upload_too_large_message
 from app.services.state_store import StateCorruptError
@@ -163,6 +164,13 @@ def _with_media_token(result: TranscriptionResult) -> TranscriptionResult:
     return result.model_copy(update={"media_token": media_token(f"job:{result.job_id}")})
 
 
+def _for_viewer(result: TranscriptionResult, user: Optional[Dict[str, Any]]) -> TranscriptionResult:
+    """Lo que esta cuenta puede leer hoy: sin Apex Pro activo, la vista previa del informe."""
+    if is_paid(user) or not result.summa_report:
+        return result
+    return result.model_copy(update={"summa_report": redact_report(result.summa_report), "summa_translations": {}})
+
+
 @router.get("/jobs/{job_id}/status", response_model=JobStatusResponse)
 def get_job_status(job_id: str = Depends(require_job_owner)) -> JobStatusResponse:
     """Poll the current status and progress percentage of a transcription job."""
@@ -173,11 +181,14 @@ def get_job_status(job_id: str = Depends(require_job_owner)) -> JobStatusRespons
 
 
 @router.get("/jobs/{job_id}/result", response_model=TranscriptionResult)
-def get_job_result(job_id: str = Depends(require_job_owner)) -> TranscriptionResult:
+def get_job_result(
+    job_id: str = Depends(require_job_owner),
+    user: Optional[Dict[str, Any]] = Depends(optional_user),
+) -> TranscriptionResult:
     """Retrieve the complete chronological transcription and speaker diarization result."""
     result = job_manager.get_job_result(job_id)
     if result:
-        return _with_media_token(result)
+        return _with_media_token(_for_viewer(result, user))
     if job_manager.is_expired(job_id):
         raise HTTPException(status_code=410, detail=EXPIRED_RESULT)
 
@@ -198,11 +209,14 @@ def get_job_result(job_id: str = Depends(require_job_owner)) -> TranscriptionRes
 
 @router.patch("/jobs/{job_id}/speakers", response_model=TranscriptionResult)
 async def rename_job_speakers(
-    payload: RenameSpeakersRequest, job_id: str = Depends(require_job_owner)
+    payload: RenameSpeakersRequest,
+    job_id: str = Depends(require_job_owner),
+    user: Optional[Dict[str, Any]] = Depends(optional_user),
 ) -> TranscriptionResult:
     """Rename speaker labels across all segments of a completed transcription job."""
     try:
-        return _with_media_token(await run_heavy(job_manager.rename_speakers, job_id, payload.speaker_map))
+        renamed = await run_heavy(job_manager.rename_speakers, job_id, payload.speaker_map)
+        return _with_media_token(_for_viewer(renamed, user))
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
 
@@ -344,14 +358,11 @@ def _summa_report(job_id: str, lang: str, user: Optional[Dict[str, Any]]) -> Ape
 
     if result.plan == "guest":
         raise HTTPException(status_code=402, detail="Crea tu cuenta para usar Apex Summa / Create an account to use Apex Summa.")
-    is_locked = result.plan == "free" and not is_paid(user)
-    report = generate_apex_summa_report(
-        result=result,
-        language=lang,
-        is_locked=is_locked,
-    )
-    result.summa_report = report
-    return report
+    if not is_paid(user):
+        # Nunca se guarda: es lo que ve esta cuenta hoy, no el informe del trabajo.
+        stored = result.summa_report
+        return redact_report(stored) if stored else generate_apex_summa_report(result, lang, is_locked=True)
+    return job_manager.get_or_build_summa(result, lang)
 
 
 @router.post("/jobs/{job_id}/minutes", response_model=MinutesDocumentResponse)
@@ -377,11 +388,7 @@ def _meeting_minutes(
     result = _require_result(job_id)
 
     _require_summa_access(result, user)
-    report = generate_apex_summa_report(
-        result=result,
-        language=payload.language,
-        is_locked=False,
-    )
+    report = job_manager.get_or_build_summa(result, payload.language)
     return generate_meeting_minutes(
         result=result,
         report=report,
@@ -402,12 +409,7 @@ def _calendar_file(job_id: str, user: Optional[Dict[str, Any]]) -> Response:
     result = _require_result(job_id)
 
     _require_summa_access(result, user)
-    report = generate_apex_summa_report(
-        result=result,
-        language=result.language or "es",
-        is_locked=False,
-    )
-    ics_content = generate_ics_calendar(report)
+    ics_content = generate_ics_calendar(job_manager.get_or_build_summa(result))
     return Response(
         content=ics_content.encode("utf-8"),
         media_type="text/calendar; charset=utf-8",
