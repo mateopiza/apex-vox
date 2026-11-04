@@ -205,10 +205,12 @@ def _recover_then_maintain() -> None:
     """After a restart, settle interrupted work; then, each minute, free what is no longer needed."""
     from app.api.deps import prune_throttle
     from app.services import recall_service, twilio_service
+    from app.services.acoustic_diarizer import clear_decoded_audio
     from app.services.apex_box import apex_box_manager
     from app.services.job_manager import job_manager
 
     for recover in (
+        clear_decoded_audio,
         job_manager.recover_interrupted_jobs,
         recall_service.resume_interrupted_bots,
         twilio_service.resume_interrupted_calls,

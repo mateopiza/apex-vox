@@ -36,7 +36,7 @@ from app.models.schemas import (
     TranscribeRequest,
     TranscriptionResult,
 )
-from app.services.acoustic_diarizer import cluster_segments_acoustically
+from app.services.acoustic_diarizer import cluster_segments_acoustically, release_pcm
 from app.services.apex_summa import generate_apex_summa_report
 from app.services.state_store import StateCorruptError, atomic_write_bytes, atomic_write_json, read_json
 from app.services.audio_engine import (
@@ -902,6 +902,7 @@ class JobManager:
             )
             raise
         finally:
+            release_pcm(settings.OUTPUT_DIR / f"{job_id}_merged.mp3")
             if settings.CLEANUP_TEMP_FILES:
                 shutil.rmtree(job_temp_dir, ignore_errors=True)
 
