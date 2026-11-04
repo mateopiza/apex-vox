@@ -1,5 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="118" height="24" viewBox="0 0 118 24" fill="none" role="img" aria-label="Powered by Groq for fast inference.">
-  <rect x="0.5" y="0.5" width="117" height="23" rx="5.5" fill="#FFFFFF" stroke="#CECEBF"/>
-  <text x="10" y="15" fill="#686A6E" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="9" font-weight="500" letter-spacing="0.02em">POWERED BY</text>
-  <text x="74" y="15.5" fill="#F43E01" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" font-size="11" font-weight="700" letter-spacing="0.01em">groq</text>
-</svg>

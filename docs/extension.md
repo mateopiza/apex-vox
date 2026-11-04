@@ -92,7 +92,7 @@ To point the extension at your own domain:
 The listing draft lives in [`CHROMEWEBSTORE.md`](../CHROMEWEBSTORE.md): name, descriptions, single purpose, permission justifications, privacy answers and version history.
 
 1. Bump `version` in `extension/manifest.json` and add a row to the version history in `CHROMEWEBSTORE.md`.
-2. Build the ZIP. `curl -o apex-box.zip https://<host>/api/box/extension.zip` packages exactly the `extension/` folder (it skips `.DS_Store`, `.map`, `.sh` and `__pycache__`). You can also zip the folder contents yourself.
+2. Build the ZIP with `extension/scripts/package-extension.sh`. It writes `dist/apex-box-v<version>-chrome-webstore.zip` from `extension/`, without the localhost permissions that store review rejects. With those permissions gone, the extension locks itself to the official server and hides the server field. `GET /api/box/extension.zip` is for loading the extension unpacked: it keeps the permissions and the server field.
 3. In the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole), upload the ZIP, then fill in the listing and the **Privacy practices** tab from `CHROMEWEBSTORE.md`. Copy the permission justifications from the table above, including the content script.
 4. Add screenshots at 1280×800 (planned under `docs/screenshots/`), the 128×128 icon (`extension/icons/icon-128.png`) and a privacy policy URL (`https://<host>/legal/privacidad`).
 5. Submit for review. Store review of `tabCapture` and of content scripts tends to focus on whether the single purpose is clear and on the data disclosure.

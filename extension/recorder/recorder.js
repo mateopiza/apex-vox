@@ -74,6 +74,10 @@ translateStatic();
   const BITRATE = 48000;
   const MAX_RETRIES = 3;
   const CLOUD_URL = "https://apex-vox.ialabs.app";
+  // The Chrome Web Store package has no localhost permission: it only talks to the official server.
+  const LOCKED_TO_CLOUD = !(chrome.runtime.getManifest().host_permissions || []).some((h) =>
+    /localhost|127\.0\.0\.1/.test(h)
+  );
   const SOUND_RMS = 0.006; // ~ -44 dBFS: por encima se considera que hay sonido
   const SILENCE_WARN_SEC = 15; // aviso tras este silencio continuo
   const WAVE_POINTS = 160;
@@ -801,7 +805,13 @@ translateStatic();
 
   (async () => {
     const saved = await chrome.storage.local.get(["serverUrl", "lastMeetingType", "lastMode", "lastEngine"]);
-    if (saved.serverUrl && el.serverUrl) {
+    if (LOCKED_TO_CLOUD) {
+      st.serverUrl = CLOUD_URL;
+      $("server-settings").classList.add("hidden");
+      const locked = $("server-locked");
+      locked.textContent = L("Conectado a apex-vox.ialabs.app", "Connected to apex-vox.ialabs.app");
+      locked.classList.remove("hidden");
+    } else if (saved.serverUrl && el.serverUrl) {
       st.serverUrl = el.serverUrl.value = safeServerUrl(saved.serverUrl);
     } else {
       st.serverUrl = CLOUD_URL;

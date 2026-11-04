@@ -117,5 +117,6 @@ https://apex-vox.ialabs.app
 | Version | Date | Changes | Status |
 |---------|------|---------|--------|
 | 3.1.0 | 2026-11-02 | Connects to the cloud service (https://apex-vox.ialabs.app) by default; live sound waves and no-sound warning ("MUDO" badge). | Draft |
+| 3.3.1 | 2026-11-04 | Store package built from the main codebase by `extension/scripts/package-extension.sh`, locked to the official server. |
 | 3.0.0 | 2026-11-02 | Simplified: recording moves to a pinned extension tab (no side panel/offscreen/content scripts); four fields (meeting type, title, recording type, model), REC + time badge, final results link. | Draft |
 | 2.0.0 | 2026-11-02 | Initial release of Apex Box MV3 extension with 3-minute zero-RAM block rotation (10h+ continuous recording), Presencial & Virtual meeting modes (Meet, Zoom, Teams, Webex), live timestamped notes, and Apex Summa integration. | Draft |
