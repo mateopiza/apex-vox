@@ -30,14 +30,12 @@ Engineering Guarantees for 10+ Hour Continuous Recording:
 from __future__ import annotations
 
 import datetime as dt
-import io
 import json
 import logging
 import shutil
 import threading
 import time
 import uuid
-import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, BinaryIO, Dict, List, Optional, Set, Tuple, Union
@@ -77,6 +75,7 @@ from app.services.audio_engine import (
     format_timestamp_hhmmss,
 )
 from app.services.diarization import diarize_segments
+from app.services.extension_package import build_zip_bytes
 from app.services.job_manager import job_manager
 from app.services.state_store import atomic_write_bytes
 from app.services.storage_s4 import mega_s4_storage
@@ -1044,19 +1043,7 @@ def build_extension_zip_bytes() -> bytes:
     if not ext_dir.exists():
         raise FileNotFoundError("El directorio de la extensión 'extension/' no existe.")
 
-    excluded_names = {".DS_Store", "Thumbs.db", ".git", "node_modules", "__pycache__"}
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-        for file_path in sorted(ext_dir.rglob("*")):
-            if file_path.is_dir():
-                continue
-            if any(part in excluded_names for part in file_path.parts):
-                continue
-            if file_path.suffix in (".pyc", ".map", ".sh"):
-                continue
-            rel_path = file_path.relative_to(ext_dir)
-            zf.write(file_path, arcname=str(rel_path))
-    return buf.getvalue()
+    return build_zip_bytes(ext_dir)
 
 
 EXTENSION_S4_PREFIX = "public/extension"

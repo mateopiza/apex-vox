@@ -12,9 +12,9 @@ Este documento explica cómo **probar la extensión en tu navegador**, cómo **u
 3. Haz clic en el botón **Cargar descomprimida** (arriba a la izquierda).
 4. Selecciona una de estas dos carpetas según lo que quieras probar:
    - **Para probar la versión lista para la tienda (producción)**:
-     `/home/iamdexter/Documentos/transcripcion/extension/versionenvio`
+     la carpeta donde descomprimiste el ZIP que genera `extension/scripts/package-extension.sh` en `dist/`
    - **Para desarrollo local (permite cambiar entre `localhost:8000` y la nube)**:
-     `/home/iamdexter/Documentos/transcripcion/extension`
+     la carpeta `extension/` del repositorio
 5. Fija el icono naranja de **Apex Box** en tu barra de herramientas de Chrome haciendo clic en el icono del rompecabezas (🧩 Extensiones) → clic en el pin 📌 junto a **Apex Box — Grabador de Reuniones**.
 
 ---
@@ -65,12 +65,12 @@ Al pulsar **«■ Detener»**, la extensión sube el último bloque pendiente y 
 ## 3. Cómo enviar la extensión a Google Chrome Web Store
 
 1. **Archivo que debes subir**:
-   No comprimas toda la carpeta `extension/`. Usa únicamente el paquete limpio que ya está generado en:
-   `/home/iamdexter/Documentos/transcripcion/extension/versionenvio/apex-box-v3.2.0-chrome-webstore.zip`
-2. **Si modificas algo en `versionenvio/` y necesitas regenerar el ZIP**:
+   No comprimas toda la carpeta `extension/`. Usa únicamente el paquete limpio que genera el script:
+   `dist/apex-box-v<versión>-chrome-webstore.zip`
+2. **Para generar el ZIP (también tras cualquier cambio en `extension/`)**:
    Ejecuta en la terminal:
    ```bash
-   /home/iamdexter/Documentos/transcripcion/extension/scripts/package-extension.sh
+   extension/scripts/package-extension.sh
    ```
 3. **Textos, capturas de pantalla y justificaciones de permisos para el formulario de Google**:
    Abre el documento [GUIA_CONFIGURACION_Y_ENVIO_CWS.md](./GUIA_CONFIGURACION_Y_ENVIO_CWS.md) y utiliza las imágenes de la carpeta `doc/assets/` (`store-icon-128x128.png`, `screenshot-1-grabador-1280x800.png`, `screenshot-2-resultado-acta-1280x800.png` y `small-promo-tile-440x280.png`).

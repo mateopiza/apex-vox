@@ -15,7 +15,10 @@ const CLOUD_URL = "https://apex-vox.ialabs.app";
 chrome.runtime.onInstalled.addListener(async () => {
   try {
     const { serverUrl } = await chrome.storage.local.get("serverUrl");
-    if (!serverUrl || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(serverUrl)) {
+    const lockedToCloud = !(chrome.runtime.getManifest().host_permissions || []).some((h) =>
+      /localhost|127\.0\.0\.1/.test(h)
+    );
+    if (lockedToCloud || !serverUrl || /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(serverUrl)) {
       await chrome.storage.local.set({ serverUrl: CLOUD_URL });
     }
     await chrome.storage.session.set({ recordingState: "idle" });

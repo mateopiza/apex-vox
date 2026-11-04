@@ -26,45 +26,18 @@ Esta guía documenta la estructura reorganizada de `/home/iamdexter/Documentos/t
 │   └── powered-by-groq-light.svg             # Insignia SVG empaquetada localmente (cero peticiones externas)
 ├── scripts/
 │   └── package-extension.sh                  # Script automatizado que genera el ZIP limpio para Chrome Web Store
-├── versionenvio/                             # 🚀 VERSIÓN DE PRODUCCIÓN LISTA PARA ENVIAR A CHROME WEB STORE
-│   ├── apex-box-v3.2.0-chrome-webstore.zip   # 📦 ARCHIVO ZIP LISTO PARA SUBIR AL DASHBOARD DE GOOGLE
-│   ├── manifest.json                         # Manifest V3 de producción (solo https://apex-vox.ialabs.app/*)
-│   ├── service-worker.js                     # Service Worker de producción
-│   ├── content/
-│   │   └── session-bridge.js
-│   ├── icons/
-│   │   ├── icon-16.png
-│   │   ├── icon-32.png
-│   │   ├── icon-48.png
-│   │   └── icon-128.png
-│   └── recorder/
-│       ├── recorder.html                     # Sin selector de servidor arbitrario (fijado a producción)
-│       ├── recorder.css
-│       ├── recorder.js
-│       ├── level-meter.js
-│       └── powered-by-groq-light.svg
-└── doc/                                      # 📚 DOCUMENTACIÓN Y RECURSOS GRÁFICOS PARA LA TIENDA
-    ├── GUIA_CONFIGURACION_Y_ENVIO_CWS.md     # Este documento maestro paso a paso
-    ├── CHROMEWEBSTORE.md                     # Ficha completa de la tienda y justificaciones
-    ├── PRIVACY_POLICY.md                     # Política de privacidad en Markdown
-    ├── PRIVACY_POLICY.html                   # Política de privacidad en HTML lista para alojar en /privacy
-    └── assets/                               # Imágenes listas con dimensiones exactas exigidas por Google
-        ├── store-icon-128x128.png            # Icono de la tienda (128×128 PNG)
-        ├── screenshot-1-grabador-1280x800.png# Captura 1: Grabando con ondas en vivo (1280×800 PNG)
-        ├── screenshot-2-resultado-acta-1280x800.png # Captura 2: Reunión lista y entrega de acta (1280×800 PNG)
-        └── small-promo-tile-440x280.png      # mosaico promocional pequeño (440×280 PNG)
 ```
 
 ---
 
 ## 2. Adaptaciones Críticas Realizadas para Aprobar la Revisión de Google
 
-Google Chrome Web Store rechaza extensiones automáticamente o en revisión manual cuando detecta permisos de desarrollo, cargas de recursos remotos no declarados, uso de marcas registradas en la descripción corta o problemas de concurrencia en `tabCapture`. En `versionenvio/` se aplicaron las siguientes correcciones:
+Google Chrome Web Store rechaza extensiones automáticamente o en revisión manual cuando detecta permisos de desarrollo, cargas de recursos remotos no declarados, uso de marcas registradas en la descripción corta o problemas de concurrencia en `tabCapture`. El paquete que genera el script aplica estas correcciones:
 
 1. **Eliminación de permisos de desarrollo (`localhost` y `127.0.0.1`)**:
-   - En `versionenvio/manifest.json`, `host_permissions` y `content_scripts.matches` contienen **únicamente** `"https://apex-vox.ialabs.app/*"`. Dejar `http://localhost:8000/*` o `http://127.0.0.1:8000/*` provoca rechazo por la política de *Minimum Permissions* de Chrome Web Store.
+   - El script de empaquetado deja en el `manifest.json` del ZIP, en `host_permissions` y `content_scripts.matches`, **únicamente** `"https://apex-vox.ialabs.app/*"`. Dejar `http://localhost:8000/*` o `http://127.0.0.1:8000/*` provoca rechazo por la política de *Minimum Permissions* de Chrome Web Store.
 2. **Eliminación del selector de servidor arbitrario en producción**:
-   - En `versionenvio/recorder/recorder.html` y `recorder.js` se reemplazó el campo editable de URL de servidor por el indicador fijo `Conectado a apex-vox.ialabs.app`, garantizando que la extensión de producción solo se comunique con el dominio declarado en `host_permissions`.
+   - Sin permiso de localhost, `recorder.js` oculta el campo editable de URL de servidor y muestra el indicador fijo `Conectado a apex-vox.ialabs.app`, garantizando que la extensión de producción solo se comunique con el dominio declarado en `host_permissions`.
 3. **Empaquetado local de activos gráficos (`powered-by-groq-light.svg`)**:
    - Antes, `recorder.html` cargaba `https://console.groq.com/powered-by-groq-light.svg` desde un servidor externo al abrir la extensión. Ahora se sirve localmente desde `recorder/powered-by-groq-light.svg`, eliminando peticiones de red a terceros no declaradas.
 4. **Descripción corta sin infracción de marcas registradas (`Trademark Policy`)**:
@@ -79,7 +52,7 @@ Google Chrome Web Store rechaza extensiones automáticamente o en revisión manu
 
 ---
 
-## 3. Archivo `manifest.json` de Producción (`versionenvio/manifest.json`)
+## 3. Archivo `manifest.json` del paquete (lo genera el script a partir de `extension/manifest.json`)
 
 ```json
 {
@@ -138,8 +111,8 @@ Google Chrome Web Store rechaza extensiones automáticamente o en revisión manu
 1. Ingresa a [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole).
 2. Haz clic en **New Item (Nuevo elemento)**.
 3. Sube el archivo generado:
-   `/home/iamdexter/Documentos/transcripcion/extension/versionenvio/apex-box-v3.2.0-chrome-webstore.zip`
-   *(Si en el futuro haces cambios, ejecuta `./scripts/package-extension.sh` para regenerar el ZIP limpio).*
+   `dist/apex-box-v<versión>-chrome-webstore.zip`
+   *(Se genera con `extension/scripts/package-extension.sh`; vuelve a ejecutarlo tras cualquier cambio).*
 
 ---
 
@@ -147,7 +120,7 @@ Google Chrome Web Store rechaza extensiones automáticamente o en revisión manu
 
 - **Title (Nombre)**: Se autocompleta desde `manifest.json` (`Apex Box — Grabador de Reuniones`).
 - **Summary (Resumen)**: Se autocompleta desde `manifest.json` (`Graba reuniones presenciales o videollamadas en una pestaña fija y obtén transcripción, notas, resumen y acta en Apex Vox.`).
-- **Description (Descripción detallada)**: Copia y pega el bloque de `Detailed Description` de `doc/CHROMEWEBSTORE.md`.
+- **Description (Descripción detallada)**: Copia y pega el bloque de `Detailed Description` de `CHROMEWEBSTORE.md`, en la raíz del repositorio.
 - **Category (Categoría)**: `Productivity` (Productividad).
 - **Language (Idioma)**: `Español` (Spanish).
 - **Store Icon (Icono de tienda 128×128)**: Sube `doc/assets/store-icon-128x128.png`.
@@ -212,8 +185,7 @@ Y marca las **3 casillas de certificación obligatorias**:
 
 1. Abre `chrome://extensions` en Google Chrome.
 2. Activa el **Modo de desarrollador (Developer mode)** en la esquina superior derecha.
-3. Haz clic en **Cargar descomprimida (Load unpacked)** y selecciona la carpeta:
-   `/home/iamdexter/Documentos/transcripcion/extension/versionenvio`
+3. Haz clic en **Cargar descomprimida (Load unpacked)** y selecciona la carpeta donde descomprimiste el ZIP de `dist/`.
 4. Verifica en la tarjeta de la extensión:
    - Que no aparezca ningún botón de **Errores (Errors)**.
    - Haz clic en el enlace **Inspeccionar vistas: service worker** para abrir Chrome DevTools sobre el Service Worker y comprobar que la consola está limpia.

@@ -25,3 +25,6 @@ venv/
 
 # Test artifacts (e2e screenshots and Playwright traces)
 test-results/
+
+# Chrome Web Store package (extension/scripts/package-extension.sh)
+dist/
