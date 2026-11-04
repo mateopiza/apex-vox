@@ -330,7 +330,7 @@ class ApexBoxManager:
         start_offset_sec: float,
         duration_sec: float,
         filename: str,
-    ) -> tuple[Optional[Path], List[DiarizedSegment]]:
+    ) -> tuple[Optional[Path], List[DiarizedSegment], bool]:
         """
         Convert a single recorded block to 16kHz mono 64kbps MP3 and transcribe it
         immediately so the user gets a continuous live transcript over 10+ hours.
@@ -397,10 +397,11 @@ class ApexBoxManager:
                         )
                     )
             except Exception as exc:
-                logger.debug("Groq live block transcription fallback on block %s: %s", clean(block_index), type(exc).__name__)
+                logger.warning("Groq live block transcription fallback on block %s: %s", clean(block_index), type(exc).__name__)
 
         # Fallback acoustic/voice interval segmentation when running offline or without external API key
-        if not raw_whisper_segs:
+        placeholder = not raw_whisper_segs
+        if placeholder:
             try:
                 silences = detect_silences(chunk_mp3_path, total_duration=duration_sec)
             except Exception:
@@ -475,7 +476,7 @@ class ApexBoxManager:
                 for s in raw_whisper_segs
             ]
 
-        return (chunk_mp3_path if chunk_mp3_path.exists() else None), diarized_block_segs
+        return (chunk_mp3_path if chunk_mp3_path.exists() else None), diarized_block_segs, placeholder
 
     def ingest_block(
         self,
@@ -540,6 +541,7 @@ class ApexBoxManager:
                 max_bytes=max_bytes,
             )
             measured_sec = max(0.0, float(probed.duration_sec or 0.0))
+            charge_day = supabase_service.usage_day()
             if charge_quota:
                 try:
                     supabase_service.check_and_consume_quota(session.user_id, measured_sec)
@@ -563,8 +565,9 @@ class ApexBoxManager:
             )
 
         new_segments: List[DiarizedSegment] = []
+        placeholder = False
         if transcribe_immediately and track_path and track_path.exists():
-            chunk_mp3, new_segments = self._transcribe_single_block_incrementally(
+            chunk_mp3, new_segments, placeholder = self._transcribe_single_block_incrementally(
                 session=session,
                 block_path=track_path,
                 block_index=idx,
@@ -578,6 +581,8 @@ class ApexBoxManager:
                 for seg in new_segments:
                     seg_copy = seg.model_copy(update={"id": len(session.segments)})
                     session.segments.append(seg_copy)
+            if placeholder and charge_quota:  # no hubo transcripción real: no se cobra
+                supabase_service.refund_quota(session.user_id, measured_sec, charge_day)
 
         with self._lock:
             timeline_range = f"{format_timestamp_hhmmss(start_offset)} → {format_timestamp_hhmmss(end_offset)}"
@@ -591,6 +596,7 @@ class ApexBoxManager:
                 timeline_range=timeline_range,
                 size_bytes=probed.size_bytes,
                 transcribed=bool(new_segments),
+                placeholder=placeholder,
                 segments_count=len(new_segments),
                 uploaded_at=dt.datetime.now(dt.timezone.utc).isoformat(),
             )
@@ -767,7 +773,7 @@ class ApexBoxManager:
                 for b in session.blocks:
                     tr = upload_session.tracks.get(b.file_id)
                     if tr and tr.file_path.exists():
-                        _, b_segs = self._transcribe_single_block_incrementally(
+                        _, b_segs, _ = self._transcribe_single_block_incrementally(
                             session=session,
                             block_path=tr.file_path,
                             block_index=b.block_index,

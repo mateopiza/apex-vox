@@ -87,6 +87,16 @@ def _store_upload(content: Union[bytes, BinaryIO], dest: Path, max_bytes: Option
 
 
 @dataclass
+class QuotaCharge:
+    """What a job used of a plan or guest allowance, so a failure can give it back exactly once."""
+    owner: str
+    day: str
+    audios: int
+    seconds: float = 0.0
+    guest: bool = False
+
+
+@dataclass
 class UploadedTrack:
     """Internal representation of an uploaded audio file within a session."""
     file_id: str
@@ -114,6 +124,7 @@ class JobManager:
         self._jobs: Dict[str, JobStatusResponse] = {}
         self._results: Dict[str, TranscriptionResult] = {}
         self._job_owners: Dict[str, str] = {}  # job id -> cuenta o clave del invitado
+        self._charges: Dict[str, QuotaCharge] = {}  # job id -> cargo pendiente de un trabajo en curso
 
     # -------------------------------------------------------------------------
     # Session Management
@@ -313,6 +324,24 @@ class JobManager:
         with self._lock:
             return self._job_owners.get(job_id)
 
+    def record_charge(self, job_id: str, charge: QuotaCharge) -> None:
+        with self._lock:
+            self._charges[job_id] = charge
+
+    def _settle_charge(self, job_id: str, refund: bool) -> None:
+        """Forget a job's charge, giving it back if the job failed. Safe to call more than once."""
+        with self._lock:
+            charge = self._charges.pop(job_id, None)
+        if not charge or not refund:
+            return
+        try:
+            if charge.guest:
+                supabase_service.refund_guest_audios(charge.owner, charge.audios, charge.day)
+            else:
+                supabase_service.refund_quota(charge.owner, charge.seconds, charge.day, charge.audios)
+        except Exception:
+            logger.exception("Could not refund the quota of job %s", clean(job_id))
+
     def _update_job(
         self,
         job_id: str,
@@ -386,6 +415,7 @@ class JobManager:
         """
         job_temp_dir = settings.TEMP_DIR / job_id
         job_temp_dir.mkdir(parents=True, exist_ok=True)
+        is_guest = bool(req.guest_key) and not req.user_id
 
         try:
             self._update_job(
@@ -425,18 +455,23 @@ class JobManager:
             total_duration = round(sum(p.duration_sec for p in probed_list), 3)
 
             # Plan comes from the account set by the server (never from the client).
-            is_guest = bool(req.guest_key) and not req.user_id
             effective_user = None if is_guest else supabase_service.get_user_by_id(req.user_id)
             resolved_uid = effective_user["user_id"] if effective_user else None
             if is_guest:
                 effective_plan = "guest"
             else:
+                charge_day = supabase_service.usage_day()
                 quota_state = supabase_service.check_and_consume_quota(
                     user_id=resolved_uid,
                     duration_seconds=total_duration,
                     audios_count=len(ordered_tracks),
                 )
                 effective_plan = quota_state.plan
+                if resolved_uid:
+                    self.record_charge(
+                        job_id,
+                        QuotaCharge(owner=resolved_uid, day=charge_day, audios=len(ordered_tracks), seconds=total_duration),
+                    )
 
             engine_brand = get_public_engine_label(req.diarization_engine)
             engine = resolve_engine_code(req.diarization_engine)
@@ -607,6 +642,7 @@ class JobManager:
                 timer.daemon = True
                 timer.start()
                 self.discard_session(req.session_id)
+                self._settle_charge(job_id, refund=False)
                 self._update_job(
                     job_id,
                     status="completed",
@@ -684,6 +720,7 @@ class JobManager:
             with self._lock:
                 self._results[job_id] = result
 
+            self._settle_charge(job_id, refund=False)
             self._update_job(
                 job_id,
                 status="completed",
@@ -694,6 +731,9 @@ class JobManager:
 
         except Exception as exc:
             logger.exception("Job %s failed: %s", job_id, exc)
+            self._settle_charge(job_id, refund=True)
+            if is_guest:  # sin cuenta no se guarda nada, tampoco si falló
+                self.discard_session(req.session_id)
             self._update_job(
                 job_id,
                 status="failed",

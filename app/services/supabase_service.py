@@ -718,6 +718,23 @@ class SupabaseCloudService:
 
         return self.get_user_quota(uid)
 
+    @staticmethod
+    def usage_day() -> str:
+        """The day usage is being counted on: refunds must go back to the same day."""
+        return _today_str()
+
+    def refund_quota(self, user_id: str, seconds: float, day: str, audios: int = 1) -> None:
+        """Give back what a failed job or block used, on the day it was charged."""
+        with self._lock:
+            db = self._load_db()
+            entry = db["daily_usage"].get(f"{user_id}:{day}")
+            if not entry:
+                return
+            entry["used_seconds"] = round(max(0.0, float(entry.get("used_seconds", 0.0)) - max(0.0, seconds)), 3)
+            entry["audios_count"] = max(0, int(entry.get("audios_count", 0)) - max(0, audios))
+            entry["updated_at"] = _now().isoformat()
+            self._save_db(db)
+
     # -------------------------------------------------------------------------
     # Precio y promoción de bienvenida
     # -------------------------------------------------------------------------
@@ -1040,6 +1057,16 @@ class SupabaseCloudService:
             usage[f"{guest_key}:{today}"] = used + count
             self._save_db(db)
             return settings.GUEST_MAX_AUDIOS_PER_DAY - used - count
+
+    def refund_guest_audios(self, guest_key: str, count: int, day: str) -> None:
+        """Give back audios a failed guest job used. Counters only live for the current day."""
+        with self._lock:
+            db = self._load_db()
+            usage = db.setdefault("guest_usage", {})
+            key = f"{guest_key}:{day}"
+            if key in usage:
+                usage[key] = max(0, int(usage[key]) - max(0, count))
+                self._save_db(db)
 
     # -------------------------------------------------------------------------
     # Password reset

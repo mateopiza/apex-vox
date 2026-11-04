@@ -27,6 +27,7 @@ Preparation of the public open-source release.
 
 ### Fixed
 
+- A failed transcription gives back the plan or guest quota it used, on the day it was charged. An Apex Box block with no real transcript is not charged. A failed guest job no longer leaves its audio on disk.
 - Apex Box: free accounts get the Summa preview and no minutes, as on normal uploads and as documented; finalizing twice returns the same result; a failed finalize can be retried instead of staying stuck; blocks and status changes are refused once a recording is closed; audio and transcript follow the timeline even when blocks finish out of order.
 - Authenticated requests no longer reparse the whole accounts file (about 100 ms per parse at 10k accounts): read paths share a snapshot that is reparsed only when the file changes. Password hashing and the Supabase Auth call no longer run under the global state lock.
 - State files (accounts, storage index, voice profiles, results) are replaced atomically. A damaged or missing accounts file now returns 503 and fails `/api/health` instead of being read as empty, which let the next save erase every account. A damaged storage index or voice-profile file is never overwritten.

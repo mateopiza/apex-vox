@@ -48,7 +48,7 @@ from app.services.apex_summa import (
     generate_ics_calendar,
     generate_meeting_minutes,
 )
-from app.services.job_manager import job_manager, upload_too_large_message
+from app.services.job_manager import QuotaCharge, job_manager, upload_too_large_message
 from app.services.state_store import StateCorruptError
 from app.services.supabase_service import supabase_service
 from app.services.usage_reporter import (
@@ -90,6 +90,7 @@ async def start_transcription_job(
     if not (settings.GROQ_API_KEY or "").strip() and not (engine == "deepgram" and settings.DEEPGRAM_API_KEY):
         raise HTTPException(status_code=503, detail="El servicio de transcripción no está disponible en este momento.")
 
+    charge: Optional[QuotaCharge] = None
     if not user:
         tracks = job_manager.get_session_files(payload.session_id)
         too_long = [t.filename for t in tracks if t.duration_sec > settings.GUEST_MAX_AUDIO_SECONDS]
@@ -98,17 +99,22 @@ async def start_transcription_job(
                 status_code=413,
                 detail=f"Sin cuenta cada audio puede durar hasta {settings.GUEST_MAX_AUDIO_MINUTES:.0f} minutos.",
             )
+        charge_day = supabase_service.usage_day()
         try:
             supabase_service.consume_guest_audios(owner, len(tracks))
         except PermissionError as exc:
             raise HTTPException(status_code=403, detail=str(exc)) from exc
+        charge = QuotaCharge(owner=owner, day=charge_day, audios=len(tracks), guest=True)
 
     try:
         job_status = job_manager.create_job(payload)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        if charge:
+            supabase_service.refund_guest_audios(charge.owner, charge.audios, charge.day)
+        status = 404 if isinstance(exc, KeyError) else 400
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
+    if charge:
+        job_manager.record_charge(job_status.job_id, charge)
 
     if sync:
         try:
