@@ -609,6 +609,26 @@ class SupabaseCloudService:
                 return True
         return False
 
+    def effective_expiry(self, stored_expiry: Optional[str], owner_id: Optional[str]) -> Optional[dt.datetime]:
+        """
+        When a result stops being available, or None if it does not expire. An account paying now
+        keeps everything, and one whose Pro lapsed has a grace period before Free retention applies.
+        When in doubt (an unreadable date) it is kept.
+        """
+        user = self._read_snapshot()["users"].get(owner_id) if owner_id else None
+        if user and str(user.get("plan", "free")).lower() in ("pro", "trial") and not self._plan_expired(user):
+            return None
+        stored = _parse_iso(stored_expiry)
+        if stored_expiry and not stored:
+            return None
+        lapsed = _parse_iso(user.get("pro_until")) if user else None
+        if lapsed:
+            after_lapse = lapsed + dt.timedelta(
+                days=settings.RETENTION_PRO_LAPSE_GRACE_DAYS, hours=settings.FREE_RETENTION_HOURS
+            )
+            return max(stored, after_lapse) if stored else after_lapse
+        return stored
+
     def get_user_quota(self, user_id: str) -> QuotaUsageResponse:
         db = self._read_snapshot()
         user = db["users"].get(user_id)
@@ -1222,6 +1242,32 @@ class SupabaseCloudService:
         remote = {k: v for k, v in record.items() if k in TRANSCRIPTION_COLUMNS}
         self._sync_to_supabase_table("transcriptions", remote, upsert_col="job_id")
 
+    def _delete_from_supabase_table(self, table: str, column: str, value: str) -> bool:
+        """Delete rows from Supabase Cloud. True if they are gone, or there is no Supabase."""
+        if not self.is_cloud_configured:
+            return True
+        url = f"{settings.SUPABASE_URL.rstrip('/')}/rest/v1/{table}"
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                resp = client.delete(url, params={column: f"eq.{value}"}, headers=self._rest_headers(use_service_role=True))
+        except httpx.HTTPError as exc:
+            logger.warning("Supabase delete failed on %s: %s", table, type(exc).__name__)
+            return False
+        if resp.status_code not in (200, 202, 204):
+            logger.warning("Supabase delete on %s answered HTTP %s", table, resp.status_code)
+            return False
+        return True
+
+    def delete_transcription_record(self, job_id: str) -> bool:
+        """Forget a transcription here and in Supabase. False if Supabase failed: it is kept to retry."""
+        if not self._delete_from_supabase_table("transcriptions", "job_id", job_id):
+            return False
+        with self._lock:
+            db = self._load_db()
+            if db["transcriptions"].pop(job_id, None) is not None:
+                self._save_db(db)
+        return True
+
     def _gotrue_user(self, email: str, password: str) -> Optional[Dict[str, Any]]:
         """Confirm email and password with Supabase Auth. Returns the Auth user or None."""
         anon = (settings.SUPABASE_ANON_KEY or "").strip()
@@ -1308,16 +1354,9 @@ class SupabaseCloudService:
         for jid, rec in self._read_snapshot().get("transcriptions", {}).items():
             if user_id and rec.get("user_id") != user_id:
                 continue
-            exp_str = rec.get("expires_at")
-            if exp_str:
-                try:
-                    exp_dt = dt.datetime.fromisoformat(exp_str)
-                    if exp_dt.tzinfo is None:
-                        exp_dt = exp_dt.replace(tzinfo=dt.timezone.utc)
-                    if now >= exp_dt:
-                        continue
-                except (TypeError, ValueError):
-                    logger.debug("Transcription %s: unreadable expires_at, kept", jid)  # ante la duda, se muestra
+            expiry = self.effective_expiry(rec.get("expires_at"), user_id)
+            if expiry and now >= expiry:
+                continue
             items.append(copy.deepcopy(rec))
         items.sort(key=lambda r: r.get("created_at", ""), reverse=True)
         return items

@@ -193,17 +193,8 @@ class JobManager:
             shutil.rmtree(session.session_dir, ignore_errors=True)
 
     def _purge_guest_job(self, job_id: str) -> None:
-        with self._lock:
-            self._results.pop(job_id, None)
-            self._jobs.pop(job_id, None)
-            self._job_owners.pop(job_id, None)
-            self._finished_at.pop(job_id, None)
-            self._guest_expiry.pop(job_id, None)
-            self._result_edit_locks.pop(job_id, None)
+        self.forget_job(job_id)
         (settings.OUTPUT_DIR / f"{job_id}_merged.mp3").unlink(missing_ok=True)
-        job_file = self._job_file(job_id)
-        if job_file:
-            job_file.unlink(missing_ok=True)
 
     # -------------------------------------------------------------------------
     # Job status on disk: it survives a restart, and interrupted jobs fail honestly
@@ -922,6 +913,51 @@ class JobManager:
         return None
 
     def get_job_result(self, job_id: str) -> Optional[TranscriptionResult]:
+        """The job's result, unless it has expired: this holds even while nothing is deleted yet."""
+        result = self._load_result(job_id)
+        return None if result is None or self._result_expired(result) else result
+
+    def is_expired(self, job_id: str) -> bool:
+        result = self._load_result(job_id)
+        return result is not None and self._result_expired(result)
+
+    def result_owner(self, job_id: str) -> Optional[str]:
+        """Account that owns the result, expired or not (its owner should hear why it is gone)."""
+        result = self._load_result(job_id)
+        return result.user_id if result else None
+
+    @staticmethod
+    def _result_expired(result: TranscriptionResult) -> bool:
+        expiry = supabase_service.effective_expiry(result.expires_at, result.user_id)
+        return bool(expiry and datetime.datetime.now(datetime.timezone.utc) >= expiry)
+
+    def is_active(self, job_id: str) -> bool:
+        with self._lock:
+            status = self._jobs.get(job_id)
+            return bool(status) and status.status in _ACTIVE_STATUSES
+
+    def has_live_result(self, job_id: str) -> bool:
+        """A guest's result only lives in memory until its time is up."""
+        with self._lock:
+            return job_id in self._results
+
+    def active_session_ids(self) -> set:
+        with self._lock:
+            return {job.session_id for job in self._jobs.values() if job.status in _ACTIVE_STATUSES}
+
+    def forget_job(self, job_id: str) -> None:
+        with self._lock:
+            self._results.pop(job_id, None)
+            self._jobs.pop(job_id, None)
+            self._job_owners.pop(job_id, None)
+            self._finished_at.pop(job_id, None)
+            self._guest_expiry.pop(job_id, None)
+            self._result_edit_locks.pop(job_id, None)
+        job_file = self._job_file(job_id)
+        if job_file:
+            job_file.unlink(missing_ok=True)
+
+    def _load_result(self, job_id: str) -> Optional[TranscriptionResult]:
         with self._lock:
             if job_id in self._results:
                 self._results[job_id] = self._results.pop(job_id)  # el más reciente va al final

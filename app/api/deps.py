@@ -166,8 +166,7 @@ def job_owner(job_id: str) -> Optional[str]:
     owner = job_manager.job_owner(job_id)
     if owner:
         return owner
-    result = job_manager.get_job_result(job_id)  # resultados recargados del disco tras un reinicio
-    return result.user_id if result else None
+    return job_manager.result_owner(job_id)  # resultados recargados del disco tras un reinicio
 
 
 def require_job_owner(

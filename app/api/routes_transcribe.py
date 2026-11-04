@@ -27,7 +27,7 @@ from app.api.deps import (
     run_heavy,
 )
 from app.config import resolve_engine_code, settings
-from app.errors import detail_of, public_error
+from app.errors import EXPIRED_RESULT, detail_of, public_error
 from app.models.schemas import (
     ApexSummaReport,
     JobStatusResponse,
@@ -148,6 +148,16 @@ def start_transcription_job(
     )
 
 
+def _require_result(job_id: str) -> TranscriptionResult:
+    """The result, or 410 if it expired and 404 if there is none."""
+    result = job_manager.get_job_result(job_id)
+    if result:
+        return result
+    if job_manager.is_expired(job_id):
+        raise HTTPException(status_code=410, detail=EXPIRED_RESULT)
+    raise HTTPException(status_code=404, detail=f"Resultado '{job_id}' no encontrado.")
+
+
 def _with_media_token(result: TranscriptionResult) -> TranscriptionResult:
     """Copia del resultado con el token de descarga (el token nunca se guarda)."""
     return result.model_copy(update={"media_token": media_token(f"job:{result.job_id}")})
@@ -168,6 +178,8 @@ def get_job_result(job_id: str = Depends(require_job_owner)) -> TranscriptionRes
     result = job_manager.get_job_result(job_id)
     if result:
         return _with_media_token(result)
+    if job_manager.is_expired(job_id):
+        raise HTTPException(status_code=410, detail=EXPIRED_RESULT)
 
     status = job_manager.get_job_status(job_id)
     if status:
@@ -198,6 +210,8 @@ async def rename_job_speakers(
 @router.get("/jobs/{job_id}/audio")
 def stream_merged_job_audio(job_id: str = Depends(require_job_media)) -> FileResponse:
     """Stream the merged continuous MP3 timeline audio for interactive playback."""
+    if job_manager.is_expired(job_id):
+        raise HTTPException(status_code=410, detail=EXPIRED_RESULT)
     merged_path = settings.OUTPUT_DIR / f"{job_id}_merged.mp3"
     if not merged_path.exists():
         raise HTTPException(status_code=404, detail="Audio combinado no disponible.")
@@ -326,9 +340,7 @@ async def get_job_apex_summa_report(
 
 
 def _summa_report(job_id: str, lang: str, user: Optional[Dict[str, Any]]) -> ApexSummaReport:
-    result = job_manager.get_job_result(job_id)
-    if not result:
-        raise HTTPException(status_code=404, detail=f"Resultado '{job_id}' no encontrado.")
+    result = _require_result(job_id)
 
     if result.plan == "guest":
         raise HTTPException(status_code=402, detail="Crea tu cuenta para usar Apex Summa / Create an account to use Apex Summa.")
@@ -362,9 +374,7 @@ async def create_job_meeting_minutes(
 def _meeting_minutes(
     job_id: str, payload: MinutesGenerationRequest, user: Optional[Dict[str, Any]]
 ) -> MinutesDocumentResponse:
-    result = job_manager.get_job_result(job_id)
-    if not result:
-        raise HTTPException(status_code=404, detail=f"Resultado '{job_id}' no encontrado.")
+    result = _require_result(job_id)
 
     _require_summa_access(result, user)
     report = generate_apex_summa_report(
@@ -389,9 +399,7 @@ async def download_job_tasks_calendar_ics(
 
 
 def _calendar_file(job_id: str, user: Optional[Dict[str, Any]]) -> Response:
-    result = job_manager.get_job_result(job_id)
-    if not result:
-        raise HTTPException(status_code=404, detail=f"Resultado '{job_id}' no encontrado.")
+    result = _require_result(job_id)
 
     _require_summa_access(result, user)
     report = generate_apex_summa_report(

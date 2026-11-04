@@ -141,7 +141,6 @@ def test_damaged_index_is_left_alone_and_upload_still_succeeds() -> None:
     try:
         key = f"users/{uuid.uuid4().hex}/a.json"
         assert mega_s4_storage.upload_object(key, b"{}", plan="pro")["object_key"] == key
-        assert mega_s4_storage.cleanup_expired_objects() == 0
         assert mega_s4_storage.get_object_metadata(key) is None
         assert path.read_bytes() == b"{broken"
     finally:

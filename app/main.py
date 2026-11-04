@@ -13,6 +13,7 @@ import json
 import logging
 import shutil
 import threading
+import time
 from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
@@ -220,11 +221,17 @@ def _recover_then_maintain() -> None:
         except Exception:
             logger.exception("Could not recover interrupted work")
 
+    next_sweep = 0.0  # also right after start-up
     while not _stop_background.wait(60):
         try:
             job_manager.evict()
             apex_box_manager.evict_completed()
             prune_throttle()
+            if time.monotonic() >= next_sweep:
+                from app.services import retention
+
+                retention.sweep()
+                next_sweep = time.monotonic() + settings.RETENTION_SWEEP_MINUTES * 60
         except Exception:
             logger.exception("Maintenance failed")
 

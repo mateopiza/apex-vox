@@ -554,6 +554,15 @@ class Settings:
     # -------------------------------------------------------------------------
     # Job Management & Lifecycle
     # -------------------------------------------------------------------------
+    RETENTION_DRY_RUN: bool = field(
+        default_factory=lambda: _parse_bool(os.getenv("RETENTION_DRY_RUN", "true"), default=True)
+    )
+    RETENTION_SWEEP_MINUTES: int = field(
+        default_factory=lambda: int(os.getenv("RETENTION_SWEEP_MINUTES", "60"))
+    )
+    RETENTION_PRO_LAPSE_GRACE_DAYS: int = field(
+        default_factory=lambda: int(os.getenv("RETENTION_PRO_LAPSE_GRACE_DAYS", "7"))
+    )
     JOB_CONCURRENCY: int = field(
         default_factory=lambda: int(os.getenv("JOB_CONCURRENCY", "2"))
     )

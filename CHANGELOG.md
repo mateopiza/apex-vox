@@ -10,6 +10,7 @@ Preparation of the public open-source release.
 
 ### Added
 
+- **Retention sweep.** Deletes expired results from the bucket, disk and Supabase, original uploads after `JOB_RETENTION_HOURS`, and files left by restarts, keeping usage totals in an aggregate ledger. It starts in simulation (`RETENTION_DRY_RUN=true`): see `docs/deployment.md`.
 - **Browser end-to-end suite (`tests/e2e/`, Playwright + real uvicorn server)** covering landing and languages, layout at 390/768/1440 px, guest transcription, sign-up → upload → transcribe → rename → all exports → history → logout, wrong-password login and cross-account job isolation. It is hermetic (outbound requests from the server fail the test) and runs in a new `e2e` CI job that uploads screenshots and traces on failure.
 - **Recorded calls with a masked number (Twilio, Apex Pro).** Phone verification by SMS code (Twilio Verify); bridge calls that ring the verified phone first, ask to press 1 and dial the contact from `TWILIO_CALLER_ID`, so the contact never sees the user's number; recording notice to both parties; dual-channel recording with speakers labelled by channel; live notes during the call placed on the timeline; summary, minutes and email when ready; recordings deleted from Twilio after processing. Web card in "Record", `/api/phone*`, `/api/calls*` and signed `/api/twilio/*` webhooks.
 - **MCP connector:** `find_meeting` identifies a meeting from a natural-language description (relative dates in Spanish and English, participants, contact number, source, topics); `list_meetings` filters by date, source, speaker and title; new `get_meeting_details`, `get_meeting_notes` (with transcript context), `get_meeting_minutes`, `list_upcoming_meetings` and `list_phone_calls`; `search_meetings` ignores accents, matches all words and searches live notes; transcript filters by speaker and time range; `meeting_id` accepts `latest`.
@@ -28,6 +29,7 @@ Preparation of the public open-source release.
 
 ### Fixed
 
+- Expired results stop being served, with 410 on the result, exports, calendar and audio, including through download links. The 24-hour limit only hid them from the history before. When Pro lapses, files get a grace period (`RETENTION_PRO_LAPSE_GRACE_DAYS`) and then Free retention; paying keeps them.
 - Large audio reaches object storage: uploads are streamed with retries instead of read fully into memory, and failures can be retried later and are counted in the admin health check. Apex Box recordings now upload their audio, which was recorded as stored but never sent. Objects that reached the bucket are no longer kept twice on local disk.
 - Long audio no longer needs gigabytes of RAM. A job decoded the whole recording up to four times into memory (about 230 MB per hour each) with a 60 s limit that could fail it; it now decodes once to a temporary file under `temp/`, and estimating the number of speakers no longer grows with the square of the segments.
 - Groq and Deepgram calls no longer retry requests that cannot succeed (such as a bad key), respect `Retry-After`, and no longer multiply retries with the SDK's own. Deepgram response text stays out of error messages.
