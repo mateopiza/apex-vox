@@ -601,6 +601,7 @@ def health_check(x_admin_key: Optional[str] = Header(default=None)) -> JSONRespo
     if not ffprobe_available:
         logger.warning("Health check warning: 'ffprobe' binary not found in PATH")
 
+    from app.services.storage_s4 import mega_s4_storage
     from app.services.supabase_service import supabase_service
 
     state_readable = supabase_service.state_readable()
@@ -645,6 +646,7 @@ def health_check(x_admin_key: Optional[str] = Header(default=None)) -> JSONRespo
             "outputs_writable": outputs_writable,
             "temp_writable": temp_writable,
             "state_readable": state_readable,
+            "unsynced_objects": mega_s4_storage.unsynced_count(),
         },
         "models": {
             "default_speech_model": settings.DEFAULT_MODEL,

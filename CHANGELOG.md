@@ -28,6 +28,7 @@ Preparation of the public open-source release.
 
 ### Fixed
 
+- Large audio reaches object storage: uploads are streamed with retries instead of read fully into memory, and failures can be retried later and are counted in the admin health check. Apex Box recordings now upload their audio, which was recorded as stored but never sent. Objects that reached the bucket are no longer kept twice on local disk.
 - Long audio no longer needs gigabytes of RAM. A job decoded the whole recording up to four times into memory (about 230 MB per hour each) with a 60 s limit that could fail it; it now decodes once to a temporary file under `temp/`, and estimating the number of speakers no longer grows with the square of the segments.
 - Groq and Deepgram calls no longer retry requests that cannot succeed (such as a bad key), respect `Retry-After`, and no longer multiply retries with the SDK's own. Deepgram response text stays out of error messages.
 - Job status survives a restart: finished jobs keep answering, and jobs a restart interrupted fail with a clear message and give back their quota, instead of vanishing. Calls and meeting bots being processed are retried up to 3 times at start-up, and a repeated `bot.done` webhook no longer processes a recording twice.

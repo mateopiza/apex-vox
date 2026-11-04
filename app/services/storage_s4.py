@@ -19,9 +19,13 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import hmac
+import io
 import logging
 import re
+import shutil
 import threading
+import time
+from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 from urllib.parse import quote, urlparse
 
@@ -31,6 +35,9 @@ from app.config import settings
 from app.services.state_store import StateCorruptError, atomic_write_json, read_json
 
 logger = logging.getLogger("app.services.storage_s4")
+
+_PUT_ATTEMPTS = 3
+_FROM_PLAN: Any = object()  # compute the expiry from the plan, unlike None (it never expires)
 
 
 def _sha256_hex(data: bytes) -> str:
@@ -105,6 +112,7 @@ class MegaS4StorageService:
         payload: bytes = b"",
         content_type: str = "application/octet-stream",
         extra_amz_headers: Optional[Dict[str, str]] = None,
+        payload_hash: Optional[str] = None,
     ) -> Dict[str, str]:
         """
         Construct AWS Signature Version 4 headers for MEGA S4 REST API calls.
@@ -116,7 +124,7 @@ class MegaS4StorageService:
         parsed = urlparse(self.endpoint_url)
         host = parsed.netloc or "s3.g.s4.mega.io"
         canonical_uri = "/" + self.bucket.strip("/") + "/" + quote(object_key.lstrip("/"), safe="/-_.~")
-        payload_hash = _sha256_hex(payload)
+        payload_hash = payload_hash or _sha256_hex(payload)
 
         headers_to_sign: Dict[str, str] = {
             "content-type": content_type,
@@ -279,6 +287,92 @@ class MegaS4StorageService:
             return False
         return True
 
+    def _put_with_retries(
+        self,
+        clean_key: str,
+        open_body: Callable[[], Any],
+        size: int,
+        payload_hash: str,
+        content_type: str,
+        amz_meta: Dict[str, str],
+    ) -> bool:
+        """PUT to MEGA S4. Returns whether the object is stored; failures are logged, never raised."""
+        s4_url = f"{self.endpoint_url}/{self.bucket}/{clean_key}"
+        for attempt in range(1, _PUT_ATTEMPTS + 1):
+            try:
+                # Signed per attempt: the signature carries the current time.
+                headers = self.build_s3v4_headers(
+                    method="PUT",
+                    object_key=clean_key,
+                    content_type=content_type,
+                    extra_amz_headers=amz_meta,
+                    payload_hash=payload_hash,
+                )
+                headers["Content-Length"] = str(size)  # S3 rejects chunked uploads
+                with open_body() as body, httpx.Client(timeout=30.0) as client:
+                    resp = client.put(s4_url, content=body, headers=headers)
+                if resp.status_code in (200, 201, 204):
+                    return True
+                logger.warning("MEGA S4 PUT returned HTTP %s for %s", resp.status_code, clean_key)
+                if 400 <= resp.status_code < 500 and resp.status_code != 429:
+                    return False
+            except (httpx.HTTPError, OSError) as exc:
+                logger.warning("MEGA S4 upload failed (%s): %s", clean_key, type(exc).__name__)
+            if attempt < _PUT_ATTEMPTS:
+                time.sleep(2.0 ** (attempt - 1))
+        return False
+
+    def _store(
+        self,
+        object_key: str,
+        open_body: Callable[[], Any],
+        size: int,
+        payload_hash: str,
+        keep_in_mirror: Callable[[Path], None],
+        content_type: str,
+        plan: str,
+        user_id: Optional[str],
+        job_id: Optional[str],
+        expires_at: Any,
+    ) -> Dict[str, Any]:
+        clean_key = object_key.lstrip("/")
+        if expires_at is _FROM_PLAN:
+            expires_at = self.compute_expiration_iso(plan)
+        retention_tag = "unlimited" if expires_at is None else f"{settings.FREE_RETENTION_HOURS}h"
+
+        cloud_synced = False
+        if self.is_cloud_configured:
+            amz_meta = {"x-amz-meta-plan": plan, "x-amz-meta-retention": retention_tag}
+            if expires_at:
+                amz_meta["x-amz-meta-expires-at"] = expires_at
+            cloud_synced = self._put_with_retries(clean_key, open_body, size, payload_hash, content_type, amz_meta)
+
+        # The local copy is the fallback: only what did not reach the bucket stays here.
+        local_dest = self.mirror_dir / clean_key
+        if cloud_synced:
+            local_dest.unlink(missing_ok=True)
+        else:
+            local_dest.parent.mkdir(parents=True, exist_ok=True)
+            keep_in_mirror(local_dest)
+
+        meta_record = {
+            "object_key": clean_key,
+            "bucket": self.bucket,
+            "endpoint": self.endpoint_url,
+            "s4_url": f"{self.endpoint_url}/{self.bucket}/{clean_key}",
+            "size_bytes": size,
+            "content_type": content_type,
+            "plan": plan,
+            "user_id": user_id,
+            "job_id": job_id,
+            "retention": retention_tag,
+            "created_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "expires_at": expires_at,
+            "cloud_synced": cloud_synced,
+        }
+        self._update_index(lambda idx: idx.__setitem__(clean_key, meta_record))
+        return meta_record
+
     def upload_object(
         self,
         object_key: str,
@@ -287,69 +381,76 @@ class MegaS4StorageService:
         plan: str = "free",
         user_id: Optional[str] = None,
         job_id: Optional[str] = None,
+        expires_at: Any = _FROM_PLAN,
     ) -> Dict[str, Any]:
         """
-        Store an object in MEGA S4 (s4.mega.io) with plan-based retention metadata.
-        Also writes to local S4 mirror directory for instant streaming & offline resilience.
+        Store a small object in MEGA S4 with plan-based retention metadata (or the local mirror).
+        Pass `expires_at` when replacing an object, so a new copy does not extend its retention.
         """
+        return self._store(
+            object_key, lambda: io.BytesIO(data), len(data), _sha256_hex(data), lambda dest: dest.write_bytes(data),
+            content_type, plan, user_id, job_id, expires_at,
+        )
+
+    def upload_file(
+        self,
+        object_key: str,
+        path: Path,
+        content_type: str = "application/octet-stream",
+        plan: str = "free",
+        user_id: Optional[str] = None,
+        job_id: Optional[str] = None,
+        expires_at: Any = _FROM_PLAN,
+    ) -> Dict[str, Any]:
+        """Like `upload_object` for files of any size: nothing is read fully into memory."""
+        digest = hashlib.sha256()
+        with open(path, "rb") as handle:
+            while chunk := handle.read(1024 * 1024):
+                digest.update(chunk)
+        return self._store(
+            object_key, lambda: open(path, "rb"), path.stat().st_size, digest.hexdigest(),
+            lambda dest: shutil.copyfile(path, dest), content_type, plan, user_id, job_id, expires_at,
+        )
+
+    def delete_object(self, object_key: str) -> bool:
+        """Delete an object everywhere. False if the bucket could not confirm it: try again later."""
         clean_key = object_key.lstrip("/")
-        expires_at = self.compute_expiration_iso(plan)
-        retention_tag = "unlimited" if expires_at is None else f"{settings.FREE_RETENTION_HOURS}h"
-        now_iso = dt.datetime.now(dt.timezone.utc).isoformat()
-
-        # 1. Persist in local S4 mirror bucket
-        local_dest = self.mirror_dir / clean_key
-        local_dest.parent.mkdir(parents=True, exist_ok=True)
-        local_dest.write_bytes(data)
-
-        cloud_synced = False
-        s4_url = f"{self.endpoint_url}/{self.bucket}/{clean_key}"
-
-        # 2. If MEGA S4 credentials are set, execute PUT against MEGA S4 endpoint
         if self.is_cloud_configured:
             try:
-                amz_meta = {
-                    "x-amz-meta-plan": plan,
-                    "x-amz-meta-retention": retention_tag,
-                }
-                if expires_at:
-                    amz_meta["x-amz-meta-expires-at"] = expires_at
-                headers = self.build_s3v4_headers(
-                    method="PUT",
-                    object_key=clean_key,
-                    payload=data,
-                    content_type=content_type,
-                    extra_amz_headers=amz_meta,
-                )
+                headers = self.build_s3v4_headers(method="DELETE", object_key=clean_key, content_type="")
                 with httpx.Client(timeout=30.0) as client:
-                    resp = client.put(s4_url, content=data, headers=headers)
-                    if resp.status_code in (200, 201, 204):
-                        cloud_synced = True
-                    else:
-                        logger.warning(
-                            "MEGA S4 PUT returned HTTP %s for %s", resp.status_code, clean_key
-                        )
-            except Exception as exc:
-                logger.warning("MEGA S4 remote upload fallback to mirror (%s): %s", clean_key, exc)
+                    resp = client.delete(self._object_url(clean_key), headers=headers)
+            except httpx.HTTPError as exc:
+                logger.warning("MEGA S4 delete failed (%s): %s", clean_key, type(exc).__name__)
+                return False
+            if resp.status_code not in (200, 204, 404):  # 404: ya no existe, que es lo que se quería
+                logger.warning("MEGA S4 DELETE returned HTTP %s for %s", resp.status_code, clean_key)
+                return False
+        (self.mirror_dir / clean_key).unlink(missing_ok=True)
+        self._update_index(lambda idx: idx.pop(clean_key, None))
+        return True
 
-        meta_record = {
-            "object_key": clean_key,
-            "bucket": self.bucket,
-            "endpoint": self.endpoint_url,
-            "s4_url": s4_url,
-            "size_bytes": len(data),
-            "content_type": content_type,
-            "plan": plan,
-            "user_id": user_id,
-            "job_id": job_id,
-            "retention": retention_tag,
-            "created_at": now_iso,
-            "expires_at": expires_at,
-            "cloud_synced": cloud_synced,
-        }
+    def retry_unsynced_uploads(self) -> int:
+        """Upload again what only reached the local mirror. Returns how many are still pending."""
+        if not self.is_cloud_configured:
+            return 0
+        pending = 0
+        for key, meta in self._load_index().items():
+            local = self.mirror_dir / key
+            if meta.get("cloud_synced") or not local.exists():
+                continue
+            stored = self.upload_file(
+                key, local, meta.get("content_type") or "application/octet-stream", meta.get("plan") or "free",
+                meta.get("user_id"), meta.get("job_id"), expires_at=meta.get("expires_at"),
+            )
+            if not stored["cloud_synced"]:
+                pending += 1
+        return pending
 
-        self._update_index(lambda idx: idx.__setitem__(clean_key, meta_record))
-        return meta_record
+    def unsynced_count(self) -> int:
+        if not self.is_cloud_configured:
+            return 0
+        return sum(1 for meta in self._load_index().values() if not meta.get("cloud_synced"))
 
     def get_object_metadata(self, object_key: str) -> Optional[Dict[str, Any]]:
         clean_key = object_key.lstrip("/")

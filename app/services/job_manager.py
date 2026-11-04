@@ -843,9 +843,9 @@ class JobManager:
                 job_id=job_id,
             )
             if merged_audio_path.exists():
-                mega_s4_storage.upload_object(
+                mega_s4_storage.upload_file(
                     object_key=s4_audio_key,
-                    data=merged_audio_path.read_bytes(),
+                    path=merged_audio_path,
                     content_type="audio/mpeg",
                     plan=effective_plan,
                     user_id=resolved_uid,

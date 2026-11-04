@@ -932,6 +932,16 @@ class ApexBoxManager:
             user_id=session.user_id,
             job_id=job_id,
         )
+        s4_audio_key = f"users/{session.user_id or 'public'}/jobs/{job_id}/merged.mp3"
+        if merged_audio_path.exists():
+            mega_s4_storage.upload_file(
+                object_key=s4_audio_key,
+                path=merged_audio_path,
+                content_type="audio/mpeg",
+                plan=session.plan,
+                user_id=session.user_id,
+                job_id=job_id,
+            )
 
         supabase_service.save_transcription_record(
             {
@@ -944,7 +954,7 @@ class ApexBoxManager:
                 "total_duration_formatted": result.total_duration_formatted,
                 "detected_speakers_count": len(unique_speakers),
                 "storage_provider": "apex_vox_cloud",
-                "s4_audio_key": f"users/{session.user_id or 'public'}/jobs/{job_id}/merged.mp3",
+                "s4_audio_key": s4_audio_key,
                 "s4_result_key": s4_result_key,
                 "retention_policy": "unlimited" if expires_at is None else "24h",
                 "expires_at": expires_at,
