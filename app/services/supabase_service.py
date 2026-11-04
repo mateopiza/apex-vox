@@ -269,6 +269,7 @@ class SupabaseCloudService:
 
     def login_user(self, email: str, password: str) -> UserProfileResponse:
         clean_email = email.strip().lower()
+        new_profile: Optional[Dict[str, Any]] = None
 
         with self._lock:
             db = self._load_db()
@@ -281,9 +282,19 @@ class SupabaseCloudService:
             local_ok = bool(matched_user) and _verify_password(password, matched_user.get("password_hash", ""))
             if not local_ok:
                 cloud = self._gotrue_user(clean_email, password) if self.is_cloud_configured else None
-                if not cloud:
+                created = bool(cloud) and matched_user is None
+                matched_user = self._bind_cloud_user(db, cloud, password) if cloud else None
+                if not matched_user:
                     raise ValueError("Credenciales inválidas. Verifica tu correo y contraseña.")
-                matched_user = self._bind_cloud_user(db, cloud, password)
+                if created:
+                    new_profile = {
+                        "id": matched_user["user_id"],
+                        "email": matched_user["email"],
+                        "full_name": matched_user["full_name"],
+                        "plan": matched_user["plan"],
+                        "preferred_language": matched_user["preferred_language"],
+                        "created_at": matched_user["created_at"],
+                    }
 
             # Transparently migrate legacy SHA-256 hashes to PBKDF2.
             if not str(matched_user.get("password_hash", "")).startswith("pbkdf2_sha256$"):
@@ -292,6 +303,8 @@ class SupabaseCloudService:
             token = self._issue_token(db, user_id)
             self._save_db(db)
 
+        if new_profile:
+            self._sync_to_supabase_table("profiles", new_profile, upsert_col="email")
         return self._profile_response(user_id, token)
 
     # -------------------------------------------------------------------------
@@ -1092,13 +1105,22 @@ class SupabaseCloudService:
             if resp.status_code != 200:
                 return None
             user = (resp.json() or {}).get("user") or {}
-            return user if user.get("id") and user.get("email") else None
+            confirmed = user.get("email_confirmed_at") or user.get("confirmed_at")
+            return user if user.get("id") and user.get("email") and confirmed else None
         except Exception as exc:
             logger.debug("Supabase Auth login skipped: %s", exc)
             return None
 
-    def _bind_cloud_user(self, db: Dict[str, Any], user: Dict[str, Any], password: str) -> Dict[str, Any]:
-        """Attach a Supabase Auth account to the local session store, keeping that account's id."""
+    def _bind_cloud_user(
+        self, db: Dict[str, Any], user: Dict[str, Any], password: str
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Attach a Supabase Auth account to the local session store, keeping that account's id.
+
+        Returns None when the e-mail already belongs to a local account linked to nothing or to
+        another Auth id. Anyone can sign up to Supabase Auth with any address (a project with
+        auto-confirm calls it confirmed), so a matching e-mail alone never proves ownership.
+        """
         user_id = str(user["id"])
         email = str(user["email"]).strip().lower()
         meta = user.get("user_metadata") if isinstance(user.get("user_metadata"), dict) else {}
@@ -1108,7 +1130,9 @@ class SupabaseCloudService:
             if str(record.get("email", "")).lower() == email:
                 existing = record
                 break
-        # A cloud account that already has local history keeps its local id.
+        if existing and user_id not in (existing.get("user_id"), existing.get("supabase_id")):
+            return None
+        # A cloud account linked to local history keeps its local id.
         if existing and existing.get("user_id") != user_id:
             existing["password_hash"] = _hash_password(password)
             self._apply_lifetime_pro(existing, user)
@@ -1128,6 +1152,7 @@ class SupabaseCloudService:
             "created_at": user.get("created_at") or now_iso,
         }
         record["email"] = email
+        record["supabase_id"] = user_id
         record["password_hash"] = _hash_password(password)
         self._apply_lifetime_pro(record, user)
         db["users"][user_id] = record

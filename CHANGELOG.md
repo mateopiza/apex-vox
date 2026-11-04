@@ -36,6 +36,7 @@ Preparation of the public open-source release.
 
 ### Security
 
+- Supabase Auth login requires a confirmed e-mail and an account linked by id. Before, signing up to Supabase with someone's address could replace the password of their local account.
 - Twilio webhooks and TwiML are built only from `PUBLIC_BASE_URL` (an `https://` origin is now required to enable calls). Before, an unset `PUBLIC_BASE_URL` let a client's `Host` header point Twilio at an attacker's server that could dial any number.
 - High-cost `+1` ranges (Caribbean area codes, `+1900`, `+1976`) are blocked by default (`CALL_BLOCKED_PREFIXES`) for verification SMS and calls.
 - MCP: batches capped at 10 messages and 256 KB, each message counted by the rate limit, tools run outside the event loop, and `search_meetings` scans at most the 200 most recent meetings. The consent page lists calls and calendar access.
