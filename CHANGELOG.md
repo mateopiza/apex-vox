@@ -27,6 +27,7 @@ Preparation of the public open-source release.
 
 ### Fixed
 
+- The test suite no longer writes to the real `uploads/` and `outputs/` directories and refuses outbound network. The CI JavaScript check now fails on a syntax error in any file, not only the last one, and covers nested extension files.
 - `.env` loading no longer searches parent directories (a git worktree picked up the outer checkout's production keys), and the test suite never loads `.env` (`APEX_VOX_SKIP_DOTENV=1`): local test runs were writing test accounts and transcripts to the real Supabase and MEGA S4 and calling Deepgram.
 - Supabase sync of `transcriptions` sends only the columns in `supabase/schema.sql` (PostgREST rejected the extra `title` field).
 - Deleting an account also removes its meeting bots, calendar events and phone calls.
