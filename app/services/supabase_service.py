@@ -654,6 +654,21 @@ class SupabaseCloudService:
             trial_available=False,
         )
 
+    @staticmethod
+    def _quota_exceeded_message(used_seconds: float, duration_seconds: float) -> str:
+        rem = max(0.0, settings.FREE_DAILY_SECONDS - used_seconds)
+        return (
+            f"Has alcanzado el límite de 2 horas gratis al día ({settings.FREE_DAILY_SECONDS}s). "
+            f"Disponible hoy: {rem:.0f}s, requerido: {duration_seconds:.0f}s. "
+            f"Activa Apex Pro (USD {settings.PRO_PRICE_USD:g} / mes) para transcripciones ilimitadas."
+        )
+
+    def check_quota(self, user_id: str, duration_seconds: float) -> None:
+        """Refuse now if this much audio would not fit today, without charging anything."""
+        quota = self.get_user_quota(user_id)
+        if not quota.is_unlimited and duration_seconds > (quota.remaining_today_seconds or 0.0):
+            raise PermissionError(self._quota_exceeded_message(quota.used_today_seconds, duration_seconds))
+
     def check_and_consume_quota(
         self,
         user_id: Optional[str],
@@ -693,12 +708,7 @@ class SupabaseCloudService:
             used_before = float(current_entry.get("used_seconds", 0.0))
 
             if not is_paid and (used_before + duration_seconds) > settings.FREE_DAILY_SECONDS:
-                rem = max(0.0, settings.FREE_DAILY_SECONDS - used_before)
-                raise PermissionError(
-                    f"Has alcanzado el límite de 2 horas gratis al día ({settings.FREE_DAILY_SECONDS}s). "
-                    f"Disponible hoy: {rem:.0f}s, requerido: {duration_seconds:.0f}s. "
-                    f"Activa Apex Pro (USD {settings.PRO_PRICE_USD:g} / mes) para transcripciones ilimitadas."
-                )
+                raise PermissionError(self._quota_exceeded_message(used_before, duration_seconds))
 
             current_entry["used_seconds"] = round(used_before + max(0.0, duration_seconds), 3)
             current_entry["audios_count"] = int(current_entry.get("audios_count", 0)) + max(1, audios_count)

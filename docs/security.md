@@ -110,9 +110,6 @@ Also:
 These are present in the current code. Plan around them or contribute fixes.
 
 - **Capability-style job endpoints.** `GET /api/jobs/{id}/status|result|audio|summa|export/*|calendar.ics`, `PATCH /api/jobs/{id}/speakers`, `POST /api/jobs/{id}/minutes`, `GET /api/sessions/{id}` and the track audio stream do not check the account. Their only protection is the random ID (`job_` + 16 hex characters, or 10 for Box-finalized jobs). Do not share result links you want to keep private. The plan gates still apply.
-- **Session tokens are stored in clear** in the state file (unlike OAuth tokens and reset codes, which are HMACed). Protect `outputs/` and its backups accordingly.
-- **Request size:** `MAX_FILE_SIZE_MB` is not enforced in code. Cap body size at the proxy.
-- **Apex Box quota** is charged from the client-supplied `duration_hint_sec`. Apex Box block upload and finalize also accept an optional `api_key` form field (a Groq key override) that is passed through.
 - **Throttle and state** are per process (see the scaling notes in [architecture.md](architecture.md)).
 - Account deletion does not remove objects already uploaded to remote object storage.
 

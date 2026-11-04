@@ -658,7 +658,7 @@ def process_recording(call_id: str) -> Optional[str]:
             extract_chunk(src, part, start, end)
             apex_box_manager.ingest_block(
                 box_session_id=session.box_session_id, filename=part.name, content=part.read_bytes(),
-                block_index=index, duration_hint_sec=end - start, transcribe_immediately=True,
+                block_index=index, transcribe_immediately=True,
             )
             start, index = end, index + 1
 

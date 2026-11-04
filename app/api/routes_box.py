@@ -37,6 +37,7 @@ from app.models.schemas import (
     BoxSessionStateResponse,
 )
 from app.services.apex_box import (
+    BoxConflictError,
     OPTIMAL_BLOCK_SECONDS,
     RECOMMENDED_BITRATE_BPS,
     apex_box_manager,
@@ -135,6 +136,10 @@ async def update_box_recording_status(
         return apex_box_manager.update_session_status(box_session_id, status)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except BoxConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/sessions/{box_session_id}/blocks", response_model=BoxBlockUploadResponse)
@@ -144,7 +149,6 @@ async def upload_recording_block(
     block_index: Optional[int] = Form(default=None),
     duration_hint_sec: Optional[float] = Form(default=None),
     transcribe_immediately: bool = Form(default=True),
-    api_key: Optional[str] = Form(default=None),
     user: Dict[str, Any] = Depends(require_user),
 ) -> BoxBlockUploadResponse:
     """
@@ -153,22 +157,23 @@ async def upload_recording_block(
     """
     _owned_session(box_session_id, user)
     try:
-        # Los bloques descuentan del límite diario del plan gratis (Apex Pro: ilimitado).
-        supabase_service.check_and_consume_quota(user["user_id"], max(0.0, float(duration_hint_sec or 0.0)))
-    except PermissionError as exc:
-        raise HTTPException(status_code=402, detail=str(exc)) from exc
-    try:
+        # La duración del cliente solo sirve para rechazar pronto: lo que se cobra es lo medido.
+        if duration_hint_sec and duration_hint_sec > 0:
+            supabase_service.check_quota(user["user_id"], duration_hint_sec)
         return await run_heavy(
             apex_box_manager.ingest_block,
             box_session_id=box_session_id,
             filename=file.filename or "block.webm",
             content=file.file,
             block_index=block_index,
-            duration_hint_sec=duration_hint_sec,
             transcribe_immediately=transcribe_immediately,
-            api_key=api_key,
             max_bytes=settings.MAX_BOX_BLOCK_MB * 1024 * 1024,
+            charge_quota=True,
         )
+    except PermissionError as exc:
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
+    except BoxConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except UploadTooLargeError as exc:
         raise HTTPException(status_code=413, detail=str(exc)) from exc
     except KeyError as exc:
@@ -238,9 +243,11 @@ async def finalize_box_recording_session(
     """
     _owned_session(box_session_id, user)
     try:
-        return apex_box_manager.finalize_session(box_session_id, payload)
+        return await run_heavy(apex_box_manager.finalize_session, box_session_id, payload)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except BoxConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("Error finalizing Apex Box session %s", clean(box_session_id))
         raise HTTPException(status_code=500, detail="Error al finalizar la sesión.") from exc

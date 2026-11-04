@@ -477,8 +477,6 @@ class BoxSessionStateResponse(BaseModel):
 
 class BoxFinalizeRequest(BaseModel):
     """Request payload to finalize a multi-hour recording session and generate full Apex Summa & Minutes."""
-    api_key: Optional[str] = None
-    deepgram_api_key: Optional[str] = None
     run_full_pipeline: bool = False
     generate_minutes: bool = True
     organization_name: Optional[str] = "Apex Vox Enterprise"
