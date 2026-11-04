@@ -67,7 +67,8 @@ def test_deleting_an_account_reaches_everything(monkeypatch: pytest.MonkeyPatch)
     (session.session_dir / "a.wav").write_bytes(b"x")
     box = apex_box_manager.create_session(BoxCreateSessionRequest(title="t", user_id=uid))
 
-    assert client.delete("/api/auth/account", headers=auth).status_code == 200
+    deleted = client.delete("/api/auth/account", headers=auth)
+    assert deleted.status_code == 200
 
     after = supabase_service._load_db()
     raw = json.dumps(after)
@@ -96,7 +97,8 @@ def test_failed_bucket_delete_is_retried_by_the_sweep(monkeypatch: pytest.Monkey
     job_id, key = _job(uid)
     with monkeypatch.context() as patch:
         patch.setattr(mega_s4_storage, "delete_object", lambda key: False)
-        assert client.delete("/api/auth/account", headers=auth).status_code == 200
+        deleted = client.delete("/api/auth/account", headers=auth)
+        assert deleted.status_code == 200
         pending = supabase_service._load_db()["pending_erasures"][uid]
         assert job_id in pending["jobs"]
         assert uid not in supabase_service._load_db()["users"]  # the account itself is gone already
