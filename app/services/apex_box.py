@@ -60,8 +60,6 @@ from app.models.schemas import (
     BoxNoteRequest,
     BoxOptimalConfigResponse,
     BoxSessionStateResponse,
-    CalendarTaskItem,
-    CalloutItem,
     DiarizedSegment,
     JobStatusResponse,
     MinutesGenerationRequest,
@@ -290,6 +288,19 @@ class ApexBoxManager:
             )
             self._sessions[box_id] = session
             return self._to_state_response(session)
+
+    def forget_owner(self, user_id: str) -> None:
+        """An account was deleted: its recordings stop here."""
+        with self._lock:
+            boxes = [b for b, s in self._sessions.items() if s.user_id == user_id]
+            for box_id in boxes:
+                del self._sessions[box_id]
+        for box_id in boxes:
+            shutil.rmtree(settings.TEMP_DIR / box_id, ignore_errors=True)
+
+    def open_upload_session_ids(self) -> Set[str]:
+        with self._lock:
+            return {s.upload_session_id for s in self._sessions.values() if s.status != "completed"}
 
     def evict_completed(self, max_age_seconds: float = 3600.0) -> None:
         """Forget finished recordings: their result lives on disk. Runs periodically."""
@@ -758,6 +769,8 @@ class ApexBoxManager:
         # El plan se decide ahora: la cuenta pudo pagar o vencer durante la grabación.
         if supabase_service.get_user_by_id(session.user_id):
             session.plan = supabase_service.get_user_quota(session.user_id).plan
+        elif session.user_id != "guest_default":
+            raise BoxConflictError("La cuenta ya no existe. / The account no longer exists.")
         is_locked = session.plan == "free"
 
         job_id = f"job_{uuid.uuid4().hex[:10]}"
@@ -867,39 +880,6 @@ class ApexBoxManager:
             language=session.language or "es",
             is_locked=is_locked,
         )
-
-        base_date = dt.date.today()
-        for idx, note in enumerate([] if is_locked else session.notes):
-            tag = note.tag.lower()
-            stamp = f"[{note.timestamp_formatted}]"
-            author = note.speaker or summa_report.dominant_speaker or "Equipo"
-            if tag in ("acuerdo", "idea", "nota"):
-                summa_report.objectives.insert(0, f"{stamp} ({tag.upper()}) {note.text}")
-            if tag == "alerta":
-                summa_report.callouts.insert(
-                    0,
-                    CalloutItem(
-                        title=f"Alerta registrada en vivo {stamp}",
-                        description=note.text,
-                        speaker=author,
-                        timestamp=note.timestamp_formatted,
-                        severity="alta",
-                    ),
-                )
-            if tag == "tarea":
-                summa_report.calendar_tasks.insert(
-                    0,
-                    CalendarTaskItem(
-                        task_id=f"box_note_{idx + 1}",
-                        title=note.text[:90],
-                        description=f"Nota de tarea tomada en vivo en el minuto {note.timestamp_formatted} ({session.title}).",
-                        assignee=author,
-                        due_date=(base_date + dt.timedelta(days=1)).isoformat(),
-                        due_time="09:00",
-                        priority="alta",
-                        category="Apex Box Live",
-                    ),
-                )
 
         result.summa_report = summa_report
 

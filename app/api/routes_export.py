@@ -12,6 +12,7 @@ from fastapi.responses import Response
 
 from app.api.deps import require_job_media
 from app.services.exporter import format_transcript_export
+from app.errors import EXPIRED_RESULT
 from app.services.job_manager import job_manager
 
 router = APIRouter(prefix="/api", tags=["Export"])
@@ -21,6 +22,8 @@ router = APIRouter(prefix="/api", tags=["Export"])
 def export_job_transcript(fmt: str, job_id: str = Depends(require_job_media)) -> Response:
     """Download the formatted transcript for a completed job."""
     result = job_manager.get_job_result(job_id)
+    if not result and job_manager.is_expired(job_id):
+        raise HTTPException(status_code=410, detail=EXPIRED_RESULT)
     if not result:
         raise HTTPException(
             status_code=404, detail=f"Transcripción '{job_id}' no encontrada."

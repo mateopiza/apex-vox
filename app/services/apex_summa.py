@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import time
 import logging
 import re
 from collections import Counter
@@ -390,6 +391,80 @@ def _extract_heuristic_insights(
     }
 
 
+_SYSTEM_PROMPT = "You are Apex Summa, an executive meeting intelligence engine. Output valid JSON only."
+_SINGLE_CALL_CHARS = 12000
+_MAP_BLOCK_CHARS = 24000
+_LLM_CALL_TIMEOUT_SECONDS = 25.0
+
+
+def _llm_client(api_key: str) -> Any:
+    from groq import Groq
+
+    return Groq(api_key=api_key, timeout=_LLM_CALL_TIMEOUT_SECONDS, max_retries=0)
+
+
+def _complete_json(client: Any, prompt: str, deadline: float) -> Optional[Dict[str, Any]]:
+    """One JSON answer from the LLM, trying the fallback model once. None if neither gave one in time."""
+    for model in (settings.DEFAULT_LLM_MODEL, settings.FALLBACK_LLM_MODEL):
+        if time.monotonic() >= deadline:
+            logger.warning("Apex Summa LLM budget used up")
+            return None
+        try:
+            completion = client.chat.completions.create(
+                model=model,
+                messages=[{"role": "system", "content": _SYSTEM_PROMPT}, {"role": "user", "content": prompt}],
+                temperature=0.1,
+                response_format={"type": "json_object"},
+            )
+            parsed = json.loads(completion.choices[0].message.content or "{}")
+            if isinstance(parsed, dict):
+                return parsed
+        except Exception as exc:  # noqa: BLE001 — los errores del proveedor varían; el informe sigue sin LLM
+            logger.warning("Apex Summa LLM call failed on %s: %s", model, type(exc).__name__)
+    return None
+
+
+def _split_into_blocks(text: str, size: int = _MAP_BLOCK_CHARS) -> List[str]:
+    """Cut a transcript between its lines, so no speaker turn is split unless it is huge by itself."""
+    blocks: List[str] = []
+    current: List[str] = []
+    length = 0
+    for line in text.split("\n"):
+        while len(line) > size:
+            line_head, line = line[:size], line[size:]
+            if current:
+                blocks.append("\n".join(current))
+                current, length = [], 0
+            blocks.append(line_head)
+        if length + len(line) + 1 > size and current:
+            blocks.append("\n".join(current))
+            current, length = [], 0
+        current.append(line)
+        length += len(line) + 1
+    if current:
+        blocks.append("\n".join(current))
+    return blocks
+
+
+def _pick_blocks(blocks: List[str], limit: int) -> List[str]:
+    """Evenly across the meeting, always with the end: Apex Box notes are written there."""
+    if len(blocks) <= limit:
+        return blocks
+    if limit <= 1:
+        return blocks[-1:]
+    return [blocks[round(i * (len(blocks) - 1) / (limit - 1))] for i in range(limit)]
+
+
+def _report_schema(lang_label: str) -> str:
+    today_iso = dt.date.today().isoformat()
+    return f"""Return ONLY a valid JSON object in {lang_label} with these exact keys:
+- "executive_summary": string (concise 3-4 sentence summary of what was discussed)
+- "topics": array of 3 objects {{"title": string, "summary": string, "relevance_pct": number, "keywords": [string]}}
+- "objectives": array of 3-5 strings (clear objectives and goals identified)
+- "callouts": array of 2-4 objects {{"title": string, "description": string, "speaker": string, "timestamp": string, "severity": "alta"|"media"}} (warnings, blockers, callouts, or critical attention points)
+- "calendar_tasks": array of 3-4 objects {{"task_id": string, "title": string, "description": string, "assignee": string, "due_date": "YYYY-MM-DD" (starting after {today_iso}), "due_time": "HH:MM", "priority": "alta"|"media", "category": string}}"""
+
+
 def _enrich_with_groq_llm(
     result: TranscriptionResult,
     speaker_stats: List[SpeakerAnalyticsItem],
@@ -397,51 +472,129 @@ def _enrich_with_groq_llm(
     api_key: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """
-    When a live Groq API key is configured, synthesize executive summary,
-    topics, objectives, callouts, and calendar tasks using Groq LLM.
+    When a live Groq API key is configured, synthesize executive summary, topics, objectives,
+    callouts, and calendar tasks using Groq LLM. A long meeting is summarized part by part and
+    then combined, so that the whole meeting counts and not only how it started.
     """
     eff_key = (api_key or settings.GROQ_API_KEY or "").strip()
     if not eff_key or eff_key.startswith("gsk_test") or eff_key.startswith("gsk_valid"):
         return None
+    text = (result.full_text or "").strip()
+    if not text:
+        return None
 
     try:
-        from groq import Groq
-
-        client = Groq(api_key=eff_key, timeout=25.0)
-        transcript_excerpt = (result.full_text or "")[:10000]
-        if not transcript_excerpt.strip():
-            return None
-
-        today_iso = dt.date.today().isoformat()
-        lang_label = "English" if (lang or "es").lower().startswith("en") else "Spanish"
-        prompt = f"""Analyze the following diarized transcript and return ONLY a valid JSON object in {lang_label} with these exact keys:
-- "executive_summary": string (concise 3-4 sentence summary of what was discussed)
-- "topics": array of 3 objects {{"title": string, "summary": string, "relevance_pct": number, "keywords": [string]}}
-- "objectives": array of 3-5 strings (clear objectives and goals identified)
-- "callouts": array of 2-4 objects {{"title": string, "description": string, "speaker": string, "timestamp": string, "severity": "alta"|"media"}} (warnings, blockers, callouts, or critical attention points)
-- "calendar_tasks": array of 3-4 objects {{"task_id": string, "title": string, "description": string, "assignee": string, "due_date": "YYYY-MM-DD" (starting after {today_iso}), "due_time": "HH:MM", "priority": "alta"|"media", "category": string}}
-
-Transcript:
-{transcript_excerpt}
-"""
-        completion = client.chat.completions.create(
-            model=settings.DEFAULT_LLM_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are Apex Summa, an executive meeting intelligence engine. Output valid JSON only.",
-                },
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.1,
-            response_format={"type": "json_object"},
-        )
-        raw_content = completion.choices[0].message.content or "{}"
-        parsed = json.loads(raw_content)
-        return parsed
-    except Exception as exc:
-        logger.debug("Apex Summa LLM enrichment fallback to deterministic analyzer: %s", exc)
+        client = _llm_client(eff_key)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Apex Summa LLM is not available: %s", type(exc).__name__)
         return None
+
+    lang_label = "English" if (lang or "es").lower().startswith("en") else "Spanish"
+    deadline = time.monotonic() + settings.SUMMA_LLM_BUDGET_SECONDS
+    schema = _report_schema(lang_label)
+
+    if len(text) <= _SINGLE_CALL_CHARS:
+        return _complete_json(client, f"Analyze the following diarized transcript. {schema}\n\nTranscript:\n{text}", deadline)
+
+    blocks = _split_into_blocks(text)
+    chosen = _pick_blocks(blocks, max(1, settings.SUMMA_MAX_MAP_BLOCKS))
+    complete = len(chosen) == len(blocks)
+    parts: List[Dict[str, Any]] = []
+    for index, block in enumerate(chosen, start=1):
+        part = _complete_json(
+            client,
+            f"This is part {index} of {len(chosen)} of a diarized meeting transcript. Return ONLY a valid JSON object in "
+            f'{lang_label} with these keys: "summary": string (up to 5 sentences), "topics": [string], '
+            '"objectives": [string], "callouts": [{"title": string, "description": string, "speaker": string, '
+            '"timestamp": string}], "tasks": [{"title": string, "description": string, "assignee": string}].'
+            f"\n\nTranscript part:\n{block}",
+            deadline,
+        )
+        if part:
+            parts.append(part)
+        else:
+            complete = False
+    if not parts:
+        return None
+
+    combined = _complete_json(
+        client,
+        f"These are notes on {len(parts)} consecutive parts of one meeting. Combine them into a single report for the "
+        f"whole meeting, without repeating yourself. {schema}\n\nNotes:\n{json.dumps(parts, ensure_ascii=False)}",
+        deadline,
+    )
+    if combined and not complete:
+        combined["_partial"] = True
+    return combined
+
+
+def _weave_live_notes(
+    notes: List[Dict[str, Any]],
+    lang: str,
+    dominant_speaker: str,
+    objectives: List[str],
+    callouts: List[CalloutItem],
+    calendar_tasks: List[CalendarTaskItem],
+) -> None:
+    """What the user wrote during the meeting goes first, in the report of every language."""
+    english = lang == "en"
+    due = (dt.date.today() + dt.timedelta(days=1)).isoformat()
+    for idx, note in enumerate(notes):
+        tag = str(note.get("tag") or "nota").lower()
+        moment = str(note.get("timestamp_formatted") or "")
+        text = str(note.get("text") or "")
+        stamp = f"[{moment}]"
+        author = note.get("speaker") or dominant_speaker or ("Team" if english else "Equipo")
+        if tag in ("acuerdo", "idea", "nota"):
+            objectives.insert(0, f"{stamp} ({tag.upper()}) {text}")
+        if tag == "alerta":
+            callouts.insert(0, CalloutItem(
+                title=f"Live alert {stamp}" if english else f"Alerta registrada en vivo {stamp}",
+                description=text, speaker=author, timestamp=moment, severity="alta",
+            ))
+        if tag == "tarea":
+            calendar_tasks.insert(0, CalendarTaskItem(
+                task_id=f"box_note_{idx + 1}",
+                title=text[:90],
+                description=f"Task noted live at {moment}." if english else f"Nota de tarea tomada en vivo en el minuto {moment}.",
+                assignee=author, due_date=due, due_time="09:00", priority="alta", category="Apex Box Live",
+            ))
+
+
+def redact_report(report: ApexSummaReport) -> ApexSummaReport:
+    """The preview: speakers and charts stay, the Pro analysis goes. Returns a copy."""
+    return report.model_copy(update={
+        "is_locked": True, "analysis_source": "locked", "executive_summary": "", "topics": [], "objectives": [],
+        "callouts": [], "calendar_tasks": [],
+    })
+
+
+def relabel_report(report: ApexSummaReport, result: TranscriptionResult, mapping: Dict[str, str]) -> ApexSummaReport:
+    """After renaming speakers: the same analysis with the new names. Recalculated, never asked of the LLM."""
+    def rename_in(text: str) -> str:
+        for old in sorted(mapping, key=len, reverse=True):
+            text = text.replace(old, mapping[old])
+        return text
+
+    stats = compute_speaker_analytics(result.segments, result.speaker_roles)
+    charts = report.charts.model_copy(update={"speaker_distribution": stats})
+    return report.model_copy(update={
+        "speaker_stats": stats,
+        "charts": charts,
+        "dominant_speaker": stats[0].speaker if stats else report.dominant_speaker,
+        "dominant_speaker_pct": stats[0].talk_percentage if stats else report.dominant_speaker_pct,
+        "executive_summary": rename_in(report.executive_summary),
+        "objectives": [rename_in(o) for o in report.objectives],
+        "topics": [t.model_copy(update={"summary": rename_in(t.summary)}) for t in report.topics],
+        "callouts": [
+            c.model_copy(update={"speaker": mapping.get(c.speaker, c.speaker), "description": rename_in(c.description)})
+            for c in report.callouts
+        ],
+        "calendar_tasks": [
+            t.model_copy(update={"assignee": mapping.get(t.assignee, t.assignee), "description": rename_in(t.description)})
+            for t in report.calendar_tasks
+        ],
+    })
 
 
 def generate_apex_summa_report(
@@ -469,7 +622,8 @@ def generate_apex_summa_report(
 
     # 2, 3, 4, 5: Heuristic baseline + optional Groq LLM synthesis
     baseline = _extract_heuristic_insights(result, speaker_stats, lang=lang)
-    llm_data = _enrich_with_groq_llm(result, speaker_stats, lang=lang, api_key=api_key)
+    # Nothing is paid for an analysis the plan withholds anyway.
+    llm_data = None if is_locked else _enrich_with_groq_llm(result, speaker_stats, lang=lang, api_key=api_key)
 
     exec_summary = baseline["executive_summary"]
     topics = baseline["topics"]
@@ -510,6 +664,9 @@ def generate_apex_summa_report(
             except Exception:  # noqa: BLE001
                 logger.debug("LLM tasks ignored: unexpected shape")  # se conservan las tareas heurísticas
 
+    if not is_locked:
+        _weave_live_notes(result.live_notes, lang, dominant_speaker, objectives, callouts, calendar_tasks)
+
     charts = TranscriptionChartsData(
         speaker_distribution=speaker_stats,
         timeline_density=timeline_density,
@@ -528,7 +685,11 @@ def generate_apex_summa_report(
         for item in MINUTES_TEMPLATES_CATALOG
     ]
 
+    analysis_source = "heuristic"
+    if llm_data:
+        analysis_source = "llm_partial" if llm_data.get("_partial") else "llm"
     if is_locked:
+        analysis_source = "locked"
         # Free plan: keep the speaker teaser and charts, withhold the Pro analysis.
         exec_summary = ""
         topics = []
@@ -541,6 +702,7 @@ def generate_apex_summa_report(
         generated_at=dt.datetime.now(dt.timezone.utc).isoformat(),
         language=lang,
         is_locked=is_locked,
+        analysis_source=analysis_source,
         dominant_speaker=dominant_speaker,
         dominant_speaker_pct=dominant_pct,
         speaker_stats=speaker_stats,

@@ -51,6 +51,12 @@ Notes on the columns below:
 | `MAX_REQUEST_BODY_MB` | `10` | No | Largest request body on every other endpoint. |
 | `HEAVY_ROUTE_CONCURRENCY` | `8` | No | Requests that may run long work (ffmpeg, Groq, an LLM) at the same time. Others wait without using a thread. |
 | `GROQ_PARALLEL_CHUNKS` | `3` | No | Chunks of one audio sent to Groq at once. Faster on long audio, but each chunk loses the text of the previous one as context. `1` sends them one by one and keeps that context. |
+| `RETENTION_DRY_RUN` | `true` | No | While `true`, the retention sweep only logs what it would delete. Set it to `false` to delete. Expired results stop being served either way. |
+| `RETENTION_SWEEP_MINUTES` | `60` | No | Time between retention sweeps. |
+| `RETENTION_PRO_LAPSE_GRACE_DAYS` | `7` | No | After Apex Pro lapses, days before Free retention starts to count on files kept without an expiry. |
+| `JOB_RETENTION_HOURS` | `24` | No | Original uploads and leftovers are deleted this long after their last change, on every plan. Merged audio and results follow the plan's retention. |
+| `SUMMA_MAX_MAP_BLOCKS` | `8` | No | A long meeting is summarized in parts of up to 24,000 characters and then combined. Above this many parts, an even sample is used and the report says `analysis_source: llm_partial`. |
+| `SUMMA_LLM_BUDGET_SECONDS` | `90` | No | Time for all LLM calls of one report. Past it, the report uses what it has. |
 | `JOB_CONCURRENCY` | `2` | No | Recordings processed at the same time. Others wait with status `queued`. |
 | `JOB_TIMEOUT_SECONDS` | `1800` | No | A job over this time fails and gives back its quota. Measured from when it starts running, not while queued. |
 | `CHUNK_DURATION_MINUTES` | `10` | No | Target chunk length. Used only if `CHUNK_TARGET_DURATION_SEC` is unset. |
@@ -197,7 +203,7 @@ These are read by the code but rarely need changing.
 | `COST_GROQ_WHISPER_PER_MIN_USD`, `COST_GROQ_LLM_PER_MIN_USD`, `COST_DEEPGRAM_PER_MIN_USD`, `REVENUE_PER_MIN_USD` | `0.00185`, `0.0002`, `0.0063`, `0.05` | Unit prices for the daily usage report. |
 | `REPORT_WEBHOOK_URL` | empty | Extra webhook (Slack, Discord, n8n...) for the usage report. |
 
-`DEBUG`, `HOST`, `PORT`, `JOB_RETENTION_HOURS`, `FALLBACK_MODEL` and `DIARIZATION_MAX_SPEAKERS` are defined in `Settings` but not used by any code path today.
+`DEBUG`, `HOST`, `PORT`, `FALLBACK_MODEL` and `DIARIZATION_MAX_SPEAKERS` are defined in `Settings` but not used by any code path today.
 
 ## Minimal production `.env`
 

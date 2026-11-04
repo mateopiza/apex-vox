@@ -32,6 +32,7 @@ import secrets
 import threading
 import uuid
 from typing import Any, Callable, Dict, List, Optional, Tuple
+from urllib.parse import quote
 
 import httpx
 
@@ -485,6 +486,7 @@ class SupabaseCloudService:
         full_name: str,
         provider: str,
         preferred_language: str = "es",
+        supabase_id: Optional[str] = None,
     ) -> UserProfileResponse:
         """Sign in (or create) the account that owns this provider-verified e-mail."""
         clean_email = (email or "").strip().lower()
@@ -521,6 +523,8 @@ class SupabaseCloudService:
                 user["auth_providers"] = sorted(providers)
                 if full_name and not user.get("full_name"):
                     user["full_name"] = full_name.strip()
+            if supabase_id:
+                user["supabase_id"] = supabase_id
             token = self._issue_token(db, user["user_id"])
             self._save_db(db)
 
@@ -608,6 +612,26 @@ class SupabaseCloudService:
                 user["plan"] = "free"
                 return True
         return False
+
+    def effective_expiry(self, stored_expiry: Optional[str], owner_id: Optional[str]) -> Optional[dt.datetime]:
+        """
+        When a result stops being available, or None if it does not expire. An account paying now
+        keeps everything, and one whose Pro lapsed has a grace period before Free retention applies.
+        When in doubt (an unreadable date) it is kept.
+        """
+        user = self._read_snapshot()["users"].get(owner_id) if owner_id else None
+        if user and str(user.get("plan", "free")).lower() in ("pro", "trial") and not self._plan_expired(user):
+            return None
+        stored = _parse_iso(stored_expiry)
+        if stored_expiry and not stored:
+            return None
+        lapsed = _parse_iso(user.get("pro_until")) if user else None
+        if lapsed:
+            after_lapse = lapsed + dt.timedelta(
+                days=settings.RETENTION_PRO_LAPSE_GRACE_DAYS, hours=settings.FREE_RETENTION_HOURS
+            )
+            return max(stored, after_lapse) if stored else after_lapse
+        return stored
 
     def get_user_quota(self, user_id: str) -> QuotaUsageResponse:
         db = self._read_snapshot()
@@ -1183,9 +1207,22 @@ class SupabaseCloudService:
             if not user:
                 raise LookupError("Cuenta no encontrada.")
             db["tokens"] = {k: v for k, v in db["tokens"].items() if v.get("user_id") != user_id}
-            removed_jobs = [jid for jid, rec in db.get("transcriptions", {}).items() if rec.get("user_id") == user_id]
-            for jid in removed_jobs:
+            # Las claves del almacenamiento se guardan antes: al borrar las filas ya no habría cómo hallarlas.
+            jobs = {
+                jid: {"s4_audio_key": rec.get("s4_audio_key"), "s4_result_key": rec.get("s4_result_key")}
+                for jid, rec in db.get("transcriptions", {}).items() if rec.get("user_id") == user_id
+            }
+            for jid in jobs:
                 db["transcriptions"].pop(jid, None)
+            for coll in ("oauth_tokens", "oauth_codes", "handoffs", "telegram_codes", "password_resets"):
+                items = db.get(coll) or {}
+                for key in [k for k, v in items.items() if isinstance(v, dict) and v.get("user_id") == user_id]:
+                    items.pop(key, None)
+            (db.get("newsletter") or {}).pop(str(user.get("email", "")).lower(), None)
+            for coll in ("subscriptions", "promo_ips"):
+                for entry in (db.get(coll) or {}).values():
+                    if entry.get("user_id") == user_id:
+                        entry["user_id"] = "deleted"  # registro contable sin vínculo personal
             for key in [k for k in db.get("daily_usage", {}) if k.startswith(f"{user_id}:")]:
                 db["daily_usage"].pop(key, None)
             # Llamadas (números de contactos y apuntes), bots y eventos de calendario de la cuenta
@@ -1197,17 +1234,51 @@ class SupabaseCloudService:
             for ref, pay in db.get("payments", {}).items():
                 if pay.get("user_id") == user_id:
                     pay["user_id"] = "deleted"  # keep accounting record without personal link
+            db.setdefault("pending_erasures", {})[user_id] = {
+                "jobs": jobs, "supabase_id": user.get("supabase_id"), "requested_at": _now().isoformat(),
+            }
             self._save_db(db)
-        for jid in removed_jobs:
-            for suffix in ("_result.json", "_merged.mp3"):
-                (settings.OUTPUT_DIR / f"{jid}{suffix}").unlink(missing_ok=True)
-        try:
-            from app.services.acoustic_diarizer import update_voice_profiles
 
-            update_voice_profiles(lambda profiles: [p for p in profiles if p.owner_id != user_id])
-        except Exception as exc:
-            logger.warning("Voice profile cleanup failed: %s", exc)
-        return {"email": user.get("email", ""), "jobs_deleted": len(removed_jobs)}
+        # El resto depende de otros servicios y no debe retener el lock. Lo que falle se reintenta.
+        from app.services import retention
+
+        retention.process_pending_erasures(only_user=user_id)
+        return {"email": user.get("email", ""), "jobs_deleted": len(jobs)}
+
+    def finish_erasure(self, user_id: str) -> None:
+        with self._lock:
+            db = self._load_db()
+            if db.get("pending_erasures", {}).pop(user_id, None) is not None:
+                self._save_db(db)
+
+    def delete_remote_account_rows(self, user_id: str, supabase_id: Optional[str]) -> bool:
+        """Remove the account from Supabase Cloud. False if something failed and must be retried."""
+        done = [
+            self._delete_from_supabase_table("transcriptions", "user_id", user_id),
+            self._delete_from_supabase_table("profiles", "id", user_id),
+        ]
+        if supabase_id:
+            done.append(self._delete_auth_user(supabase_id))
+        return all(done)
+
+    def _delete_auth_user(self, supabase_id: str) -> bool:
+        """Otherwise signing in again with the same Supabase password would recreate the account."""
+        if not self.is_cloud_configured:
+            return True
+        if not settings.SUPABASE_SERVICE_ROLE_KEY:
+            logger.warning("SUPABASE_SERVICE_ROLE_KEY is not set: the Supabase Auth user was not deleted.")
+            return True
+        url = f"{settings.SUPABASE_URL.rstrip('/')}/auth/v1/admin/users/{quote(supabase_id, safe='')}"
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                resp = client.delete(url, headers=self._rest_headers(use_service_role=True))
+        except httpx.HTTPError as exc:
+            logger.warning("Supabase Auth delete failed: %s", type(exc).__name__)
+            return False
+        if resp.status_code not in (200, 204, 404):
+            logger.warning("Supabase Auth delete answered HTTP %s", resp.status_code)
+            return False
+        return True
 
     def save_transcription_record(self, record: Dict[str, Any]) -> None:
         """Persist transcription metadata and Mega S4 keys in Supabase Cloud & local DB."""
@@ -1221,6 +1292,32 @@ class SupabaseCloudService:
         # PostgREST rechaza columnas que no existen: solo se envían las de supabase/schema.sql.
         remote = {k: v for k, v in record.items() if k in TRANSCRIPTION_COLUMNS}
         self._sync_to_supabase_table("transcriptions", remote, upsert_col="job_id")
+
+    def _delete_from_supabase_table(self, table: str, column: str, value: str) -> bool:
+        """Delete rows from Supabase Cloud. True if they are gone, or there is no Supabase."""
+        if not self.is_cloud_configured:
+            return True
+        url = f"{settings.SUPABASE_URL.rstrip('/')}/rest/v1/{table}"
+        try:
+            with httpx.Client(timeout=10.0) as client:
+                resp = client.delete(url, params={column: f"eq.{value}"}, headers=self._rest_headers(use_service_role=True))
+        except httpx.HTTPError as exc:
+            logger.warning("Supabase delete failed on %s: %s", table, type(exc).__name__)
+            return False
+        if resp.status_code not in (200, 202, 204):
+            logger.warning("Supabase delete on %s answered HTTP %s", table, resp.status_code)
+            return False
+        return True
+
+    def delete_transcription_record(self, job_id: str) -> bool:
+        """Forget a transcription here and in Supabase. False if Supabase failed: it is kept to retry."""
+        if not self._delete_from_supabase_table("transcriptions", "job_id", job_id):
+            return False
+        with self._lock:
+            db = self._load_db()
+            if db["transcriptions"].pop(job_id, None) is not None:
+                self._save_db(db)
+        return True
 
     def _gotrue_user(self, email: str, password: str) -> Optional[Dict[str, Any]]:
         """Confirm email and password with Supabase Auth. Returns the Auth user or None."""
@@ -1308,16 +1405,9 @@ class SupabaseCloudService:
         for jid, rec in self._read_snapshot().get("transcriptions", {}).items():
             if user_id and rec.get("user_id") != user_id:
                 continue
-            exp_str = rec.get("expires_at")
-            if exp_str:
-                try:
-                    exp_dt = dt.datetime.fromisoformat(exp_str)
-                    if exp_dt.tzinfo is None:
-                        exp_dt = exp_dt.replace(tzinfo=dt.timezone.utc)
-                    if now >= exp_dt:
-                        continue
-                except (TypeError, ValueError):
-                    logger.debug("Transcription %s: unreadable expires_at, kept", jid)  # ante la duda, se muestra
+            expiry = self.effective_expiry(rec.get("expires_at"), user_id)
+            if expiry and now >= expiry:
+                continue
             items.append(copy.deepcopy(rec))
         items.sort(key=lambda r: r.get("created_at", ""), reverse=True)
         return items

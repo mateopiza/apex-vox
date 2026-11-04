@@ -16,6 +16,7 @@ from __future__ import annotations
 import datetime
 import json
 import logging
+from pathlib import Path
 import os
 from typing import Any, Dict, List, Optional
 
@@ -42,6 +43,68 @@ REVENUE_PER_AUDIO_MIN_USD = float(
 )
 
 
+def _usage_entry(result_file: Path, data: Dict[str, Any]) -> Dict[str, Any]:
+    """Figures for one job. Aggregates only: no account, names or transcript."""
+    mtime_local = datetime.datetime.fromtimestamp(result_file.stat().st_mtime).astimezone()
+    dur_sec = float(data.get("total_duration_sec") or 0.0)
+    dur_min = dur_sec / 60.0
+    engine = str(data.get("diarization_engine_used") or "groq_llm").lower()
+    segs = data.get("segments") or []
+
+    # Calculate API Cost for this job
+    groq_cost = dur_min * (COST_GROQ_WHISPER_V3_PER_MIN + COST_GROQ_LLM_PER_MIN_AUDIO)
+    dg_cost = 0.0
+    if "deepgram" in engine:
+        dg_cost = dur_min * COST_DEEPGRAM_NOVA2_DIARIZE_PER_MIN
+        if engine == "deepgram":
+            groq_cost = dur_min * COST_GROQ_LLM_PER_MIN_AUDIO
+
+    total_cost = groq_cost + dg_cost
+    revenue = dur_min * REVENUE_PER_AUDIO_MIN_USD
+    return {
+        "job_id": data.get("job_id", result_file.stem),
+        "date": mtime_local.strftime("%Y-%m-%d"),
+        "timestamp": mtime_local.strftime("%Y-%m-%d %H:%M:%S"),
+        "duration_sec": round(dur_sec, 2),
+        "duration_min": round(dur_min, 2),
+        "duration_formatted": data.get("total_duration_formatted") or format_timestamp_hhmmss(dur_sec),
+        "engine": engine,
+        "speakers_detected": int(data.get("detected_speakers_count") or 1),
+        "segments_count": len(segs),
+        "files_count": len(data.get("file_order") or []),
+        "cost_groq_usd": round(groq_cost, 4),
+        "cost_deepgram_usd": round(dg_cost, 4),
+        "cost_total_usd": round(total_cost, 4),
+        "revenue_usd": round(revenue, 4),
+        "net_margin_usd": round(revenue - total_cost, 4),
+    }
+
+
+def _ledger_path() -> Path:
+    return settings.OUTPUT_DIR / "reports" / "usage_ledger.jsonl"
+
+
+def record_in_ledger(result_file: Path, data: Dict[str, Any]) -> None:
+    """Keep a job's figures before retention deletes its files."""
+    path = _ledger_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "a", encoding="utf-8") as ledger:
+        ledger.write(json.dumps(_usage_entry(result_file, data), ensure_ascii=False) + "\n")
+
+
+def _read_ledger() -> List[Dict[str, Any]]:
+    path = _ledger_path()
+    if not path.exists():
+        return []
+    entries = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            entries.append(json.loads(line))
+        except ValueError:
+            logger.warning("Skipping an unreadable line in the usage ledger")
+    return entries
+
+
 def compute_usage_report(target_date: Optional[str] = None) -> Dict[str, Any]:
     """
     Scan all completed jobs in `outputs/*_result.json` and compute both:
@@ -56,54 +119,27 @@ def compute_usage_report(target_date: Optional[str] = None) -> Dict[str, Any]:
 
     daily_jobs: List[Dict[str, Any]] = []
     all_jobs: List[Dict[str, Any]] = []
+    seen = set()
 
     for rf in result_files:
         try:
-            stat = rf.stat()
-            mtime_local = datetime.datetime.fromtimestamp(stat.st_mtime).astimezone()
-            job_date = mtime_local.strftime("%Y-%m-%d")
             data = json.loads(rf.read_text(encoding="utf-8"))
+            entry = _usage_entry(rf, data)
         except Exception as exc:
             logger.warning("Skipping unreadable result file %s: %s", rf.name, exc)
             continue
-
-        dur_sec = float(data.get("total_duration_sec") or 0.0)
-        dur_min = dur_sec / 60.0
-        engine = str(data.get("diarization_engine_used") or "groq_llm").lower()
-        segs = data.get("segments") or []
-
-        # Calculate API Cost for this job
-        groq_cost = dur_min * (COST_GROQ_WHISPER_V3_PER_MIN + COST_GROQ_LLM_PER_MIN_AUDIO)
-        dg_cost = 0.0
-        if "deepgram" in engine:
-            dg_cost = dur_min * COST_DEEPGRAM_NOVA2_DIARIZE_PER_MIN
-            if engine == "deepgram":
-                groq_cost = dur_min * COST_GROQ_LLM_PER_MIN_AUDIO
-
-        total_cost = groq_cost + dg_cost
-        revenue = dur_min * REVENUE_PER_AUDIO_MIN_USD
-        net_profit = revenue - total_cost
-
-        entry = {
-            "job_id": data.get("job_id", rf.stem),
-            "date": job_date,
-            "timestamp": mtime_local.strftime("%Y-%m-%d %H:%M:%S"),
-            "duration_sec": round(dur_sec, 2),
-            "duration_min": round(dur_min, 2),
-            "duration_formatted": data.get("total_duration_formatted") or format_timestamp_hhmmss(dur_sec),
-            "engine": engine,
-            "speakers_detected": int(data.get("detected_speakers_count") or 1),
-            "segments_count": len(segs),
-            "files_count": len(data.get("file_order") or []),
-            "cost_groq_usd": round(groq_cost, 4),
-            "cost_deepgram_usd": round(dg_cost, 4),
-            "cost_total_usd": round(total_cost, 4),
-            "revenue_usd": round(revenue, 4),
-            "net_margin_usd": round(net_profit, 4),
-        }
+        seen.add(entry["job_id"])
         all_jobs.append(entry)
-        if job_date == date_str:
+        if entry["date"] == date_str:
             daily_jobs.append(entry)
+
+    # Jobs whose files retention already deleted count through their aggregates.
+    for entry in _read_ledger():
+        if entry["job_id"] not in seen:
+            seen.add(entry["job_id"])
+            all_jobs.append(entry)
+            if entry["date"] == date_str:
+                daily_jobs.append(entry)
 
     def _summarize(items: List[Dict[str, Any]]) -> Dict[str, Any]:
         tot_sec = sum(x["duration_sec"] for x in items)

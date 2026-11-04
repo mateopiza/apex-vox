@@ -297,6 +297,7 @@ def transcribe_media(user: Dict[str, Any], chat_id: int, media: Dict[str, Any], 
         name = f"{Path(name).stem or 'telegram'}.ogg" if suffix in ("", ".oga") else name
     filename = media.get("file_name") or name
     owner = user["user_id"]
+    session = None
     try:
         session = job_manager.create_or_get_session(None, owner)
         job_manager.add_file_to_session(session.session_id, filename, content, owner=owner)
@@ -316,6 +317,9 @@ def transcribe_media(user: Dict[str, Any], chat_id: int, media: Dict[str, Any], 
         logger.exception("Telegram transcription failed")
         send_message(chat_id, f"No se pudo transcribir el audio. {public_error(exc)}")
         return
+    finally:
+        if session:  # el audio original no se necesita más: el resultado ya se guardó aparte
+            job_manager.discard_session(session.session_id)
 
     text = result.full_text or "(sin voz detectada)"
     preview = text if len(text) <= 3500 else text[:3500] + "…"

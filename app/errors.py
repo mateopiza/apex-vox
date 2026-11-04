@@ -14,6 +14,11 @@ GENERIC_ERROR = (
 )
 
 
+EXPIRED_RESULT = (
+    "Esta transcripción ya venció y no está disponible. / This transcription has expired and is no longer available."
+)
+
+
 class UserFacingError(Exception):
     """An error whose message was written for the user and is safe to show."""
 

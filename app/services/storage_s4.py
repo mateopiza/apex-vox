@@ -458,41 +458,14 @@ class MegaS4StorageService:
         return idx.get(clean_key)
 
     def list_user_objects(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """List stored objects in MEGA S4, automatically filtering out expired 24h free objects."""
-        self.cleanup_expired_objects()
+        """List stored objects in MEGA S4, leaving out expired ones. Deleting them is the retention sweep's job."""
+        now = dt.datetime.now(dt.timezone.utc).isoformat()
         idx = self._load_index()
-        items = list(idx.values())
+        items = [i for i in idx.values() if not i.get("expires_at") or str(i["expires_at"]) > now]
         if user_id:
             items = [i for i in items if i.get("user_id") == user_id]
         items.sort(key=lambda x: x.get("created_at", ""), reverse=True)
         return items
-
-    def cleanup_expired_objects(self) -> int:
-        """
-        Enforce the 24-hour storage retention limit for Free plan objects.
-        Paid ('pro' / 'trial') objects have expires_at = None and are never deleted.
-        """
-        now = dt.datetime.now(dt.timezone.utc)
-        removed: List[str] = []
-
-        def prune(idx: Dict[str, Any]) -> None:
-            for key, meta in list(idx.items()):
-                expires_at_str = meta.get("expires_at")
-                if not expires_at_str:
-                    continue
-                try:
-                    exp_dt = dt.datetime.fromisoformat(expires_at_str)
-                    if exp_dt.tzinfo is None:
-                        exp_dt = exp_dt.replace(tzinfo=dt.timezone.utc)
-                    if now >= exp_dt:
-                        (self.mirror_dir / key).unlink(missing_ok=True)
-                        del idx[key]
-                        removed.append(key)
-                except (TypeError, ValueError, OSError):
-                    logger.debug("Retention index: unreadable expiry for %s, kept", key)  # ante la duda, no se borra
-
-        self._update_index(prune)
-        return len(removed)
 
 
 mega_s4_storage = MegaS4StorageService()

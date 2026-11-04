@@ -75,7 +75,7 @@ PRIVACY_ES: List[Section] = [
         "No vendemos tus datos ni usamos tus audios para entrenar modelos propios.",
     ]),
     ("Cuánto tiempo los conservamos", [
-        "<strong>Sin cuenta:</strong> los audios se borran al terminar la transcripción y el resultado se elimina de la memoria del servidor a los {guest_ttl} minutos. No se guarda historial.",
+        "<strong>Sin cuenta:</strong> el audio que subes se borra al terminar la transcripción. El resultado y una copia del audio para escucharlo se eliminan a los {guest_ttl} minutos. No se guarda historial.",
         "<strong>Plan Gratis:</strong> audios y resultados se conservan {free_retention} horas.",
         "<strong>Apex Pro:</strong> se conservan mientras la cuenta exista o hasta que los elimines.",
         "Los registros de pago se conservan el tiempo que exige la ley contable y tributaria.",
@@ -113,7 +113,7 @@ PRIVACY_EN: List[Section] = [
         "We do not sell your data or use your audio to train our own models.",
     ]),
     ("Retention", [
-        "<strong>Without an account:</strong> audio is deleted once transcribed and the result is removed from server memory after {guest_ttl} minutes. No history is kept.",
+        "<strong>Without an account:</strong> the audio you upload is deleted once transcribed. The result and a copy of the audio for playback are removed after {guest_ttl} minutes. No history is kept.",
         "<strong>Free plan:</strong> audio and results are kept for {free_retention} hours.",
         "<strong>Apex Pro:</strong> kept while the account exists or until you delete them.",
         "Payment records are kept as long as accounting and tax law requires.",

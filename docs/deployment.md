@@ -101,6 +101,10 @@ Other proxies (nginx, Caddy) work the same way, as long as they append the real 
 
 Do not cache `/api/*`, `/oauth/*` or `/mcp`. Static assets under `/static/` are versioned (`?v=<hash>`) and sent with long `Cache-Control` headers.
 
+## Retention
+
+The sweep starts in simulation (`RETENTION_DRY_RUN=true`). Look for `Retention sweep (dry run` in the logs, check what it would delete, and only then set `RETENTION_DRY_RUN=false`. **Deletions are permanent**, including from object storage. Expired results stop being served from the first deploy, whether or not anything is deleted.
+
 ## Volumes and backups
 
 Everything that matters lives in `outputs/`:
