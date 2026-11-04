@@ -25,7 +25,6 @@ import copy
 import datetime as dt
 import hashlib
 import hmac
-import json
 import logging
 import os
 import re
@@ -111,6 +110,7 @@ class SupabaseCloudService:
         self._secret_cache: Optional[Tuple[Any, bytes]] = None
         self._db_file = settings.OUTPUT_DIR / "supabase_cloud_state.json"
         self._ensure_seed_state()
+        self._migrate_raw_secrets()
 
     @property
     def is_cloud_configured(self) -> bool:
@@ -151,7 +151,43 @@ class SupabaseCloudService:
             raise StateCorruptError(self._db_file.name)
         for key in ("users", "tokens", "daily_usage", "subscriptions", "transcriptions", "payments", "handoffs", "promo_ips"):
             db.setdefault(key, {})
+        self._hash_raw_secrets(db)
         return db
+
+    def _token_key(self, token: str) -> str:
+        """Sessions are stored by digest: reading the state file or a backup gives no usable session."""
+        return self._digest(f"session:{token}")
+
+    def _hash_raw_secrets(self, db: Dict[str, Any]) -> bool:
+        """Bring a state written by an older version (or restored from a backup) to the current format."""
+        tokens = db["tokens"]
+        changed = False
+        for key in [k for k, v in tokens.items() if k.startswith("apx_") or not isinstance(v, dict)]:
+            entry = tokens.pop(key)
+            if not isinstance(entry, dict):  # antiguos: sin caducidad
+                expires = _now() + dt.timedelta(days=settings.SESSION_TTL_DAYS)
+                entry = {"user_id": entry, "expires_at": expires.isoformat()}
+            tokens[self._token_key(key) if key.startswith("apx_") else key] = entry
+            changed = True
+        handoffs = db["handoffs"]
+        for key in [k for k, v in handoffs.items() if "token" in v]:  # códigos de 2 minutos con el token en claro
+            handoffs.pop(key)
+            changed = True
+        return changed
+
+    def _migrate_raw_secrets(self) -> None:
+        """Remove raw session tokens from disk at start-up."""
+        with self._lock:
+            try:
+                raw = read_json(self._db_file)
+                if not isinstance(raw, dict):
+                    return
+                raw.setdefault("tokens", {})
+                raw.setdefault("handoffs", {})
+                if self._hash_raw_secrets(raw):
+                    self._save_db(raw)
+            except StateCorruptError as exc:
+                logger.error("Account state is unreadable: %s", exc)  # se informa también en cada petición
 
     def _load_db(self) -> Dict[str, Any]:
         """
@@ -168,6 +204,7 @@ class SupabaseCloudService:
 
         READ ONLY: the same object goes to every caller. Return copies of what leaves the service.
         """
+        self._app_secret()  # siempre antes de `_snapshot_lock`: el orden de locks es _lock → _snapshot_lock
         try:
             stat = self._db_file.stat()
         except FileNotFoundError as exc:
@@ -359,7 +396,7 @@ class SupabaseCloudService:
     def _issue_token(self, db: Dict[str, Any], user_id: str) -> str:
         token = f"apx_{secrets.token_urlsafe(32)}"
         expires = _now() + dt.timedelta(days=settings.SESSION_TTL_DAYS)
-        db["tokens"][token] = {"user_id": user_id, "expires_at": expires.isoformat()}
+        db["tokens"][self._token_key(token)] = {"user_id": user_id, "expires_at": expires.isoformat()}
         return token
 
     @staticmethod
@@ -374,43 +411,39 @@ class SupabaseCloudService:
         token = self._clean_token(authorization)
         if not token.startswith("apx_"):
             return None
+        key = self._token_key(token)
         snapshot = self._read_snapshot()
-        entry = snapshot["tokens"].get(token)
+        entry = snapshot["tokens"].get(key)
         if entry is None:
             return None
-        if isinstance(entry, dict):
-            expires = _parse_iso(entry.get("expires_at"))
-            if not (expires and _now() >= expires):
-                user = snapshot["users"].get(entry.get("user_id"))
-                if not user:
-                    return None
-                if not self._plan_expired(user):
-                    return copy.deepcopy(user)
-        # Hay algo que corregir (sesión vencida, plan vencido, token antiguo): camino lento.
+        expires = _parse_iso(entry.get("expires_at"))
+        if not (expires and _now() >= expires):
+            user = snapshot["users"].get(entry.get("user_id"))
+            if not user:
+                return None
+            if not self._plan_expired(user):
+                return copy.deepcopy(user)
+        # Hay algo que corregir (sesión vencida, plan vencido): camino lento.
         with self._lock:
             db = self._load_db()
-            entry = db["tokens"].get(token)
+            entry = db["tokens"].get(key)
             if entry is None:
                 return None
-            if isinstance(entry, str):  # legacy, non-expiring token
-                uid = entry
-            else:
-                expires = _parse_iso(entry.get("expires_at"))
-                if expires and _now() >= expires:
-                    db["tokens"].pop(token, None)
-                    self._save_db(db)
-                    return None
-                uid = entry.get("user_id")
-            user = db["users"].get(uid)
+            expires = _parse_iso(entry.get("expires_at"))
+            if expires and _now() >= expires:
+                db["tokens"].pop(key, None)
+                self._save_db(db)
+                return None
+            user = db["users"].get(entry.get("user_id"))
             if user and self._refresh_plan_expiry(user):
                 self._save_db(db)
             return dict(user) if user else None
 
     def revoke_token(self, authorization: Optional[str]) -> None:
-        token = self._clean_token(authorization)
+        key = self._token_key(self._clean_token(authorization))
         with self._lock:
             db = self._load_db()
-            if db["tokens"].pop(token, None) is not None:
+            if db["tokens"].pop(key, None) is not None:
                 self._save_db(db)
 
     def _profile_response(self, user_id: str, token: str = "") -> UserProfileResponse:
@@ -510,7 +543,7 @@ class SupabaseCloudService:
         clean = (email or "").strip().lower()
         return any(u.get("email", "").lower() == clean for u in self._read_snapshot()["users"].values())
 
-    def create_handoff_code(self, access_token: str, ttl_seconds: int = 120) -> str:
+    def create_handoff_code(self, user_id: str, ttl_seconds: int = 120) -> str:
         """One-time code that lets the browser pick up a session after an OAuth redirect."""
         code = secrets.token_urlsafe(24)
         with self._lock:
@@ -520,8 +553,8 @@ class SupabaseCloudService:
                 k: v for k, v in db["handoffs"].items()
                 if (_parse_iso(v.get("expires_at")) or now) > now
             }
-            db["handoffs"][code] = {
-                "token": access_token,
+            db["handoffs"][self._digest(f"handoff:{code}")] = {
+                "user_id": user_id,
                 "expires_at": (now + dt.timedelta(seconds=ttl_seconds)).isoformat(),
             }
             self._save_db(db)
@@ -530,34 +563,22 @@ class SupabaseCloudService:
     def consume_handoff_code(self, code: str) -> Optional[UserProfileResponse]:
         with self._lock:
             db = self._load_db()
-            entry = db["handoffs"].pop(code or "", None)
+            entry = db["handoffs"].pop(self._digest(f"handoff:{code or ''}"), None)
+            if not entry:
+                return None
+            expires = _parse_iso(entry.get("expires_at"))
+            user_id = entry.get("user_id")
+            if (expires and _now() >= expires) or user_id not in db["users"]:
+                self._save_db(db)
+                return None
+            token = self._issue_token(db, user_id)
             self._save_db(db)
-        if not entry:
-            return None
-        expires = _parse_iso(entry.get("expires_at"))
-        if expires and _now() >= expires:
-            return None
-        user = self.get_user_by_token(entry["token"])
-        if not user:
-            return None
-        return self._profile_response(user["user_id"], entry["token"])
+        return self._profile_response(user_id, token)
 
-    def get_user_by_token_or_id(self, identifier: Optional[str]) -> Optional[Dict[str, Any]]:
+    def get_user_by_id(self, user_id: Optional[str]) -> Optional[Dict[str, Any]]:
         """Internal helper for server-trusted ids. Never pass client-supplied ids here."""
-        if not identifier:
-            return None
-        clean = identifier.strip()
-        if clean.lower().startswith("bearer "):
-            clean = clean[7:].strip()
-
-        db = self._read_snapshot()
-        if clean in db["tokens"]:
-            entry = db["tokens"][clean]
-            uid = entry if isinstance(entry, str) else entry.get("user_id")
-            return copy.deepcopy(db["users"].get(uid))
-        if clean in db["users"]:
-            return copy.deepcopy(db["users"][clean])
-        return None
+        user = self._read_snapshot()["users"].get(user_id) if user_id else None
+        return copy.deepcopy(user) if user else None
 
     # -------------------------------------------------------------------------
     # Quota & Plan Management (2h Free/day vs Unlimited Pro)
@@ -1058,10 +1079,7 @@ class SupabaseCloudService:
                 raise PermissionError("Cuenta no encontrada.")
             user["password_hash"] = new_hash
             # Sign out every existing session.
-            db["tokens"] = {
-                t: v for t, v in db["tokens"].items()
-                if (v if isinstance(v, str) else v.get("user_id")) != user["user_id"]
-            }
+            db["tokens"] = {k: v for k, v in db["tokens"].items() if v.get("user_id") != user["user_id"]}
             token_new = self._issue_token(db, user["user_id"])
             self._save_db(db)
         return self._profile_response(user["user_id"], token_new)
@@ -1127,10 +1145,7 @@ class SupabaseCloudService:
             user = db["users"].pop(user_id, None)
             if not user:
                 raise LookupError("Cuenta no encontrada.")
-            db["tokens"] = {
-                t: v for t, v in db["tokens"].items()
-                if (v if isinstance(v, str) else v.get("user_id")) != user_id
-            }
+            db["tokens"] = {k: v for k, v in db["tokens"].items() if v.get("user_id") != user_id}
             removed_jobs = [jid for jid, rec in db.get("transcriptions", {}).items() if rec.get("user_id") == user_id]
             for jid in removed_jobs:
                 db["transcriptions"].pop(jid, None)

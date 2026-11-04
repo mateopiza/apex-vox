@@ -270,7 +270,8 @@ async def oauth_callback(request: Request, code: Optional[str] = None, error: Op
             email_service.render_welcome(profile.full_name, profile.preferred_language, _promo_ends(profile)),
             tags=[{"name": "category", "value": "welcome"}],
         )
-    handoff = supabase_service.create_handoff_code(profile.access_token)
+    supabase_service.revoke_token(profile.access_token)  # the browser gets its own session from the code
+    handoff = supabase_service.create_handoff_code(profile.user_id)
     return finish(f"auth_code={handoff}")
 
 

@@ -19,7 +19,6 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import hmac
-import json
 import logging
 import re
 import threading

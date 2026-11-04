@@ -65,7 +65,7 @@ def test_returned_data_cannot_change_the_shared_snapshot() -> None:
     before = json.dumps(supabase_service._read_snapshot(), sort_keys=True)
 
     supabase_service.get_user_by_token(token)["full_name"] = "changed"
-    supabase_service.get_user_by_token_or_id(user_id)["full_name"] = "changed"
+    supabase_service.get_user_by_id(user_id)["full_name"] = "changed"
     supabase_service.get_user_quota(user_id)
     supabase_service.guest_audios_used_today("guest_x")
     supabase_service.list_user_transcriptions(user_id).clear()
@@ -93,11 +93,11 @@ def test_expired_plan_is_downgraded_and_saved_on_read() -> None:
 def test_expired_session_is_removed() -> None:
     _, token = _register()
     db = supabase_service._load_db()
-    db["tokens"][token]["expires_at"] = "2020-01-01T00:00:00+00:00"
+    db["tokens"][supabase_service._token_key(token)]["expires_at"] = "2020-01-01T00:00:00+00:00"
     supabase_service._save_db(db)
 
     assert supabase_service.get_user_by_token(token) is None
-    assert token not in supabase_service._load_db()["tokens"]
+    assert supabase_service._token_key(token) not in supabase_service._load_db()["tokens"]
 
 
 def test_known_network_needs_no_lock_and_new_one_beyond_the_limit_is_refused(monkeypatch) -> None:

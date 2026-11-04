@@ -389,7 +389,7 @@ class JobManager:
 
             # Plan comes from the account set by the server (never from the client).
             is_guest = bool(req.guest_key) and not req.user_id
-            effective_user = None if is_guest else supabase_service.get_user_by_token_or_id(req.user_id)
+            effective_user = None if is_guest else supabase_service.get_user_by_id(req.user_id)
             resolved_uid = effective_user["user_id"] if effective_user else None
             if is_guest:
                 effective_plan = "guest"
