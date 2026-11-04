@@ -50,6 +50,7 @@ def _register_in_ui(page: Page, email: str, name: str = "Persona E2E") -> None:
     page.locator("#open-auth-btn").click()
     dialog = page.locator("#auth-dialog")
     expect(dialog).to_be_visible()
+    page.locator("#switch-to-register-btn").click()  # the dialog opens on "sign in"
     page.locator("#auth-name-input").fill(name)
     page.locator("#auth-email-input").fill(email)
     page.locator("#auth-password-input").fill(PASSWORD)

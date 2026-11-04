@@ -5,6 +5,7 @@ import asyncio
 import threading
 import time
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import httpx
@@ -76,7 +77,9 @@ def test_slow_login_does_not_delay_other_requests(monkeypatch: pytest.MonkeyPatc
             assert quick.status_code == 200
             return elapsed
 
-    assert asyncio.run(scenario()) < 2
+    # In its own thread: the browser suite keeps an event loop open in the main one.
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        assert pool.submit(asyncio.run, scenario()).result() < 2
 
 
 def test_routes_converted_to_threads_still_authenticate() -> None:
