@@ -13,6 +13,7 @@ con su autorización explícita, a sus reuniones (lectura).
 from __future__ import annotations
 
 import base64
+import copy
 import datetime as dt
 import hashlib
 import secrets
@@ -104,8 +105,8 @@ def register_client(metadata: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def get_client(client_id: str) -> Optional[Dict[str, Any]]:
-    with supabase_service._lock:
-        return dict(_tables(supabase_service._load_db())["oauth_clients"].get(client_id or "", {})) or None
+    clients = supabase_service._read_snapshot().get("oauth_clients", {})
+    return dict(clients.get(client_id or "", {})) or None
 
 
 def validate_authorize_request(params: Dict[str, str]) -> Dict[str, Any]:
@@ -213,6 +214,15 @@ def user_for_access_token(token: str) -> Optional[Dict[str, Any]]:
     """Usuario dueño de un token de acceso vigente, o None."""
     if not token or not token.startswith("apx_at_"):
         return None
+    snapshot = supabase_service._read_snapshot()
+    entry = snapshot.get("oauth_tokens", {}).get(_h("access", token))
+    if not entry or entry.get("kind") != "access" or (_parse(entry.get("expires_at")) or _now()) <= _now():
+        return None
+    user = snapshot["users"].get(entry["user_id"])
+    if not user:
+        return None
+    if not supabase_service._plan_expired(user):
+        return copy.deepcopy(user)
     with supabase_service._lock:
         db = _tables(supabase_service._load_db())
         entry = db["oauth_tokens"].get(_h("access", token))

@@ -100,6 +100,7 @@ def test_atomic_write_keeps_existing_permissions(tmp_path: Path) -> None:
 
 def test_empty_app_secret_is_replaced(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("APP_SECRET_KEY", raising=False)
+    monkeypatch.setattr(supabase_service, "_secret_cache", None)
     path = supabase_service._db_file.parent / ".app_secret"
     original = path.read_bytes() if path.exists() else None
     path.write_bytes(b"")

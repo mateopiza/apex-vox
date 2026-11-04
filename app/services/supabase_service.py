@@ -21,6 +21,7 @@ Business Rules Enforced:
 
 from __future__ import annotations
 
+import copy
 import datetime as dt
 import hashlib
 import hmac
@@ -105,6 +106,9 @@ class SupabaseCloudService:
 
     def __init__(self) -> None:
         self._lock = threading.RLock()
+        self._snapshot_lock = threading.Lock()
+        self._snapshot: Optional[Tuple[Tuple[int, int, int], Dict[str, Any]]] = None
+        self._secret_cache: Optional[Tuple[Any, bytes]] = None
         self._db_file = settings.OUTPUT_DIR / "supabase_cloud_state.json"
         self._ensure_seed_state()
 
@@ -141,14 +145,44 @@ class SupabaseCloudService:
                 {"users": {}, "tokens": {}, "daily_usage": {}, "subscriptions": {}, "transcriptions": {}},
             )
 
+    def _parse_state(self) -> Dict[str, Any]:
+        db = read_json(self._db_file)
+        if not isinstance(db, dict):
+            raise StateCorruptError(self._db_file.name)
+        for key in ("users", "tokens", "daily_usage", "subscriptions", "transcriptions", "payments", "handoffs", "promo_ips"):
+            db.setdefault(key, {})
+        return db
+
     def _load_db(self) -> Dict[str, Any]:
-        """A fresh copy of the state, or StateCorruptError. Never an empty stand-in: the next save would keep it."""
+        """
+        A private copy of the state for code that changes it, or StateCorruptError. Never an empty
+        stand-in: the next save would keep it. Changes are lost unless passed to `_save_db`.
+        """
         with self._lock:
-            db = read_json(self._db_file)
-            if not isinstance(db, dict):
-                raise StateCorruptError(self._db_file.name)
-            for key in ("users", "tokens", "daily_usage", "subscriptions", "transcriptions", "payments", "handoffs", "promo_ips"):
-                db.setdefault(key, {})
+            return self._parse_state()
+
+    def _read_snapshot(self) -> Dict[str, Any]:
+        """
+        The state shared by read paths, reparsed only when the file changes. Writers replace the
+        file atomically, so readers never wait for them and always see a complete state.
+
+        READ ONLY: the same object goes to every caller. Return copies of what leaves the service.
+        """
+        try:
+            stat = self._db_file.stat()
+        except FileNotFoundError as exc:
+            raise StateCorruptError(self._db_file.name) from exc
+        key = (stat.st_ino, stat.st_mtime_ns, stat.st_size)
+        cached = self._snapshot
+        if cached and cached[0] == key:
+            return cached[1]
+        with self._snapshot_lock:
+            cached = self._snapshot
+            if cached and cached[0] == key:
+                return cached[1]
+            # Taken before parsing: a replace in between only causes one more reparse.
+            db = self._parse_state()
+            self._snapshot = (key, db)
             return db
 
     def _save_db(self, db: Dict[str, Any]) -> None:
@@ -208,6 +242,10 @@ class SupabaseCloudService:
                 f"Password must be at least {MIN_PASSWORD_LENGTH} characters."
             )
 
+        if self.email_registered(clean_email):
+            raise ValueError(f"El correo '{clean_email}' ya está registrado.")
+        password_hash = _hash_password(password)  # costoso: fuera del lock global
+
         with self._lock:
             db = self._load_db()
             for uid, u in db["users"].items():
@@ -221,7 +259,7 @@ class SupabaseCloudService:
                 "user_id": user_id,
                 "email": clean_email,
                 "full_name": full_name.strip() or clean_email.split("@")[0].capitalize(),
-                "password_hash": _hash_password(password),
+                "password_hash": password_hash,
                 "plan": "free",
                 "preferred_language": preferred_language if preferred_language in ("es", "en") else "es",
                 "trial_started_at": None,
@@ -265,23 +303,32 @@ class SupabaseCloudService:
 
     def login_user(self, email: str, password: str) -> UserProfileResponse:
         clean_email = email.strip().lower()
+        invalid = "Credenciales inválidas. Verifica tu correo y contraseña."
         new_profile: Optional[Dict[str, Any]] = None
+
+        def find(users: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+            return next((u for u in users.values() if u.get("email", "").lower() == clean_email), None)
+
+        # El hash y la llamada a Supabase son lentos: nunca bajo el lock que usa toda la app.
+        known = find(self._read_snapshot()["users"])
+        stored_hash = str(known.get("password_hash", "")) if known else ""
+        local_ok = bool(known) and _verify_password(password, stored_hash)
+        cloud = None
+        if not local_ok:
+            cloud = self._gotrue_user(clean_email, password) if self.is_cloud_configured else None
+            if not cloud:
+                raise ValueError(invalid)
+        # Transparently migrate legacy SHA-256 hashes to PBKDF2.
+        new_hash = _hash_password(password) if cloud or not stored_hash.startswith("pbkdf2_sha256$") else None
 
         with self._lock:
             db = self._load_db()
-            matched_user = None
-            for uid, u in db["users"].items():
-                if u.get("email", "").lower() == clean_email:
-                    matched_user = u
-                    break
-
-            local_ok = bool(matched_user) and _verify_password(password, matched_user.get("password_hash", ""))
-            if not local_ok:
-                cloud = self._gotrue_user(clean_email, password) if self.is_cloud_configured else None
-                created = bool(cloud) and matched_user is None
-                matched_user = self._bind_cloud_user(db, cloud, password) if cloud else None
+            matched_user = find(db["users"])
+            if cloud:
+                created = matched_user is None
+                matched_user = self._bind_cloud_user(db, cloud, new_hash)
                 if not matched_user:
-                    raise ValueError("Credenciales inválidas. Verifica tu correo y contraseña.")
+                    raise ValueError(invalid)
                 if created:
                     new_profile = {
                         "id": matched_user["user_id"],
@@ -291,10 +338,12 @@ class SupabaseCloudService:
                         "preferred_language": matched_user["preferred_language"],
                         "created_at": matched_user["created_at"],
                     }
-
-            # Transparently migrate legacy SHA-256 hashes to PBKDF2.
-            if not str(matched_user.get("password_hash", "")).startswith("pbkdf2_sha256$"):
-                matched_user["password_hash"] = _hash_password(password)
+            else:
+                # La clave pudo cambiar mientras se verificaba fuera del lock.
+                if not matched_user or matched_user.get("password_hash") != stored_hash:
+                    raise ValueError(invalid)
+                if new_hash:
+                    matched_user["password_hash"] = new_hash
             user_id = matched_user["user_id"]
             token = self._issue_token(db, user_id)
             self._save_db(db)
@@ -325,6 +374,19 @@ class SupabaseCloudService:
         token = self._clean_token(authorization)
         if not token.startswith("apx_"):
             return None
+        snapshot = self._read_snapshot()
+        entry = snapshot["tokens"].get(token)
+        if entry is None:
+            return None
+        if isinstance(entry, dict):
+            expires = _parse_iso(entry.get("expires_at"))
+            if not (expires and _now() >= expires):
+                user = snapshot["users"].get(entry.get("user_id"))
+                if not user:
+                    return None
+                if not self._plan_expired(user):
+                    return copy.deepcopy(user)
+        # Hay algo que corregir (sesión vencida, plan vencido, token antiguo): camino lento.
         with self._lock:
             db = self._load_db()
             entry = db["tokens"].get(token)
@@ -352,8 +414,7 @@ class SupabaseCloudService:
                 self._save_db(db)
 
     def _profile_response(self, user_id: str, token: str = "") -> UserProfileResponse:
-        with self._lock:
-            user = self._load_db()["users"].get(user_id) or {}
+        user = self._read_snapshot()["users"].get(user_id) or {}
         quota = self.get_user_quota(user_id)
         return UserProfileResponse(
             user_id=user_id,
@@ -447,8 +508,7 @@ class SupabaseCloudService:
 
     def email_registered(self, email: str) -> bool:
         clean = (email or "").strip().lower()
-        with self._lock:
-            return any(u.get("email", "").lower() == clean for u in self._load_db()["users"].values())
+        return any(u.get("email", "").lower() == clean for u in self._read_snapshot()["users"].values())
 
     def create_handoff_code(self, access_token: str, ttl_seconds: int = 120) -> str:
         """One-time code that lets the browser pick up a session after an OAuth redirect."""
@@ -490,19 +550,25 @@ class SupabaseCloudService:
         if clean.lower().startswith("bearer "):
             clean = clean[7:].strip()
 
-        with self._lock:
-            db = self._load_db()
-            if clean in db["tokens"]:
-                entry = db["tokens"][clean]
-                uid = entry if isinstance(entry, str) else entry.get("user_id")
-                return db["users"].get(uid)
-            if clean in db["users"]:
-                return db["users"][clean]
+        db = self._read_snapshot()
+        if clean in db["tokens"]:
+            entry = db["tokens"][clean]
+            uid = entry if isinstance(entry, str) else entry.get("user_id")
+            return copy.deepcopy(db["users"].get(uid))
+        if clean in db["users"]:
+            return copy.deepcopy(db["users"][clean])
         return None
 
     # -------------------------------------------------------------------------
     # Quota & Plan Management (2h Free/day vs Unlimited Pro)
     # -------------------------------------------------------------------------
+
+    @staticmethod
+    def _plan_expired(user: Dict[str, Any]) -> bool:
+        """Would `_refresh_plan_expiry` change this account? Does not modify it."""
+        plan = str(user.get("plan", "free")).lower()
+        end = _parse_iso(user.get("trial_ends_at" if plan == "trial" else "pro_until"))
+        return plan in ("trial", "pro") and bool(end) and _now() >= end
 
     @staticmethod
     def _refresh_plan_expiry(user: Dict[str, Any]) -> bool:
@@ -523,46 +589,49 @@ class SupabaseCloudService:
         return False
 
     def get_user_quota(self, user_id: str) -> QuotaUsageResponse:
-        with self._lock:
-            db = self._load_db()
-            user = db["users"].get(user_id)
-            if user and self._refresh_plan_expiry(user):
-                self._save_db(db)
-            plan = (user.get("plan", "free") if user else "free").lower()
-            today = _today_str()
-            usage_key = f"{user_id}:{today}"
-            usage_entry = db["daily_usage"].get(usage_key, {})
-            used_sec = float(usage_entry.get("used_seconds", 0.0))
+        db = self._read_snapshot()
+        user = db["users"].get(user_id)
+        if user and self._plan_expired(user):
+            with self._lock:
+                db = self._load_db()
+                user = db["users"].get(user_id)
+                if user and self._refresh_plan_expiry(user):
+                    self._save_db(db)
+        plan = (user.get("plan", "free") if user else "free").lower()
+        today = _today_str()
+        usage_key = f"{user_id}:{today}"
+        usage_entry = db["daily_usage"].get(usage_key, {})
+        used_sec = float(usage_entry.get("used_seconds", 0.0))
 
-            is_paid = plan in ("pro", "trial")
-            daily_limit = None if is_paid else settings.FREE_DAILY_SECONDS
-            remaining = None if is_paid else max(0.0, float(settings.FREE_DAILY_SECONDS) - used_sec)
-            retention = None if is_paid else settings.FREE_RETENTION_HOURS
+        is_paid = plan in ("pro", "trial")
+        daily_limit = None if is_paid else settings.FREE_DAILY_SECONDS
+        remaining = None if is_paid else max(0.0, float(settings.FREE_DAILY_SECONDS) - used_sec)
+        retention = None if is_paid else settings.FREE_RETENTION_HOURS
 
-            if plan == "trial":  # cuentas antiguas con prueba en curso
-                display_name = "Apex Pro"
-            elif plan == "pro":
-                display_name = "Apex Pro (Ilimitado)"
-            else:
-                display_name = "Plan Gratis (2h / día · 24h almacenamiento)"
+        if plan == "trial":  # cuentas antiguas con prueba en curso
+            display_name = "Apex Pro"
+        elif plan == "pro":
+            display_name = "Apex Pro (Ilimitado)"
+        else:
+            display_name = "Plan Gratis (2h / día · 24h almacenamiento)"
 
-            return QuotaUsageResponse(
-                user_id=user_id,
-                plan=plan,
-                plan_display_name=display_name,
-                daily_limit_seconds=daily_limit,
-                used_today_seconds=round(used_sec, 2),
-                remaining_today_seconds=round(remaining, 2) if remaining is not None else None,
-                is_unlimited=is_paid,
-                retention_hours=retention,
-                storage_provider="apex_vox_cloud",
-                summa_enabled=is_paid,
-                trial_active=(plan == "trial"),
-                trial_ends_at=user.get("trial_ends_at") if user else None,
-                auto_billing_enabled=False,
-                pro_until=user.get("pro_until") if user else None,
-                trial_available=False,
-            )
+        return QuotaUsageResponse(
+            user_id=user_id,
+            plan=plan,
+            plan_display_name=display_name,
+            daily_limit_seconds=daily_limit,
+            used_today_seconds=round(used_sec, 2),
+            remaining_today_seconds=round(remaining, 2) if remaining is not None else None,
+            is_unlimited=is_paid,
+            retention_hours=retention,
+            storage_provider="apex_vox_cloud",
+            summa_enabled=is_paid,
+            trial_active=(plan == "trial"),
+            trial_ends_at=user.get("trial_ends_at") if user else None,
+            auto_billing_enabled=False,
+            pro_until=user.get("pro_until") if user else None,
+            trial_available=False,
+        )
 
     def check_and_consume_quota(
         self,
@@ -649,19 +718,18 @@ class SupabaseCloudService:
         regular = round(float(settings.PRO_PRICE_USD), 2)
         promo_price = round(regular * (100 - settings.PROMO_DISCOUNT_PCT) / 100, 2)
         now = _now()
-        with self._lock:
-            db = self._load_db()
-            user = db["users"].get(user_id)
-            if not user:
-                raise LookupError("Cuenta no encontrada.")
-            ends = self.promo_ends_at(user)
-            reason = None
-            if user.get("promo_used") or self._has_paid(db, user_id):
-                reason = "first_month_only"
-            elif not ends or now >= ends:
-                reason = "window_expired"
-            elif client_ip and self._promo_ip_blocked(db, self._ip_hash(client_ip), now):
-                reason = "ip_used_this_quarter"
+        db = self._read_snapshot()
+        user = db["users"].get(user_id)
+        if not user:
+            raise LookupError("Cuenta no encontrada.")
+        ends = self.promo_ends_at(user)
+        reason = None
+        if user.get("promo_used") or self._has_paid(db, user_id):
+            reason = "first_month_only"
+        elif not ends or now >= ends:
+            reason = "window_expired"
+        elif client_ip and self._promo_ip_blocked(db, self._ip_hash(client_ip), now):
+            reason = "ip_used_this_quarter"
         eligible = reason is None
         return {
             "currency": "USD",
@@ -702,12 +770,10 @@ class SupabaseCloudService:
             self._save_db(db)
 
     def list_pending_payments(self, user_id: str) -> List[Dict[str, Any]]:
-        with self._lock:
-            db = self._load_db()
-            return [
-                dict(p) for p in db["payments"].values()
-                if p.get("user_id") == user_id and p.get("status") == "pending"
-            ]
+        return [
+            dict(p) for p in self._read_snapshot()["payments"].values()
+            if p.get("user_id") == user_id and p.get("status") == "pending"
+        ]
 
     def activate_paid_period(
         self,
@@ -843,6 +909,9 @@ class SupabaseCloudService:
         if env_secret:
             return env_secret.encode("utf-8")
         path = settings.OUTPUT_DIR / ".app_secret"
+        cached = self._secret_cache
+        if cached and cached[0] == path:
+            return cached[1]
         with self._lock:
             secret = path.read_bytes().strip() if path.exists() else b""
             if not secret:
@@ -851,6 +920,11 @@ class SupabaseCloudService:
                     logger.error("%s was empty: generating a new secret (existing sessions stop working).", path.name)
                 secret = secrets.token_hex(32).encode("utf-8")
                 atomic_write_bytes(path, secret)
+                try:
+                    path.chmod(0o600)  # también si reemplaza un archivo con permisos más abiertos
+                except OSError:
+                    logger.debug("Could not restrict permissions of %s", path)  # p. ej. sistemas sin chmod
+            self._secret_cache = (path, secret)
             return secret
 
     def _digest(self, value: str) -> str:
@@ -869,7 +943,15 @@ class SupabaseCloudService:
             return True
         month = _now().strftime("%Y-%m")
         ip_hash = self._digest(f"ip:{client_ip}")[:20]
-        with self._lock:
+        known = self._read_snapshot()["users"].get(user_id)
+        if not known or known.get("unlimited_ips"):
+            return True
+        seen_now = (known.get("ip_months") or {}).get(month, [])
+        if ip_hash in seen_now:
+            return True
+        if len(seen_now) >= settings.MAX_IPS_PER_MONTH:
+            return False
+        with self._lock:  # red nueva este mes: se registra
             db = self._load_db()
             user = db["users"].get(user_id)
             if not user:
@@ -890,9 +972,8 @@ class SupabaseCloudService:
 
     def account_ip_usage(self, user_id: str) -> Dict[str, int]:
         month = _now().strftime("%Y-%m")
-        with self._lock:
-            user = self._load_db()["users"].get(user_id) or {}
-            used = len((user.get("ip_months") or {}).get(month, []))
+        user = self._read_snapshot()["users"].get(user_id) or {}
+        used = len((user.get("ip_months") or {}).get(month, []))
         return {"used": used, "limit": settings.MAX_IPS_PER_MONTH}
 
     # -------------------------------------------------------------------------
@@ -904,9 +985,7 @@ class SupabaseCloudService:
         return "guest_" + self._digest(f"guest:{client_ip or 'unknown'}")[:24]
 
     def guest_audios_used_today(self, guest_key: str) -> int:
-        with self._lock:
-            db = self._load_db()
-            return int(db.setdefault("guest_usage", {}).get(f"{guest_key}:{_today_str()}", 0))
+        return int(self._read_snapshot().get("guest_usage", {}).get(f"{guest_key}:{_today_str()}", 0))
 
     def guest_audios_remaining(self, guest_key: str) -> int:
         return max(0, settings.GUEST_MAX_AUDIOS_PER_DAY - self.guest_audios_used_today(guest_key))
@@ -961,17 +1040,23 @@ class SupabaseCloudService:
                 f"La contraseña debe tener al menos {MIN_PASSWORD_LENGTH} caracteres / "
                 f"Password must be at least {MIN_PASSWORD_LENGTH} characters."
             )
+        digest = self._digest(f"reset:{token or ''}")
+        expired_link = "El enlace para restablecer la contraseña expiró o ya fue usado."
+        # Un enlace falso no cuesta CPU ni lock; el hash va fuera del lock global.
+        if digest not in self._read_snapshot().get("password_resets", {}):
+            raise PermissionError(expired_link)
+        new_hash = _hash_password(new_password)
         with self._lock:
             db = self._load_db()
-            entry = db.setdefault("password_resets", {}).pop(self._digest(f"reset:{token or ''}"), None)
+            entry = db.setdefault("password_resets", {}).pop(digest, None)
             expires = _parse_iso(entry.get("expires_at")) if entry else None
             if not entry or not expires or _now() >= expires:
                 self._save_db(db)
-                raise PermissionError("El enlace para restablecer la contraseña expiró o ya fue usado.")
+                raise PermissionError(expired_link)
             user = db["users"].get(entry["user_id"])
             if not user:
                 raise PermissionError("Cuenta no encontrada.")
-            user["password_hash"] = _hash_password(new_password)
+            user["password_hash"] = new_hash
             # Sign out every existing session.
             db["tokens"] = {
                 t: v for t, v in db["tokens"].items()
@@ -1108,7 +1193,7 @@ class SupabaseCloudService:
             return None
 
     def _bind_cloud_user(
-        self, db: Dict[str, Any], user: Dict[str, Any], password: str
+        self, db: Dict[str, Any], user: Dict[str, Any], password_hash: str
     ) -> Optional[Dict[str, Any]]:
         """
         Attach a Supabase Auth account to the local session store, keeping that account's id.
@@ -1130,7 +1215,7 @@ class SupabaseCloudService:
             return None
         # A cloud account linked to local history keeps its local id.
         if existing and existing.get("user_id") != user_id:
-            existing["password_hash"] = _hash_password(password)
+            existing["password_hash"] = password_hash
             self._apply_lifetime_pro(existing, user)
             return existing
         record = db["users"].get(user_id) or {
@@ -1149,7 +1234,7 @@ class SupabaseCloudService:
         }
         record["email"] = email
         record["supabase_id"] = user_id
-        record["password_hash"] = _hash_password(password)
+        record["password_hash"] = password_hash
         self._apply_lifetime_pro(record, user)
         db["users"][user_id] = record
         return record
@@ -1167,25 +1252,23 @@ class SupabaseCloudService:
         if not user_id:
             return []
         now = dt.datetime.now(dt.timezone.utc)
-        with self._lock:
-            db = self._load_db()
-            items: List[Dict[str, Any]] = []
-            for jid, rec in db.get("transcriptions", {}).items():
-                if user_id and rec.get("user_id") != user_id:
-                    continue
-                exp_str = rec.get("expires_at")
-                if exp_str:
-                    try:
-                        exp_dt = dt.datetime.fromisoformat(exp_str)
-                        if exp_dt.tzinfo is None:
-                            exp_dt = exp_dt.replace(tzinfo=dt.timezone.utc)
-                        if now >= exp_dt:
-                            continue
-                    except (TypeError, ValueError):
-                        logger.debug("Transcription %s: unreadable expires_at, kept", jid)  # ante la duda, se muestra
-                items.append(rec)
-            items.sort(key=lambda r: r.get("created_at", ""), reverse=True)
-            return items
+        items: List[Dict[str, Any]] = []
+        for jid, rec in self._read_snapshot().get("transcriptions", {}).items():
+            if user_id and rec.get("user_id") != user_id:
+                continue
+            exp_str = rec.get("expires_at")
+            if exp_str:
+                try:
+                    exp_dt = dt.datetime.fromisoformat(exp_str)
+                    if exp_dt.tzinfo is None:
+                        exp_dt = exp_dt.replace(tzinfo=dt.timezone.utc)
+                    if now >= exp_dt:
+                        continue
+                except (TypeError, ValueError):
+                    logger.debug("Transcription %s: unreadable expires_at, kept", jid)  # ante la duda, se muestra
+            items.append(copy.deepcopy(rec))
+        items.sort(key=lambda r: r.get("created_at", ""), reverse=True)
+        return items
 
 
 supabase_service = SupabaseCloudService()

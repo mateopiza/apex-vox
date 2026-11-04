@@ -11,6 +11,7 @@ Telegram audio inbox (app/services/telegram_service.py)
 
 from __future__ import annotations
 
+import copy
 import datetime as dt
 import hmac
 import logging
@@ -163,6 +164,12 @@ def unlink(user_id: str) -> None:
 
 
 def user_for_chat(chat_id: int) -> Optional[Dict[str, Any]]:
+    users = supabase_service._read_snapshot()["users"]
+    known = next((u for u in users.values() if u.get("telegram_chat_id") == chat_id), None)
+    if not known:
+        return None
+    if not supabase_service._plan_expired(known):
+        return copy.deepcopy(known)
     with supabase_service._lock:
         db = supabase_service._load_db()
         user = next((u for u in db["users"].values() if u.get("telegram_chat_id") == chat_id), None)
