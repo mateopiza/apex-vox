@@ -24,7 +24,8 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 
 from app.logsafe import clean
-from app.api.deps import is_paid, require_user
+from app.api.deps import is_paid, require_user, run_heavy
+from app.config import settings
 from app.models.schemas import (
     BoxBlockUploadResponse,
     BoxCreateSessionRequest,
@@ -44,6 +45,7 @@ from app.services.apex_box import (
     ensure_extension_published_to_s4,
     extension_download_name,
 )
+from app.services.job_manager import UploadTooLargeError
 from app.services.storage_s4 import mega_s4_storage
 from app.services.supabase_service import supabase_service
 
@@ -155,17 +157,20 @@ async def upload_recording_block(
         supabase_service.check_and_consume_quota(user["user_id"], max(0.0, float(duration_hint_sec or 0.0)))
     except PermissionError as exc:
         raise HTTPException(status_code=402, detail=str(exc)) from exc
-    content = await file.read()
     try:
-        return apex_box_manager.ingest_block(
+        return await run_heavy(
+            apex_box_manager.ingest_block,
             box_session_id=box_session_id,
             filename=file.filename or "block.webm",
-            content=content,
+            content=file.file,
             block_index=block_index,
             duration_hint_sec=duration_hint_sec,
             transcribe_immediately=transcribe_immediately,
             api_key=api_key,
+            max_bytes=settings.MAX_BOX_BLOCK_MB * 1024 * 1024,
         )
+    except UploadTooLargeError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:

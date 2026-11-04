@@ -24,6 +24,7 @@ from app.api.deps import (
     require_job_owner,
     require_user,
     requester_key,
+    run_heavy,
 )
 from app.config import resolve_engine_code, settings
 from app.models.schemas import (
@@ -47,7 +48,7 @@ from app.services.apex_summa import (
     generate_ics_calendar,
     generate_meeting_minutes,
 )
-from app.services.job_manager import job_manager
+from app.services.job_manager import job_manager, upload_too_large_message
 from app.services.state_store import StateCorruptError
 from app.services.supabase_service import supabase_service
 from app.services.usage_reporter import (
@@ -218,9 +219,13 @@ async def create_voice_profile(
     user: Dict[str, Any] = Depends(require_user),
 ) -> VoiceProfile:
     """Enroll a speaker's acoustic voiceprint from a sample audio file."""
-    content = await file.read()
+    limit = settings.MAX_VOICE_SAMPLE_MB * 1024 * 1024
+    content = await file.read(limit + 1)
+    if len(content) > limit:
+        raise HTTPException(status_code=413, detail=upload_too_large_message(limit))
     try:
-        return enroll_voice_profile(
+        return await run_heavy(
+            enroll_voice_profile,
             name=name,
             audio_bytes=content,
             filename=file.filename or "sample.mp3",

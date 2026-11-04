@@ -17,7 +17,7 @@ import threading
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import BinaryIO, Dict, List, Optional, Union
 
 from app.logsafe import clean
 from app.config import (
@@ -52,6 +52,38 @@ from app.services.supabase_service import supabase_service
 from app.services.transcript_cleaner import filter_hallucinated_segments
 
 logger = logging.getLogger("app.services.job_manager")
+
+_COPY_CHUNK_BYTES = 1024 * 1024
+
+
+class UploadTooLargeError(ValueError):
+    """An uploaded file went over its size limit. The message is safe to show to the user."""
+
+
+def upload_too_large_message(limit_bytes: int) -> str:
+    limit_mb = max(1, limit_bytes // (1024 * 1024))
+    return f"El archivo supera el límite de {limit_mb} MB. / The file is over the {limit_mb} MB limit."
+
+
+def _store_upload(content: Union[bytes, BinaryIO], dest: Path, max_bytes: Optional[int]) -> int:
+    """Write an upload to disk without holding it in memory. Returns its size; nothing stays on failure."""
+    if isinstance(content, (bytes, bytearray)):
+        if max_bytes is not None and len(content) > max_bytes:
+            raise UploadTooLargeError(upload_too_large_message(max_bytes))
+        dest.write_bytes(content)
+        return len(content)
+    written = 0
+    try:
+        with open(dest, "wb") as out:
+            while chunk := content.read(_COPY_CHUNK_BYTES):
+                written += len(chunk)
+                if max_bytes is not None and written > max_bytes:
+                    raise UploadTooLargeError(upload_too_large_message(max_bytes))
+                out.write(chunk)
+    except BaseException:
+        dest.unlink(missing_ok=True)
+        raise
+    return written
 
 
 @dataclass
@@ -130,13 +162,11 @@ class JobManager:
         self,
         session_id: str,
         filename: str,
-        content: bytes,
+        content: Union[bytes, BinaryIO],
         owner: Optional[str] = None,
+        max_bytes: Optional[int] = None,
     ) -> ProbedAudio:
-        """Save uploaded bytes, probe with ffprobe, and register in session."""
-        if not content:
-            raise ValueError(f"El archivo '{filename}' está vacío (0 bytes).")
-
+        """Save an upload (bytes or an open file), probe with ffprobe, and register in session."""
         ext = Path(filename).suffix.lower()
         if ext not in settings.ALLOWED_EXTENSIONS:
             raise ValueError(
@@ -148,7 +178,9 @@ class JobManager:
         file_id = f"track_{uuid.uuid4().hex[:8]}"
         safe_name = Path(filename).name
         dest_path = session.session_dir / f"{file_id}_{safe_name}"
-        dest_path.write_bytes(content)
+        if _store_upload(content, dest_path, max_bytes) == 0:
+            dest_path.unlink(missing_ok=True)
+            raise ValueError(f"El archivo '{filename}' está vacío (0 bytes).")
 
         try:
             meta = probe_audio(dest_path)
@@ -171,6 +203,11 @@ class JobManager:
             session.ordered_ids.append(file_id)
 
         return probed
+
+    def session_size_bytes(self, session_id: str) -> int:
+        with self._lock:
+            session = self._sessions.get(session_id)
+            return sum(t.probed.size_bytes for t in session.tracks.values()) if session else 0
 
     def get_session_files(self, session_id: str) -> List[ProbedAudio]:
         with self._lock:

@@ -39,7 +39,7 @@ import uuid
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, BinaryIO, Dict, List, Optional, Union
 
 from app.logsafe import clean
 from app.config import (
@@ -457,11 +457,12 @@ class ApexBoxManager:
         self,
         box_session_id: str,
         filename: str,
-        content: bytes,
+        content: Union[bytes, BinaryIO],
         block_index: Optional[int] = None,
         duration_hint_sec: Optional[float] = None,
         transcribe_immediately: bool = True,
         api_key: Optional[str] = None,
+        max_bytes: Optional[int] = None,
     ) -> BoxBlockUploadResponse:
         """
         Receive a single recorded audio block from the Chrome Extension or Mobile Web App,
@@ -469,8 +470,6 @@ class ApexBoxManager:
         updated timeline & RAM telemetry so the client can immediately free the block from RAM.
         """
         session = self.get_session(box_session_id)
-        if not content:
-            raise ValueError("El bloque de audio recibido está vacío (0 bytes).")
 
         with self._lock:
             idx = block_index if block_index is not None else len(session.blocks)
@@ -483,6 +482,7 @@ class ApexBoxManager:
                 session_id=session.upload_session_id,
                 filename=block_filename,
                 content=content,
+                max_bytes=max_bytes,
             )
 
             # Use probed duration or duration_hint_sec if container was a raw stream
@@ -495,7 +495,7 @@ class ApexBoxManager:
             start_offset = round(session.total_duration_sec, 3)
             end_offset = round(start_offset + dur_sec, 3)
             session.total_duration_sec = end_offset
-            session.total_bytes_received += len(content)
+            session.total_bytes_received += probed.size_bytes
             session.updated_at = dt.datetime.now(dt.timezone.utc).isoformat()
 
             upload_session = job_manager.get_session(session.upload_session_id)
@@ -533,14 +533,14 @@ class ApexBoxManager:
                 start_offset_sec=start_offset,
                 end_offset_sec=end_offset,
                 timeline_range=timeline_range,
-                size_bytes=len(content),
+                size_bytes=probed.size_bytes,
                 transcribed=bool(new_segments),
                 segments_count=len(new_segments),
                 uploaded_at=dt.datetime.now(dt.timezone.utc).isoformat(),
             )
             session.blocks.append(block_info)
 
-            current_block_mb = round(len(content) / (1024 * 1024), 2)
+            current_block_mb = round(probed.size_bytes / (1024 * 1024), 2)
             ram_freed_mb = round(session.total_bytes_received / (1024 * 1024), 2)
 
             return BoxBlockUploadResponse(

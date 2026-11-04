@@ -480,6 +480,18 @@ class Settings:
     MAX_FILES_PER_UPLOAD: int = field(
         default_factory=lambda: int(os.getenv("MAX_FILES_PER_UPLOAD", "20"))
     )
+    MAX_BOX_BLOCK_MB: int = field(
+        default_factory=lambda: int(os.getenv("MAX_BOX_BLOCK_MB", "50"))
+    )
+    MAX_VOICE_SAMPLE_MB: int = field(
+        default_factory=lambda: int(os.getenv("MAX_VOICE_SAMPLE_MB", "25"))
+    )
+    MAX_REQUEST_BODY_MB: int = field(
+        default_factory=lambda: int(os.getenv("MAX_REQUEST_BODY_MB", "10"))
+    )
+    HEAVY_ROUTE_CONCURRENCY: int = field(
+        default_factory=lambda: int(os.getenv("HEAVY_ROUTE_CONCURRENCY", "8"))
+    )
     ALLOWED_EXTENSIONS: set[str] = field(
         default_factory=lambda: {
             ".mp3",

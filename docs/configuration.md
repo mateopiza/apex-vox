@@ -43,7 +43,13 @@ Notes on the columns below:
 
 | Variable | Default | Required | Description |
 | --- | --- | --- | --- |
-| `MAX_FILE_SIZE_MB` | `100` | No | Declared per-file limit. **It is read into settings but not enforced by any route today**, so limit request size at the reverse proxy (see [deployment.md](deployment.md)). |
+| `MAX_FILE_SIZE_MB` | `100` | No | Largest file accepted by `/api/upload`. Above it the app answers 413. Also keep the limit of your proxy and Cloudflare (100 MB on its base plans) in mind. |
+| `MAX_TOTAL_UPLOAD_SIZE_MB` | `500` | No | Largest request to `/api/upload`, and total size of one upload session. |
+| `MAX_FILES_PER_UPLOAD` | `20` | No | Most files in one `/api/upload` request. |
+| `MAX_BOX_BLOCK_MB` | `50` | No | Largest Apex Box recording block. |
+| `MAX_VOICE_SAMPLE_MB` | `25` | No | Largest voice-profile sample. |
+| `MAX_REQUEST_BODY_MB` | `10` | No | Largest request body on every other endpoint. |
+| `HEAVY_ROUTE_CONCURRENCY` | `8` | No | Requests that may run long work (ffmpeg, Groq, an LLM) at the same time. Others wait without using a thread. |
 | `CHUNK_DURATION_MINUTES` | `10` | No | Target chunk length. Used only if `CHUNK_TARGET_DURATION_SEC` is unset. |
 | `CHUNK_MAX_BYTES` | `26214400` (25 MiB) | No | Maximum bytes per chunk sent to Groq (Groq's hard limit is 25 MB). Used only if `GROQ_PAYLOAD_LIMIT_BYTES` is unset. `.env.example` uses `25000000`. |
 | `SILENCE_THRESHOLD_DB` | `-30` | No | Silence threshold for chunk splitting. Used only if `SILENCE_NOISE_THRESHOLD_DB` is unset. |
@@ -188,7 +194,7 @@ These are read by the code but rarely need changing.
 | `COST_GROQ_WHISPER_PER_MIN_USD`, `COST_GROQ_LLM_PER_MIN_USD`, `COST_DEEPGRAM_PER_MIN_USD`, `REVENUE_PER_MIN_USD` | `0.00185`, `0.0002`, `0.0063`, `0.05` | Unit prices for the daily usage report. |
 | `REPORT_WEBHOOK_URL` | empty | Extra webhook (Slack, Discord, n8n...) for the usage report. |
 
-`DEBUG`, `HOST`, `PORT`, `MAX_TOTAL_UPLOAD_SIZE_MB`, `MAX_FILES_PER_UPLOAD`, `JOB_TIMEOUT_SECONDS`, `JOB_RETENTION_HOURS`, `FALLBACK_MODEL` and `DIARIZATION_MAX_SPEAKERS` are defined in `Settings` but not used by any code path today.
+`DEBUG`, `HOST`, `PORT`, `JOB_TIMEOUT_SECONDS`, `JOB_RETENTION_HOURS`, `FALLBACK_MODEL` and `DIARIZATION_MAX_SPEAKERS` are defined in `Settings` but not used by any code path today.
 
 ## Minimal production `.env`
 

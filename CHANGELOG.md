@@ -38,6 +38,7 @@ Preparation of the public open-source release.
 
 ### Security
 
+- Upload limits are enforced: `MAX_FILE_SIZE_MB`, `MAX_TOTAL_UPLOAD_SIZE_MB` and `MAX_FILES_PER_UPLOAD` were never applied. New limits cover Apex Box blocks, voice samples and every other request body. Oversized requests get 413 before the body is stored, and uploads go to disk instead of memory.
 - Session tokens and OAuth hand-off codes are stored as keyed digests, so the state file and its backups hold no usable session. Existing sessions are migrated at start-up and keep working. Changing `APP_SECRET_KEY` (or losing `outputs/.app_secret`) signs everyone out.
 - Supabase Auth login requires a confirmed e-mail and an account linked by id. Before, signing up to Supabase with someone's address could replace the password of their local account.
 - Twilio webhooks and TwiML are built only from `PUBLIC_BASE_URL` (an `https://` origin is now required to enable calls). Before, an unset `PUBLIC_BASE_URL` let a client's `Host` header point Twilio at an attacker's server that could dial any number.
