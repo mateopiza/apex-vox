@@ -13,10 +13,13 @@ Provides:
 from __future__ import annotations
 
 import datetime
+import hashlib
 import logging
+import shutil
 import subprocess
 import threading
 import uuid
+from collections import OrderedDict
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
@@ -30,6 +33,7 @@ logger = logging.getLogger("app.services.acoustic_diarizer")
 
 SAMPLE_RATE = 16000
 N_MELS = 18
+_MAX_SEGMENTS_FOR_SIMILARITY = 1000
 
 
 def load_pcm_float32(
@@ -37,7 +41,15 @@ def load_pcm_float32(
     start_sec: Optional[float] = None,
     end_sec: Optional[float] = None,
 ) -> np.ndarray:
-    """Decode audio slice into 16kHz mono float32 numpy array via FFmpeg pipe."""
+    """
+    Decode audio into a 16kHz mono float32 array. Empty if it cannot be decoded.
+
+    A whole file comes back as a read-only array mapped from a temporary file (about 230 MB per
+    hour of audio, on disk rather than in RAM) and is decoded once, however many steps ask for it.
+    Call `release_pcm` when the work on that audio is done.
+    """
+    if start_sec is None and end_sec is None:
+        return _load_whole_file(Path(audio_path))
     cmd = ["ffmpeg", "-v", "error"]
     if start_sec is not None and start_sec > 0:
         cmd.extend(["-ss", f"{start_sec:.3f}"])
@@ -56,16 +68,95 @@ def load_pcm_float32(
         str(SAMPLE_RATE),
         "pipe:1",
     ])
-    res = subprocess.run(
-        cmd,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        check=False,
-        timeout=60.0,
-    )
+    try:
+        res = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            timeout=60.0,
+        )
+    except subprocess.TimeoutExpired:
+        logger.warning("Decoding an audio slice timed out")
+        return np.zeros(0, dtype=np.float32)
     if res.returncode != 0 or not res.stdout:
         return np.zeros(0, dtype=np.float32)
     return np.frombuffer(res.stdout, dtype=np.float32)
+
+
+_PCM_CACHE_ENTRIES = 4
+_pcm_cache: "OrderedDict[Tuple[str, int, int], Path]" = OrderedDict()
+_pcm_cache_lock = threading.Lock()
+_pcm_key_locks: Dict[Tuple[str, int, int], threading.Lock] = {}
+
+
+def _pcm_dir() -> Path:
+    return settings.TEMP_DIR / "pcm"
+
+
+def _decode_to_file(audio_path: Path, dest: Path) -> bool:
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    cmd = [
+        "ffmpeg", "-y", "-v", "error", "-i", str(audio_path), "-f", "f32le", "-acodec", "pcm_f32le",
+        "-ac", "1", "-ar", str(SAMPLE_RATE), str(dest),
+    ]
+    try:
+        res = subprocess.run(
+            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False, timeout=settings.JOB_TIMEOUT_SECONDS
+        )
+    except subprocess.TimeoutExpired:
+        logger.warning("Decoding audio timed out")
+        dest.unlink(missing_ok=True)
+        return False
+    if res.returncode != 0:
+        dest.unlink(missing_ok=True)
+        return False
+    return True
+
+
+def _load_whole_file(audio_path: Path) -> np.ndarray:
+    try:
+        stat = audio_path.stat()
+    except OSError:
+        return np.zeros(0, dtype=np.float32)
+    key = (str(audio_path.resolve()), stat.st_mtime_ns, stat.st_size)
+    with _pcm_cache_lock:
+        key_lock = _pcm_key_locks.setdefault(key, threading.Lock())
+    with key_lock:  # dos pasos pidiendo el mismo audio decodifican una sola vez
+        with _pcm_cache_lock:
+            cached = _pcm_cache.get(key)
+            if cached:
+                _pcm_cache.move_to_end(key)
+        if not cached or not cached.exists():
+            cached = _pcm_dir() / f"{hashlib.sha256(repr(key).encode()).hexdigest()[:24]}.f32"
+            if not _decode_to_file(audio_path, cached):
+                return np.zeros(0, dtype=np.float32)
+            with _pcm_cache_lock:
+                _pcm_cache[key] = cached
+                while len(_pcm_cache) > _PCM_CACHE_ENTRIES:
+                    old_key, old_file = _pcm_cache.popitem(last=False)
+                    _pcm_key_locks.pop(old_key, None)
+                    old_file.unlink(missing_ok=True)
+        if cached.stat().st_size == 0:
+            return np.zeros(0, dtype=np.float32)
+        return np.memmap(cached, dtype=np.float32, mode="r")
+
+
+def release_pcm(audio_path: Path | str) -> None:
+    """Delete the decoded copy of a file. Arrays already handed out keep working until dropped."""
+    resolved = str(Path(audio_path).resolve())
+    with _pcm_cache_lock:
+        for key in [k for k in _pcm_cache if k[0] == resolved]:
+            _pcm_cache.pop(key).unlink(missing_ok=True)
+            _pcm_key_locks.pop(key, None)
+
+
+def clear_decoded_audio() -> None:
+    """At start-up: decoded copies left by a process that stopped mid-job."""
+    with _pcm_cache_lock:
+        _pcm_cache.clear()
+        _pcm_key_locks.clear()
+    shutil.rmtree(_pcm_dir(), ignore_errors=True)
 
 
 def extract_voice_embedding(samples: np.ndarray) -> Tuple[np.ndarray, float]:
@@ -219,8 +310,10 @@ def cluster_segments_acoustically(
         k_clusters = min(num_speakers, n_segs)
     else:
         # Automatic speaker count estimation via pairwise cosine similarity & pitch spread
-        sims = emb_matrix @ emb_matrix.T
-        off_diag = sims[np.triu_indices(n_segs, k=1)]
+        # All pairs need n² memory (1.6 GB at 20k segments); an even sample estimates the same thing.
+        sample_idx = np.linspace(0, n_segs - 1, min(n_segs, _MAX_SEGMENTS_FOR_SIMILARITY), dtype=int)
+        sample = emb_matrix[sample_idx]
+        off_diag = (sample @ sample.T)[np.triu_indices(sample_idx.size, k=1)]
         pitch_std = float(np.std([p for p in pitches if p > 0] or [0.0]))
 
         if off_diag.size == 0 or (float(np.mean(off_diag)) > 0.86 and pitch_std < 14.0):
@@ -351,6 +444,7 @@ def enroll_voice_profile(
         emb, pitch = extract_voice_embedding(pcm)
         duration_sec = round(pcm.size / float(SAMPLE_RATE), 2)
     finally:
+        release_pcm(temp_path)
         temp_path.unlink(missing_ok=True)
 
     if not owner_id:

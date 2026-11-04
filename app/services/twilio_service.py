@@ -33,12 +33,14 @@ from xml.sax.saxutils import escape, quoteattr
 
 import httpx
 
-from app.errors import UserFacingError, public_error
+from app.errors import GENERIC_ERROR, UserFacingError, public_error
 from app.logsafe import clean
 from app.config import settings
 from app.services.supabase_service import supabase_service
 
 logger = logging.getLogger("app.services.twilio_service")
+
+MAX_PROCESSING_ATTEMPTS = 3
 
 API_BASE = "https://api.twilio.com/2010-04-01"
 VERIFY_BASE = "https://verify.twilio.com/v2"
@@ -517,6 +519,29 @@ def on_recording(call_id: str, params: Dict[str, str]) -> bool:
     return True
 
 
+def resume_interrupted_calls() -> int:
+    """At start-up: process again what a restart cut off, a limited number of times."""
+    resumed = []
+    with supabase_service._lock:
+        db = supabase_service._load_db()
+        changed = False
+        for call_id, rec in (db.get("phone_calls") or {}).items():
+            if rec.get("status") != "processing" or rec.get("job_id"):
+                continue
+            attempts = int(rec.get("processing_attempts") or 0) + 1
+            rec["processing_attempts"] = attempts
+            if attempts > MAX_PROCESSING_ATTEMPTS:
+                rec.update(status="failed", error=GENERIC_ERROR)
+            else:
+                resumed.append(call_id)
+            changed = True
+        if changed:
+            supabase_service._save_db(db)
+    for call_id in resumed:
+        threading.Thread(target=process_recording, args=(call_id,), daemon=True).start()
+    return len(resumed)
+
+
 # ---------------------------------------------------------------------------
 # Procesar la grabación
 # ---------------------------------------------------------------------------
@@ -622,6 +647,13 @@ def speaker_labels(user: Dict[str, Any], rec: Dict[str, Any]) -> Tuple[str, str]
 
 def process_recording(call_id: str) -> Optional[str]:
     """Descarga, transcribe en bloques, separa oradores por canal, integra apuntes y avisa al usuario."""
+    from app.services.job_manager import pipeline_slot
+
+    with pipeline_slot():
+        return _process_recording(call_id)
+
+
+def _process_recording(call_id: str) -> Optional[str]:
     from app.models.schemas import BoxCreateSessionRequest, BoxFinalizeRequest, BoxNoteRequest
     from app.services import email_service
     from app.services.apex_box import apex_box_manager

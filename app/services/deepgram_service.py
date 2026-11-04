@@ -22,6 +22,7 @@ import requests
 
 from app.config import settings
 from app.models.schemas import WhisperSegment
+from app.services.groq_service import retry_delay
 from app.services.audio_engine import AudioChunkInfo
 
 logger = logging.getLogger("app.services.deepgram_service")
@@ -30,8 +31,12 @@ DEEPGRAM_LISTEN_URL = "https://api.deepgram.com/v1/listen"
 
 
 class DeepgramServiceError(RuntimeError):
-    """Raised when Deepgram API requests fail."""
-    pass
+    """Raised when Deepgram fails. Carries the HTTP status and headers to decide about retrying."""
+
+    def __init__(self, message: str, status_code: Optional[int] = None, headers: Optional[Any] = None) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.headers = headers
 
 
 def get_deepgram_api_key(override_key: Optional[str] = None) -> str:
@@ -93,9 +98,8 @@ def call_deepgram_listen(
                     timeout=settings.GROQ_TIMEOUT_SECONDS,
                 )
             if resp.status_code >= 400:
-                raise DeepgramServiceError(
-                    f"Deepgram HTTP {resp.status_code}: {resp.text[:300]}"
-                )
+                logger.warning("Deepgram HTTP %s for %s: %s", resp.status_code, path.name, resp.text[:300])
+                raise DeepgramServiceError(f"Deepgram HTTP {resp.status_code}", resp.status_code, resp.headers)
             return resp.json()
         except Exception as exc:
             last_err = exc
@@ -106,11 +110,16 @@ def call_deepgram_listen(
                 path.name,
                 exc,
             )
+            delay = retry_delay(
+                attempt, getattr(exc, "status_code", None), getattr(exc, "headers", None), cap=6.0
+            )
+            if delay is None:
+                break
             if attempt < max_attempts:
-                time.sleep(min(2.0 ** (attempt - 1), 6.0))
+                time.sleep(delay)
 
     raise DeepgramServiceError(
-        f"Error en Deepgram API para '{path.name}': {last_err}"
+        f"Error en Deepgram API para '{path.name}': {type(last_err).__name__}"
     ) from last_err
 
 

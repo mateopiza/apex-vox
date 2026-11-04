@@ -79,7 +79,7 @@ Set the app to match:
 ```dotenv
 ENVIRONMENT=production
 PUBLIC_BASE_URL=https://apexvox.example.com
-ALLOWED_HOSTS=apexvox.example.com
+ALLOWED_HOSTS=apexvox.example.com   # localhost is always allowed, for the container health check
 CORS_ORIGINS=https://apexvox.example.com
 ENABLE_HSTS=true
 ```
@@ -111,7 +111,8 @@ Everything that matters lives in `outputs/`:
 | `outputs/.app_secret` | HMAC secret, if `APP_SECRET_KEY` is unset | **Yes** (or set `APP_SECRET_KEY`) |
 | `outputs/voice_profiles.json` | Voice profiles | Yes |
 | `outputs/*_result.json`, `outputs/*_merged.mp3` | Job results and audio | Yes (also stored in object storage when configured) |
-| `outputs/mega_s4_bucket/` | Local mirror of uploaded objects and the retention index | Optional when remote storage is configured |
+| `outputs/mega_s4_bucket/` | The retention index, plus objects that have not reached remote storage (all of them when none is configured) | Yes |
+| `temp/` | Decoded audio while a job runs (about 230 MB per hour of audio) and block files. Plan disk space for your longest recordings | No |
 | `outputs/reports/` | Daily usage reports | Optional |
 | `uploads/` | Audio of open upload sessions | No (transient) |
 

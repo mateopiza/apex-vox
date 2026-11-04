@@ -287,6 +287,15 @@ _throttle_lock = threading.Lock()
 _throttle_hits: Dict[str, list] = {}
 
 
+def prune_throttle(max_window_seconds: int = 3600) -> None:
+    """Forget keys with no recent hits, or one entry per visitor would stay forever."""
+    now = time.monotonic()
+    with _throttle_lock:
+        for key, hits in list(_throttle_hits.items()):
+            if not hits or now - hits[-1] >= max_window_seconds:
+                del _throttle_hits[key]
+
+
 def throttle(key: str, limit: int, window_seconds: int) -> None:
     """Simple in-process rate limit for e-mail-sending endpoints (429 when exceeded)."""
     now = time.monotonic()
