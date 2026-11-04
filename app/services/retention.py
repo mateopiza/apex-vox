@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 from app.config import settings
 from app.logsafe import clean
 from app.services import usage_reporter
+from app.services.acoustic_diarizer import update_voice_profiles
 from app.services.apex_box import apex_box_manager
 from app.services.job_manager import job_manager
 from app.services.state_store import StateCorruptError, read_json
@@ -137,6 +138,41 @@ def _sweep_index(report: Dict[str, Any], dry_run: bool) -> None:
             report["failed"].append(key)
 
 
+def process_pending_erasures(only_user: Optional[str] = None) -> int:
+    """
+    Finish deleting accounts: the user asked for it, so RETENTION_DRY_RUN does not apply. What a
+    provider could not confirm stays pending for the next sweep. Returns how many remain.
+    """
+    pending = supabase_service._read_snapshot().get("pending_erasures", {})
+    remaining = 0
+    for user_id, entry in list(pending.items()):
+        if only_user and user_id != only_user:
+            continue
+        try:
+            if _erase_account_data(user_id, entry):
+                supabase_service.finish_erasure(user_id)
+                continue
+        except (OSError, StateCorruptError):
+            logger.exception("Could not finish deleting an account")
+        remaining += 1
+    return remaining
+
+
+def _erase_account_data(user_id: str, entry: Dict[str, Any]) -> bool:
+    job_manager.forget_owner(user_id)
+    apex_box_manager.forget_owner(user_id)
+    done = [delete_job_files(job_id, record) for job_id, record in (entry.get("jobs") or {}).items()]
+    done += [
+        mega_s4_storage.delete_object(key)
+        for key, meta in mega_s4_storage._load_index().items() if meta.get("user_id") == user_id
+    ]
+    # Voiceprints are biometric data: also those of accounts deleted before this existed.
+    users = supabase_service._read_snapshot()["users"]
+    update_voice_profiles(lambda profiles: [p for p in profiles if p.owner_id in users])
+    done.append(supabase_service.delete_remote_account_rows(user_id, entry.get("supabase_id")))
+    return all(done)
+
+
 def sweep(dry_run: Optional[bool] = None) -> Dict[str, Any]:
     """One pass. Returns what it deleted, or in a dry run what it would have."""
     dry_run = settings.RETENTION_DRY_RUN if dry_run is None else dry_run
@@ -154,8 +190,9 @@ def sweep(dry_run: Optional[bool] = None) -> Dict[str, Any]:
             logger.exception("Retention sweep step failed")
     try:
         mega_s4_storage.retry_unsynced_uploads()
-    except OSError:
-        logger.exception("Could not retry unsynced uploads")
+        process_pending_erasures()
+    except (OSError, StateCorruptError):
+        logger.exception("Could not retry pending uploads or account deletions")
 
     logger.info(
         "Retention sweep%s: %d job(s), %d upload folder(s), %d leftover(s), %d object(s), %d failed. Jobs: %s",

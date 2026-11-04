@@ -261,6 +261,7 @@ def oauth_callback(request: Request, code: Optional[str] = None, error: Optional
             email=sb_user["email"],
             full_name=oauth_service.display_name(sb_user),
             provider=oauth_service.provider_of(sb_user, provider),
+            supabase_id=sb_user.get("id"),
         )
     except (oauth_service.OAuthError, ValueError):
         return finish("auth_error=failed")

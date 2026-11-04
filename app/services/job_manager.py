@@ -67,6 +67,7 @@ _INTERRUPTED_MESSAGE = (
     "El servidor se reinició mientras se procesaba este audio. Súbelo de nuevo; no se descontó de tu cuota. / "
     "The server restarted while processing this audio. Please upload it again; it did not count against your quota."
 )
+_ACCOUNT_GONE = "La cuenta ya no existe. / The account no longer exists."
 _TIMED_OUT_MESSAGE = (
     "Este audio tardó demasiado en procesarse. Intenta de nuevo; no se descontó de tu cuota. / "
     "This audio took too long to process. Please try again; it did not count against your quota."
@@ -605,6 +606,8 @@ class JobManager:
 
             # Plan comes from the account set by the server (never from the client).
             effective_user = None if is_guest else supabase_service.get_user_by_id(req.user_id)
+            if req.user_id and not effective_user:
+                raise UserFacingError(_ACCOUNT_GONE)
             resolved_uid = effective_user["user_id"] if effective_user else None
             if is_guest:
                 effective_plan = "guest"
@@ -802,6 +805,9 @@ class JobManager:
                 )
                 return result
 
+            if resolved_uid and not supabase_service.get_user_by_id(resolved_uid):
+                raise UserFacingError(_ACCOUNT_GONE)  # se borró mientras se transcribía: no se guarda nada
+
             # 5. Generate Apex Summa AI Intelligence Report
             self._update_job(
                 job_id,
@@ -956,6 +962,17 @@ class JobManager:
         job_file = self._job_file(job_id)
         if job_file:
             job_file.unlink(missing_ok=True)
+
+    def forget_owner(self, owner: str) -> None:
+        """An account was deleted: nothing of it stays in memory or in its upload folders."""
+        with self._lock:
+            jobs = [j for j, o in self._job_owners.items() if o == owner]
+            jobs += [j for j, r in self._results.items() if r.user_id == owner]
+            sessions = [s for s, session in self._sessions.items() if session.owner == owner]
+        for job_id in set(jobs):
+            self.forget_job(job_id)
+        for session_id in sessions:
+            self.discard_session(session_id)
 
     def _load_result(self, job_id: str) -> Optional[TranscriptionResult]:
         with self._lock:

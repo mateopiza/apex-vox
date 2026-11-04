@@ -51,6 +51,7 @@ Preparation of the public open-source release.
 
 ### Security
 
+- Deleting an account now reaches everything: objects in the bucket, the local mirror, Supabase rows and the Auth user, OAuth tokens, hand-off and link codes, reset tokens, the newsletter entry, uploads and memory. Whatever a provider cannot confirm is retried by the sweep. A job or recording still running when its account is deleted saves nothing.
 - Exception text no longer reaches clients: job status, API errors, Telegram replies, stored call and bot errors and MCP results could include server paths, ffprobe output and provider messages. They now show messages written for users, and the details go to the logs.
 - Apex Box charges the plan from the measured duration of each block. Before, the client chose the charge: leaving out `duration_hint_sec` made recording free, and the hint could also shorten the timeline. A retried block is no longer charged twice. `api_key` is no longer accepted from Box clients.
 - Upload limits are enforced: `MAX_FILE_SIZE_MB`, `MAX_TOTAL_UPLOAD_SIZE_MB` and `MAX_FILES_PER_UPLOAD` were never applied. New limits cover Apex Box blocks, voice samples and every other request body. Oversized requests get 413 before the body is stored, and uploads go to disk instead of memory.

@@ -291,6 +291,15 @@ class ApexBoxManager:
             self._sessions[box_id] = session
             return self._to_state_response(session)
 
+    def forget_owner(self, user_id: str) -> None:
+        """An account was deleted: its recordings stop here."""
+        with self._lock:
+            boxes = [b for b, s in self._sessions.items() if s.user_id == user_id]
+            for box_id in boxes:
+                del self._sessions[box_id]
+        for box_id in boxes:
+            shutil.rmtree(settings.TEMP_DIR / box_id, ignore_errors=True)
+
     def open_upload_session_ids(self) -> Set[str]:
         with self._lock:
             return {s.upload_session_id for s in self._sessions.values() if s.status != "completed"}
@@ -762,6 +771,8 @@ class ApexBoxManager:
         # El plan se decide ahora: la cuenta pudo pagar o vencer durante la grabación.
         if supabase_service.get_user_by_id(session.user_id):
             session.plan = supabase_service.get_user_quota(session.user_id).plan
+        elif session.user_id != "guest_default":
+            raise BoxConflictError("La cuenta ya no existe. / The account no longer exists.")
         is_locked = session.plan == "free"
 
         job_id = f"job_{uuid.uuid4().hex[:10]}"
