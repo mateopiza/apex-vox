@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import datetime as dt
 import json
+import logging
 import re
 import unicodedata
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
@@ -26,6 +27,8 @@ from zoneinfo import ZoneInfo
 from app.config import settings
 from app.services.job_manager import job_manager
 from app.services.supabase_service import supabase_service
+
+logger = logging.getLogger("app.services.mcp_server")
 
 PROTOCOL_VERSIONS = ("2025-06-18", "2025-03-26", "2024-11-05")
 SERVER_INFO = {"name": "apex-vox", "title": "Apex Vox", "version": "1.1.0"}
@@ -982,7 +985,8 @@ def handle_message(message: Any, user: Dict[str, Any]) -> Optional[Dict[str, Any
         except ToolError as exc:
             result = {"content": [{"type": "text", "text": str(exc)}], "isError": True}
         except (TypeError, ValueError) as exc:
-            result = {"content": [{"type": "text", "text": f"Argumentos inválidos: {exc}"}], "isError": True}
+            logger.warning("MCP tool %s rejected its arguments: %s", name, type(exc).__name__)
+            result = {"content": [{"type": "text", "text": "Argumentos inválidos para esta herramienta."}], "isError": True}
         return {"jsonrpc": "2.0", "id": req_id, "result": json.loads(json.dumps(result, default=str))}
     if method in ("resources/list", "prompts/list"):
         key = "resources" if method == "resources/list" else "prompts"

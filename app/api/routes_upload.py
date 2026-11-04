@@ -22,6 +22,7 @@ from app.api.deps import (
     run_heavy,
 )
 from app.config import settings
+from app.errors import GENERIC_ERROR, detail_of
 from app.models.schemas import ReorderRequest, UploadResponse
 from app.services.job_manager import UploadTooLargeError, job_manager, upload_too_large_message
 from app.services.supabase_service import supabase_service
@@ -111,9 +112,7 @@ def _store_uploads(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
             logger.exception("Unexpected error uploading %s", filename)
-            raise HTTPException(
-                status_code=500, detail=f"Error al procesar '{filename}': {exc}"
-            ) from exc
+            raise HTTPException(status_code=500, detail=GENERIC_ERROR) from exc
 
     ordered_files = job_manager.get_session_files(session.session_id)
     return _upload_response(session.session_id, ordered_files)
@@ -130,7 +129,7 @@ def get_session_files(session_id: str = Depends(require_session_owner)) -> Uploa
         files = job_manager.get_session_files(session_id)
         return _upload_response(session_id, files)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
 
 
 @router.put("/sessions/{session_id}/order", response_model=UploadResponse)
@@ -142,7 +141,7 @@ def update_session_order(
         files = job_manager.reorder_session_files(session_id, payload.file_order)
         return _upload_response(session_id, files)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
 
 
 @router.delete("/sessions/{session_id}/files/{file_id}", response_model=UploadResponse)
@@ -154,7 +153,7 @@ def delete_session_file(
         files = job_manager.remove_file_from_session(session_id, file_id)
         return _upload_response(session_id, files)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
 
 
 _AUDIO_MIME_MAP = {

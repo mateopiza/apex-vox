@@ -27,6 +27,7 @@ Preparation of the public open-source release.
 
 ### Fixed
 
+- API errors no longer show messages wrapped in stray quotes.
 - One slow request no longer freezes the whole server. Upload, Apex Box, login, minutes, webhooks and other routes ran ffmpeg, Groq calls, password hashing or file reads on the only event loop. They now run in worker threads, with long work limited by `HEAVY_ROUTE_CONCURRENCY`.
 - A failed transcription gives back the plan or guest quota it used, on the day it was charged. An Apex Box block with no real transcript is not charged. A failed guest job no longer leaves its audio on disk.
 - Apex Box: free accounts get the Summa preview and no minutes, as on normal uploads and as documented; finalizing twice returns the same result; a failed finalize can be retried instead of staying stuck; blocks and status changes are refused once a recording is closed; audio and transcript follow the timeline even when blocks finish out of order.
@@ -41,6 +42,7 @@ Preparation of the public open-source release.
 
 ### Security
 
+- Exception text no longer reaches clients: job status, API errors, Telegram replies, stored call and bot errors and MCP results could include server paths, ffprobe output and provider messages. They now show messages written for users, and the details go to the logs.
 - Apex Box charges the plan from the measured duration of each block. Before, the client chose the charge: leaving out `duration_hint_sec` made recording free, and the hint could also shorten the timeline. A retried block is no longer charged twice. `api_key` is no longer accepted from Box clients.
 - Upload limits are enforced: `MAX_FILE_SIZE_MB`, `MAX_TOTAL_UPLOAD_SIZE_MB` and `MAX_FILES_PER_UPLOAD` were never applied. New limits cover Apex Box blocks, voice samples and every other request body. Oversized requests get 413 before the body is stored, and uploads go to disk instead of memory.
 - Session tokens and OAuth hand-off codes are stored as keyed digests, so the state file and its backups hold no usable session. Existing sessions are migrated at start-up and keep working. Changing `APP_SECRET_KEY` (or losing `outputs/.app_secret`) signs everyone out.

@@ -26,6 +26,7 @@ from fastapi.responses import Response
 from app.logsafe import clean
 from app.api.deps import is_paid, require_user, run_heavy
 from app.config import settings
+from app.errors import GENERIC_ERROR, detail_of
 from app.models.schemas import (
     BoxBlockUploadResponse,
     BoxCreateSessionRequest,
@@ -121,7 +122,7 @@ def get_box_recording_session(
     try:
         return apex_box_manager.get_session_state(box_session_id)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
 
 
 @router.patch("/sessions/{box_session_id}/status", response_model=BoxSessionStateResponse)
@@ -135,7 +136,7 @@ def update_box_recording_status(
     try:
         return apex_box_manager.update_session_status(box_session_id, status)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except BoxConflictError as exc:
@@ -177,7 +178,7 @@ async def upload_recording_block(
     except UploadTooLargeError as exc:
         raise HTTPException(status_code=413, detail=str(exc)) from exc
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -196,7 +197,7 @@ def add_live_meeting_note(
     try:
         return apex_box_manager.add_note(box_session_id, payload)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -213,7 +214,7 @@ def update_live_meeting_note(
     try:
         return apex_box_manager.update_note(box_session_id, note_id, payload)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
 
 
 @router.delete("/sessions/{box_session_id}/notes/{note_id}", response_model=List[BoxNoteItem])
@@ -227,7 +228,7 @@ def delete_live_meeting_note(
     try:
         return apex_box_manager.delete_note(box_session_id, note_id)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
 
 
 @router.post("/sessions/{box_session_id}/finalize", response_model=BoxFinalizeResponse)
@@ -245,7 +246,7 @@ async def finalize_box_recording_session(
     try:
         return await run_heavy(apex_box_manager.finalize_session, box_session_id, payload)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
     except BoxConflictError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
@@ -291,7 +292,8 @@ def download_chrome_extension_package() -> Response:
     try:
         zip_bytes = build_extension_zip_bytes()
     except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        logger.exception("Extension package not available")
+        raise HTTPException(status_code=404, detail=GENERIC_ERROR) from exc
 
     return Response(
         content=zip_bytes,

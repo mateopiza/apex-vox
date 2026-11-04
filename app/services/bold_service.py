@@ -24,6 +24,7 @@ from typing import Any, Dict, Optional
 
 import httpx
 
+from app.errors import UserFacingError
 from app.logsafe import clean
 from app.config import settings
 from app.models.schemas import BoldCheckoutResponse
@@ -39,7 +40,7 @@ class BoldNotConfiguredError(RuntimeError):
     """BOLD_API_KEY is missing."""
 
 
-class BoldAPIError(RuntimeError):
+class BoldAPIError(UserFacingError):
     """Bold rejected the request or returned an unexpected payload."""
 
 
@@ -108,7 +109,8 @@ def _bold_request(method: str, path: str, json_body: Optional[Dict[str, Any]] = 
         with httpx.Client(timeout=_BOLD_TIMEOUT) as client:
             resp = client.request(method, url, json=json_body, headers=headers)
     except httpx.HTTPError as exc:
-        raise BoldAPIError(f"No se pudo contactar a Bold: {exc}") from exc
+        logger.warning("Bold request failed: %s", type(exc).__name__)
+        raise BoldAPIError("No se pudo contactar a Bold.") from exc
     try:
         data = resp.json()
     except ValueError as exc:

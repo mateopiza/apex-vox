@@ -27,6 +27,7 @@ from app.api.deps import (
     run_heavy,
 )
 from app.config import resolve_engine_code, settings
+from app.errors import detail_of, public_error
 from app.models.schemas import (
     ApexSummaReport,
     JobStatusResponse,
@@ -111,8 +112,10 @@ def start_transcription_job(
     except Exception as exc:
         if charge:
             supabase_service.refund_guest_audios(charge.owner, charge.audios, charge.day)
-        status = 404 if isinstance(exc, KeyError) else 400
-        raise HTTPException(status_code=status, detail=str(exc)) from exc
+        if isinstance(exc, KeyError):
+            raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
+        logger.exception("Could not create the job")
+        raise HTTPException(status_code=400, detail=public_error(exc)) from exc
     if charge:
         job_manager.record_charge(job_status.job_id, charge)
 
@@ -122,7 +125,7 @@ def start_transcription_job(
         except PermissionError as exc:
             raise HTTPException(status_code=402, detail=str(exc)) from exc
         except Exception as exc:
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise HTTPException(status_code=500, detail=public_error(exc)) from exc
         return TranscribeResponse(
             job_id=job_status.job_id,
             session_id=payload.session_id,
@@ -189,7 +192,7 @@ async def rename_job_speakers(
     try:
         return _with_media_token(await run_heavy(job_manager.rename_speakers, job_id, payload.speaker_map))
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
 
 
 @router.get("/jobs/{job_id}/audio")
@@ -244,7 +247,7 @@ async def create_voice_profile(
         raise
     except Exception as exc:
         logger.exception("Voice profile enrollment failed")
-        raise HTTPException(status_code=500, detail=f"Error al registrar perfil de voz: {exc}") from exc
+        raise HTTPException(status_code=500, detail=public_error(exc)) from exc
 
 
 @router.delete("/voice-profiles/{profile_id}", response_model=List[VoiceProfile])

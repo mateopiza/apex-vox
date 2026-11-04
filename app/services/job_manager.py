@@ -19,6 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import BinaryIO, Dict, List, Optional, Union
 
+from app.errors import UserFacingError, public_error
 from app.logsafe import clean
 from app.config import (
     get_public_engine_label,
@@ -198,7 +199,11 @@ class JobManager:
             meta = probe_audio(dest_path)
         except Exception as exc:
             dest_path.unlink(missing_ok=True)
-            raise ValueError(f"Archivo de audio inválido o corrupto '{safe_name}': {exc}") from exc
+            logger.warning("Could not probe an upload: %s", type(exc).__name__)
+            raise ValueError(
+                f"El archivo '{safe_name}' no es un audio válido o está dañado. / "
+                f"'{safe_name}' is not a valid audio file or is damaged."
+            ) from exc
 
         probed = meta.to_probed_audio(file_id=file_id)
         # Preserve original user-facing filename
@@ -428,7 +433,7 @@ class JobManager:
 
             session = self.get_session(req.session_id)
             if not session:
-                raise RuntimeError(f"Sesión '{req.session_id}' no encontrada.")
+                raise UserFacingError(f"Sesión '{req.session_id}' no encontrada.")
 
             ordered_tracks = [
                 session.tracks[fid]
@@ -436,7 +441,7 @@ class JobManager:
                 if fid in session.tracks
             ]
             if not ordered_tracks:
-                raise RuntimeError("No hay archivos de audio en la sesión para procesar.")
+                raise UserFacingError("No hay archivos de audio en la sesión para procesar.")
 
             ordered_paths = [t.file_path for t in ordered_tracks]
             ordered_filenames = [t.filename for t in ordered_tracks]
@@ -738,8 +743,8 @@ class JobManager:
             self._update_job(
                 job_id,
                 status="failed",
-                error=str(exc),
-                current_step=f"Error: {exc}",
+                error=public_error(exc),
+                current_step=f"Error: {public_error(exc)}",
             )
             raise
         finally:
