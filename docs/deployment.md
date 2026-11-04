@@ -79,7 +79,7 @@ Set the app to match:
 ```dotenv
 ENVIRONMENT=production
 PUBLIC_BASE_URL=https://apexvox.example.com
-ALLOWED_HOSTS=apexvox.example.com
+ALLOWED_HOSTS=apexvox.example.com   # localhost is always allowed, for the container health check
 CORS_ORIGINS=https://apexvox.example.com
 ENABLE_HSTS=true
 ```

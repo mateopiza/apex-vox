@@ -12,9 +12,11 @@ import hashlib
 import json
 import logging
 import shutil
+import threading
+from contextlib import asynccontextmanager
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, AsyncIterator, Dict, Optional
 
 from fastapi import FastAPI, Header, Request
 from fastapi.exceptions import HTTPException as FastAPIHTTPException
@@ -53,6 +55,18 @@ TEMPLATES_DIR = APP_DIR / "templates"
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
 
+_stop_background = threading.Event()
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """Start the background services, and let their loops end with the app."""
+    _stop_background.clear()
+    _start_background_services()
+    yield
+    _stop_background.set()
+
+
 # Initialize FastAPI application (interactive docs are off in production
 # unless ENABLE_DOCS=true).
 app = FastAPI(
@@ -62,6 +76,7 @@ app = FastAPI(
     docs_url="/docs" if settings.ENABLE_DOCS else None,
     redoc_url="/redoc" if settings.ENABLE_DOCS else None,
     openapi_url="/openapi.json" if settings.ENABLE_DOCS else None,
+    lifespan=lifespan,
 )
 
 # ---------------------------------------------------------------------------
@@ -78,7 +93,8 @@ app.add_middleware(
 )
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 if settings.ALLOWED_HOSTS and "*" not in settings.ALLOWED_HOSTS:
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
+    # The container health check calls http://localhost:8000, whatever the public host is.
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=[*settings.ALLOWED_HOSTS, "localhost", "127.0.0.1"])
 app.add_middleware(BodyLimitMiddleware)
 
 # Content-Security-Policy for the web UI. Fonts come from Google Fonts; inline
@@ -158,10 +174,17 @@ class CachedStaticFiles(StaticFiles):
         return response
 
 
-@app.on_event("startup")
-async def start_background_services() -> None:
+def _warn_about_open_settings() -> None:
+    if not settings.is_production:
+        return
+    for name, values in (("ALLOWED_HOSTS", settings.ALLOWED_HOSTS), ("CORS_ORIGINS", settings.CORS_ORIGINS)):
+        if "*" in values:
+            logger.warning("%s is '*' in production: set it to your public host (see docs/deployment.md).", name)
+
+
+def _start_background_services() -> None:
     """Register the Telegram webhook and schedule the nightly usage report."""
-    import threading
+    _warn_about_open_settings()
 
     def boot() -> None:
         from app.services import telegram_service
@@ -179,12 +202,10 @@ async def start_background_services() -> None:
 
 def _billing_email_loop() -> None:
     """Cada 15 min: promoción por vencer, aviso de renovación y mes vencido (una vez cada uno)."""
-    import time
-
     from app.services import email_service
     from app.services.supabase_service import supabase_service
 
-    while True:
+    while not _stop_background.is_set():
         try:
             for kind, user in supabase_service.collect_due_billing_emails():
                 name, lang = user.get("full_name", ""), user.get("preferred_language", "es")
@@ -197,26 +218,26 @@ def _billing_email_loop() -> None:
                 email_service.send_email(user["email"], rendered, tags=[{"name": "category", "value": kind}])
         except Exception as exc:
             logger.warning("Billing email sweep failed: %s", exc)
-        time.sleep(900)
+        _stop_background.wait(900)
 
 
 def _daily_report_loop() -> None:
     """Send the usage report to TELEGRAM_CHAT_ID every day at 23:55 (America/Bogota, UTC-5)."""
     import datetime as _dt
     import os
-    import time
 
     if not (settings.TELEGRAM_BOT_TOKEN and os.getenv("TELEGRAM_CHAT_ID", "").strip()):
         return
     from app.services.usage_reporter import compute_usage_report, send_daily_bot_notification
 
     bogota = _dt.timezone(_dt.timedelta(hours=-5))
-    while True:
+    while not _stop_background.is_set():
         now = _dt.datetime.now(bogota)
         target = now.replace(hour=23, minute=55, second=0, microsecond=0)
         if target <= now:
             target += _dt.timedelta(days=1)
-        time.sleep((target - now).total_seconds())
+        if _stop_background.wait((target - now).total_seconds()):
+            return
         try:
             send_daily_bot_notification(report=compute_usage_report(target_date=target.date().isoformat()))
         except Exception as exc:

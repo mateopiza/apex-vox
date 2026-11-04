@@ -27,6 +27,7 @@ Preparation of the public open-source release.
 
 ### Fixed
 
+- The documented `ALLOWED_HOSTS` value no longer makes the container health check fail: `localhost` and `127.0.0.1` are always allowed. Production logs a warning while `ALLOWED_HOSTS` or `CORS_ORIGINS` are `*`.
 - API errors no longer show messages wrapped in stray quotes.
 - One slow request no longer freezes the whole server. Upload, Apex Box, login, minutes, webhooks and other routes ran ffmpeg, Groq calls, password hashing or file reads on the only event loop. They now run in worker threads, with long work limited by `HEAVY_ROUTE_CONCURRENCY`.
 - A failed transcription gives back the plan or guest quota it used, on the day it was charged. An Apex Box block with no real transcript is not charged. A failed guest job no longer leaves its audio on disk.
