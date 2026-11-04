@@ -35,11 +35,12 @@ import json
 import logging
 import shutil
 import threading
+import time
 import uuid
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, BinaryIO, Dict, List, Optional, Set, Tuple, Union
 
 from app.logsafe import clean
 from app.config import (
@@ -193,6 +194,23 @@ def calculate_optimal_block_config(
     )
 
 
+class BoxConflictError(Exception):
+    """The session cannot do this right now. The message is safe to show to the user."""
+
+
+_SESSION_CLOSED = (
+    "Esta grabación ya se finalizó y no admite cambios. / This recording was already finalized and cannot change."
+)
+_FINALIZING = (
+    "Esta grabación se está finalizando. Espera un momento. / This recording is being finalized. Please wait a moment."
+)
+_BLOCK_IN_PROGRESS = (
+    "Este bloque ya se está procesando. Intenta de nuevo en un momento. / "
+    "This block is already being processed. Try again in a moment."
+)
+_OPEN_STATUSES = ("recording", "paused")
+_FINALIZE_WAIT_SECONDS = 120.0
+
 _RESERVED_RECORD_KEYS = frozenset({
     "job_id", "user_id", "session_id", "plan", "expires_at", "retention_policy", "s4_audio_key", "s4_result_key",
 })
@@ -223,12 +241,16 @@ class BoxSession:
         default_factory=lambda: dt.datetime.now(dt.timezone.utc).isoformat()
     )
     blocks: List[BoxBlockInfo] = field(default_factory=list)
-    chunk_paths: List[Path] = field(default_factory=list)
+    chunks: List[Tuple[float, Path]] = field(default_factory=list)  # (timeline start, block MP3)
     segments: List[DiarizedSegment] = field(default_factory=list)
     notes: List[BoxNoteItem] = field(default_factory=list)
     total_duration_sec: float = 0.0
     total_bytes_received: int = 0
     final_job_id: Optional[str] = None
+    final_response: Optional[BoxFinalizeResponse] = None
+    ingest_lock: threading.Lock = field(default_factory=threading.Lock)
+    block_responses: Dict[int, BoxBlockUploadResponse] = field(default_factory=dict)
+    blocks_in_progress: Set[int] = field(default_factory=set)
 
 
 class ApexBoxManager:
@@ -290,11 +312,14 @@ class ApexBoxManager:
             return [self._to_state_response(s) for s in items[:25]]
 
     def update_session_status(self, box_session_id: str, status: str) -> BoxSessionStateResponse:
+        if status not in _OPEN_STATUSES:
+            raise ValueError("Estado no válido. / Invalid status.")
         session = self.get_session(box_session_id)
         with self._lock:
-            if status in ("recording", "paused", "finalizing", "completed"):
-                session.status = status
-                session.updated_at = dt.datetime.now(dt.timezone.utc).isoformat()
+            if session.status not in _OPEN_STATUSES:
+                raise BoxConflictError(_SESSION_CLOSED)
+            session.status = status
+            session.updated_at = dt.datetime.now(dt.timezone.utc).isoformat()
             return self._to_state_response(session)
 
     def _transcribe_single_block_incrementally(
@@ -305,8 +330,7 @@ class ApexBoxManager:
         start_offset_sec: float,
         duration_sec: float,
         filename: str,
-        api_key: Optional[str] = None,
-    ) -> tuple[Optional[Path], List[DiarizedSegment]]:
+    ) -> tuple[Optional[Path], List[DiarizedSegment], bool]:
         """
         Convert a single recorded block to 16kHz mono 64kbps MP3 and transcribe it
         immediately so the user gets a continuous live transcript over 10+ hours.
@@ -337,7 +361,7 @@ class ApexBoxManager:
             file_sequence_index=block_index,
         )
 
-        eff_key = (api_key or settings.GROQ_API_KEY or "").strip()
+        eff_key = (settings.GROQ_API_KEY or "").strip()
         raw_whisper_segs: List[WhisperSegment] = []
 
         if eff_key:
@@ -373,10 +397,11 @@ class ApexBoxManager:
                         )
                     )
             except Exception as exc:
-                logger.debug("Groq live block transcription fallback on block %s: %s", clean(block_index), type(exc).__name__)
+                logger.warning("Groq live block transcription fallback on block %s: %s", clean(block_index), type(exc).__name__)
 
         # Fallback acoustic/voice interval segmentation when running offline or without external API key
-        if not raw_whisper_segs:
+        placeholder = not raw_whisper_segs
+        if placeholder:
             try:
                 silences = detect_silences(chunk_mp3_path, total_duration=duration_sec)
             except Exception:
@@ -451,52 +476,86 @@ class ApexBoxManager:
                 for s in raw_whisper_segs
             ]
 
-        return (chunk_mp3_path if chunk_mp3_path.exists() else None), diarized_block_segs
+        return (chunk_mp3_path if chunk_mp3_path.exists() else None), diarized_block_segs, placeholder
 
     def ingest_block(
         self,
         box_session_id: str,
         filename: str,
-        content: bytes,
+        content: Union[bytes, BinaryIO],
         block_index: Optional[int] = None,
-        duration_hint_sec: Optional[float] = None,
         transcribe_immediately: bool = True,
-        api_key: Optional[str] = None,
+        max_bytes: Optional[int] = None,
+        charge_quota: bool = False,
     ) -> BoxBlockUploadResponse:
         """
         Receive a single recorded audio block from the Chrome Extension or Mobile Web App,
         register it in the ordered session, transcribe it incrementally, and return
         updated timeline & RAM telemetry so the client can immediately free the block from RAM.
+
+        The measured duration is what counts for the timeline and for the plan's quota
+        (`charge_quota`; recordings made by the server are not charged). Sending a block again
+        returns the first answer without charging twice, so a client can safely retry.
         """
         session = self.get_session(box_session_id)
-        if not content:
-            raise ValueError("El bloque de audio recibido está vacío (0 bytes).")
 
         with self._lock:
-            idx = block_index if block_index is not None else len(session.blocks)
-            safe_ext = Path(filename or "block.webm").suffix.lower()
-            if safe_ext not in settings.ALLOWED_EXTENSIONS:
-                safe_ext = ".webm"
-            block_filename = f"bloque_{idx + 1:04d}{safe_ext}"
+            if session.status not in _OPEN_STATUSES:
+                raise BoxConflictError(_SESSION_CLOSED)
+            idx = block_index if block_index is not None else len(session.blocks) + len(session.blocks_in_progress)
+            if idx in session.block_responses:
+                return session.block_responses[idx]
+            if idx in session.blocks_in_progress:
+                raise BoxConflictError(_BLOCK_IN_PROGRESS)
+            session.blocks_in_progress.add(idx)
+        try:
+            response = self._ingest_new_block(session, idx, filename, content, transcribe_immediately, max_bytes, charge_quota)
+            with self._lock:
+                session.block_responses[idx] = response
+            return response
+        finally:
+            with self._lock:
+                session.blocks_in_progress.discard(idx)
 
+    def _ingest_new_block(
+        self,
+        session: BoxSession,
+        idx: int,
+        filename: str,
+        content: Union[bytes, BinaryIO],
+        transcribe_immediately: bool,
+        max_bytes: Optional[int],
+        charge_quota: bool,
+    ) -> BoxBlockUploadResponse:
+        safe_ext = Path(filename or "block.webm").suffix.lower()
+        if safe_ext not in settings.ALLOWED_EXTENSIONS:
+            safe_ext = ".webm"
+        block_filename = f"bloque_{idx + 1:04d}{safe_ext}"
+
+        # Saving and probing can take seconds: only blocks of this same session wait for them.
+        with session.ingest_lock:
             probed = job_manager.add_file_to_session(
                 session_id=session.upload_session_id,
                 filename=block_filename,
                 content=content,
+                max_bytes=max_bytes,
             )
+            measured_sec = max(0.0, float(probed.duration_sec or 0.0))
+            charge_day = supabase_service.usage_day()
+            if charge_quota:
+                try:
+                    supabase_service.check_and_consume_quota(session.user_id, measured_sec)
+                except PermissionError:
+                    job_manager.remove_file_from_session(session.upload_session_id, probed.file_id)
+                    raise
 
-            # Use probed duration or duration_hint_sec if container was a raw stream
-            dur_sec = float(probed.duration_sec or 0.0)
-            if duration_hint_sec and duration_hint_sec > 0 and (dur_sec <= 0.5 or abs(dur_sec - duration_hint_sec) > duration_hint_sec * 0.5):
-                dur_sec = round(float(duration_hint_sec), 3)
-            else:
-                dur_sec = round(max(0.5, dur_sec), 3)
-
-            start_offset = round(session.total_duration_sec, 3)
-            end_offset = round(start_offset + dur_sec, 3)
-            session.total_duration_sec = end_offset
-            session.total_bytes_received += len(content)
-            session.updated_at = dt.datetime.now(dt.timezone.utc).isoformat()
+            with self._lock:
+                dur_sec = round(max(0.5, measured_sec), 3)
+                start_offset = round(session.total_duration_sec, 3)
+                end_offset = round(start_offset + dur_sec, 3)
+                session.total_duration_sec = end_offset
+                session.total_bytes_received += probed.size_bytes
+                session.updated_at = dt.datetime.now(dt.timezone.utc).isoformat()
 
             upload_session = job_manager.get_session(session.upload_session_id)
             track_path = (
@@ -506,22 +565,24 @@ class ApexBoxManager:
             )
 
         new_segments: List[DiarizedSegment] = []
+        placeholder = False
         if transcribe_immediately and track_path and track_path.exists():
-            chunk_mp3, new_segments = self._transcribe_single_block_incrementally(
+            chunk_mp3, new_segments, placeholder = self._transcribe_single_block_incrementally(
                 session=session,
                 block_path=track_path,
                 block_index=idx,
                 start_offset_sec=start_offset,
                 duration_sec=dur_sec,
                 filename=block_filename,
-                api_key=api_key,
             )
             with self._lock:
                 if chunk_mp3:
-                    session.chunk_paths.append(chunk_mp3)
+                    session.chunks.append((start_offset, chunk_mp3))
                 for seg in new_segments:
                     seg_copy = seg.model_copy(update={"id": len(session.segments)})
                     session.segments.append(seg_copy)
+            if placeholder and charge_quota:  # no hubo transcripción real: no se cobra
+                supabase_service.refund_quota(session.user_id, measured_sec, charge_day)
 
         with self._lock:
             timeline_range = f"{format_timestamp_hhmmss(start_offset)} → {format_timestamp_hhmmss(end_offset)}"
@@ -533,14 +594,15 @@ class ApexBoxManager:
                 start_offset_sec=start_offset,
                 end_offset_sec=end_offset,
                 timeline_range=timeline_range,
-                size_bytes=len(content),
+                size_bytes=probed.size_bytes,
                 transcribed=bool(new_segments),
+                placeholder=placeholder,
                 segments_count=len(new_segments),
                 uploaded_at=dt.datetime.now(dt.timezone.utc).isoformat(),
             )
             session.blocks.append(block_info)
 
-            current_block_mb = round(len(content) / (1024 * 1024), 2)
+            current_block_mb = round(probed.size_bytes / (1024 * 1024), 2)
             ram_freed_mb = round(session.total_bytes_received / (1024 * 1024), 2)
 
             return BoxBlockUploadResponse(
@@ -656,35 +718,68 @@ class ApexBoxManager:
         session = self.get_session(box_session_id)
 
         with self._lock:
+            if session.final_response is not None:
+                return session.final_response
+            if session.status not in _OPEN_STATUSES:
+                raise BoxConflictError(_FINALIZING)
+            previous_status = session.status
             session.status = "finalizing"
             session.updated_at = dt.datetime.now(dt.timezone.utc).isoformat()
+
+        try:
+            self._wait_for_blocks_in_progress(session)
+            return self._finalize(session, opts, record_extra)
+        except Exception:
+            with self._lock:  # no queda atascada en "finalizing": se puede volver a intentar
+                session.status = previous_status
+            raise
+
+    def _wait_for_blocks_in_progress(self, session: BoxSession) -> None:
+        """Blocks already being transcribed belong in the result. New ones are refused by now."""
+        deadline = time.monotonic() + _FINALIZE_WAIT_SECONDS
+        while time.monotonic() < deadline:
+            with self._lock:
+                if not session.blocks_in_progress:
+                    return
+            time.sleep(0.2)
+        raise BoxConflictError(_BLOCK_IN_PROGRESS)
+
+    def _finalize(
+        self, session: BoxSession, opts: BoxFinalizeRequest, record_extra: Optional[Dict[str, Any]]
+    ) -> BoxFinalizeResponse:
+        # El plan se decide ahora: la cuenta pudo pagar o vencer durante la grabación.
+        if supabase_service.get_user_by_id(session.user_id):
+            session.plan = supabase_service.get_user_quota(session.user_id).plan
+        is_locked = session.plan == "free"
 
         job_id = f"job_{uuid.uuid4().hex[:10]}"
         merged_audio_path = settings.OUTPUT_DIR / f"{job_id}_merged.mp3"
 
         # Build merged preview MP3 from incrementally extracted block MP3s
-        if session.chunk_paths:
-            valid_chunks = [p for p in session.chunk_paths if p.exists()]
-            if valid_chunks:
-                job_manager._build_merged_preview_audio(valid_chunks, merged_audio_path)
+        # Blocks can finish transcribing out of order; the timeline decides the order.
+        valid_chunks = [path for _, path in sorted(session.chunks, key=lambda c: c[0]) if path.exists()]
+        if valid_chunks:
+            job_manager._build_merged_preview_audio(valid_chunks, merged_audio_path)
 
         # If no segments were transcribed yet (e.g. blocks uploaded with transcribe_immediately=False),
         # or if full pipeline re-run is requested and tracks exist, run segments consolidation.
-        segments = list(session.segments)
+        segments = [
+            s.model_copy(update={"id": i})
+            for i, s in enumerate(sorted(session.segments, key=lambda s: (s.start, s.end)))
+        ]
         if not segments and session.blocks:
             upload_session = job_manager.get_session(session.upload_session_id)
             if upload_session:
                 for b in session.blocks:
                     tr = upload_session.tracks.get(b.file_id)
                     if tr and tr.file_path.exists():
-                        _, b_segs = self._transcribe_single_block_incrementally(
+                        _, b_segs, _ = self._transcribe_single_block_incrementally(
                             session=session,
                             block_path=tr.file_path,
                             block_index=b.block_index,
                             start_offset_sec=b.start_offset_sec,
                             duration_sec=b.duration_sec,
                             filename=b.filename,
-                            api_key=opts.api_key,
                         )
                         for s in b_segs:
                             segments.append(s.model_copy(update={"id": len(segments)}))
@@ -762,12 +857,11 @@ class ApexBoxManager:
         summa_report = generate_apex_summa_report(
             result=result,
             language=session.language or "es",
-            api_key=opts.api_key,
-            is_locked=False,
+            is_locked=is_locked,
         )
 
         base_date = dt.date.today()
-        for idx, note in enumerate(session.notes):
+        for idx, note in enumerate([] if is_locked else session.notes):
             tag = note.tag.lower()
             stamp = f"[{note.timestamp_formatted}]"
             author = note.speaker or summa_report.dominant_speaker or "Equipo"
@@ -870,7 +964,7 @@ class ApexBoxManager:
 
         minutes_doc = None
         tpl = opts.minutes_type or opts.generate_minutes_template
-        if opts.generate_minutes and tpl:
+        if opts.generate_minutes and tpl and not is_locked:
             minutes_doc = generate_meeting_minutes(
                 result=result,
                 report=summa_report,
@@ -888,13 +982,7 @@ class ApexBoxManager:
             box_temp_dir = settings.TEMP_DIR / session.box_session_id
             shutil.rmtree(box_temp_dir, ignore_errors=True)
 
-        with self._lock:
-            session.status = "completed"
-            session.final_job_id = job_id
-            session.segments = segments
-            session.updated_at = dt.datetime.now(dt.timezone.utc).isoformat()
-
-        return BoxFinalizeResponse(
+        response = BoxFinalizeResponse(
             box_session_id=session.box_session_id,
             job_id=job_id,
             upload_session_id=session.upload_session_id,
@@ -908,6 +996,15 @@ class ApexBoxManager:
             minutes_document=minutes_doc,
             minutes=minutes_doc,
         )
+
+        with self._lock:
+            session.status = "completed"
+            session.final_job_id = job_id
+            session.final_response = response
+            session.segments = segments
+            session.updated_at = dt.datetime.now(dt.timezone.utc).isoformat()
+
+        return response
 
     def _to_state_response(self, session: BoxSession) -> BoxSessionStateResponse:
         last_block_bytes = session.blocks[-1].size_bytes if session.blocks else (BYTES_PER_SECOND * session.block_duration_sec)

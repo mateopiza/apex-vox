@@ -40,7 +40,7 @@ router = APIRouter(prefix="/api", tags=["Auth, User Portal & Quotas"])
 
 
 @router.post("/auth/register", response_model=UserProfileResponse)
-async def register_user_endpoint(payload: UserRegisterRequest, request: Request) -> UserProfileResponse:
+def register_user_endpoint(payload: UserRegisterRequest, request: Request) -> UserProfileResponse:
     """
     Register a new user in Supabase Cloud.
     Automatically activates the Free Plan:
@@ -76,7 +76,7 @@ def _promo_ends(profile: UserProfileResponse) -> str | None:
 
 
 @router.post("/auth/login", response_model=UserProfileResponse)
-async def login_user_endpoint(payload: UserLoginRequest, request: Request) -> UserProfileResponse:
+def login_user_endpoint(payload: UserLoginRequest, request: Request) -> UserProfileResponse:
     """Authenticate an existing user and return profile + daily quota state."""
     throttle(f"login-ip:{client_ip(request)}", limit=20, window_seconds=900)
     try:
@@ -99,7 +99,7 @@ class LanguagePreference(BaseModel):
 
 
 @router.patch("/auth/me/language", response_model=UserProfileResponse)
-async def update_language(payload: LanguagePreference, user: Dict[str, Any] = Depends(require_user)) -> UserProfileResponse:
+def update_language(payload: LanguagePreference, user: Dict[str, Any] = Depends(require_user)) -> UserProfileResponse:
     """Idioma de la cuenta (web, correos y extensión)."""
     try:
         return supabase_service.set_preferred_language(user["user_id"], payload.preferred_language)
@@ -108,20 +108,20 @@ async def update_language(payload: LanguagePreference, user: Dict[str, Any] = De
 
 
 @router.get("/auth/me", response_model=UserProfileResponse)
-async def get_current_profile(user: Dict[str, Any] = Depends(require_user)) -> UserProfileResponse:
+def get_current_profile(user: Dict[str, Any] = Depends(require_user)) -> UserProfileResponse:
     """Profile, plan and quota of the signed-in account."""
     return supabase_service.get_profile(user["user_id"])
 
 
 @router.post("/auth/logout")
-async def logout_endpoint(authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
+def logout_endpoint(authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
     """Revoke the current session token."""
     supabase_service.revoke_token(authorization)
     return {"status": "signed_out"}
 
 
 @router.delete("/auth/account")
-async def delete_account(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
+def delete_account(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
     """Delete the signed-in account and its data (Ley 1581 de 2012: derecho de supresión)."""
     from app.services import twilio_service
 
@@ -133,13 +133,13 @@ async def delete_account(user: Dict[str, Any] = Depends(require_user)) -> Dict[s
 
 
 @router.get("/auth/security")
-async def account_security(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
+def account_security(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
     """Networks used this month vs. the monthly limit."""
     return supabase_service.account_ip_usage(user["user_id"])
 
 
 @router.get("/auth/config")
-async def auth_config(request: Request, user: Optional[Dict[str, Any]] = Depends(optional_user)) -> Dict[str, Any]:
+def auth_config(request: Request, user: Optional[Dict[str, Any]] = Depends(optional_user)) -> Dict[str, Any]:
     """Public client configuration: sign-in providers, plans and visitor limits."""
     guest_remaining = None if user else supabase_service.guest_audios_remaining(requester_key(request, user))
     return {
@@ -158,7 +158,7 @@ async def auth_config(request: Request, user: Optional[Dict[str, Any]] = Depends
 
 
 @router.post("/auth/password/forgot")
-async def forgot_password(payload: PasswordForgotRequest, request: Request) -> Dict[str, Any]:
+def forgot_password(payload: PasswordForgotRequest, request: Request) -> Dict[str, Any]:
     """E-mail a one-time reset link. Always answers the same way (no account enumeration)."""
     email = (payload.email or "").strip().lower()
     throttle(f"forgot-ip:{client_ip(request)}", limit=5, window_seconds=3600)
@@ -177,7 +177,7 @@ async def forgot_password(payload: PasswordForgotRequest, request: Request) -> D
 
 
 @router.post("/auth/password/reset", response_model=UserProfileResponse)
-async def reset_password(payload: PasswordResetRequest, request: Request) -> UserProfileResponse:
+def reset_password(payload: PasswordResetRequest, request: Request) -> UserProfileResponse:
     """Set a new password with a valid reset token; signs out other sessions."""
     throttle(f"reset-ip:{client_ip(request)}", limit=10, window_seconds=3600)
     try:
@@ -189,7 +189,7 @@ async def reset_password(payload: PasswordResetRequest, request: Request) -> Use
 
 
 @router.post("/newsletter/subscribe")
-async def newsletter_subscribe(payload: NewsletterSubscribeRequest, request: Request) -> Dict[str, Any]:
+def newsletter_subscribe(payload: NewsletterSubscribeRequest, request: Request) -> Dict[str, Any]:
     """Start a double opt-in subscription: we e-mail a confirmation link."""
     email = (payload.email or "").strip().lower()
     throttle(f"news-ip:{client_ip(request)}", limit=5, window_seconds=3600)
@@ -210,7 +210,7 @@ async def newsletter_subscribe(payload: NewsletterSubscribeRequest, request: Req
 
 
 @router.get("/newsletter/confirm", include_in_schema=False)
-async def newsletter_confirm(request: Request, token: str = "") -> RedirectResponse:
+def newsletter_confirm(request: Request, token: str = "") -> RedirectResponse:
     """Confirmation link from the e-mail: adds the contact to the Resend segment + topic."""
     confirmed = supabase_service.newsletter_confirm(token)
     if not confirmed:
@@ -232,7 +232,7 @@ async def newsletter_confirm(request: Request, token: str = "") -> RedirectRespo
 
 
 @router.get("/newsletter/unsubscribe", include_in_schema=False)
-async def newsletter_unsubscribe(email: str = "", token: str = "") -> RedirectResponse:
+def newsletter_unsubscribe(email: str = "", token: str = "") -> RedirectResponse:
     """One-click unsubscribe link (also used in the List-Unsubscribe header)."""
     if not supabase_service.newsletter_unsubscribe(email, token):
         return RedirectResponse(url="/?newsletter=invalid", status_code=303)
@@ -241,7 +241,7 @@ async def newsletter_unsubscribe(email: str = "", token: str = "") -> RedirectRe
 
 
 @router.get("/auth/oauth/callback", include_in_schema=False)
-async def oauth_callback(request: Request, code: Optional[str] = None, error: Optional[str] = None) -> RedirectResponse:
+def oauth_callback(request: Request, code: Optional[str] = None, error: Optional[str] = None) -> RedirectResponse:
     """Supabase redirects here after Google / GitHub; hands a one-time code to the UI."""
     provider, verifier = oauth_service.extract_provider(request.cookies.get(_OAUTH_COOKIE))
 
@@ -276,7 +276,7 @@ async def oauth_callback(request: Request, code: Optional[str] = None, error: Op
 
 
 @router.get("/auth/oauth/{provider}", include_in_schema=False)
-async def oauth_start(provider: str, request: Request) -> RedirectResponse:
+def oauth_start(provider: str, request: Request) -> RedirectResponse:
     """Start Google / GitHub sign-in through Supabase Auth (PKCE)."""
     if provider not in oauth_service.enabled_providers():
         return RedirectResponse(url="/?auth_error=provider_disabled", status_code=303)
@@ -299,7 +299,7 @@ async def oauth_start(provider: str, request: Request) -> RedirectResponse:
 
 
 @router.post("/auth/oauth/exchange", response_model=UserProfileResponse)
-async def oauth_exchange(payload: OAuthExchangeRequest, request: Request) -> UserProfileResponse:
+def oauth_exchange(payload: OAuthExchangeRequest, request: Request) -> UserProfileResponse:
     """Swap the one-time code from the OAuth redirect for a session."""
     profile = supabase_service.consume_handoff_code(payload.code)
     if not profile:
@@ -313,13 +313,13 @@ async def oauth_exchange(payload: OAuthExchangeRequest, request: Request) -> Use
 
 
 @router.get("/auth/quota", response_model=QuotaUsageResponse)
-async def get_quota_status(user: Optional[Dict[str, Any]] = Depends(optional_user)) -> QuotaUsageResponse:
+def get_quota_status(user: Optional[Dict[str, Any]] = Depends(optional_user)) -> QuotaUsageResponse:
     """Daily audio quota (2h/day free vs unlimited Pro) of the signed-in account."""
     return supabase_service.get_user_quota(user["user_id"] if user else "guest_default")
 
 
 @router.get("/portal/summary")
-async def get_user_portal_summary(user: Optional[Dict[str, Any]] = Depends(optional_user)) -> Dict[str, Any]:
+def get_user_portal_summary(user: Optional[Dict[str, Any]] = Depends(optional_user)) -> Dict[str, Any]:
     """
     User Portal dashboard for the signed-in account (guest view without a session):
     profile & plan, daily quota, Supabase/Mega S4 transcription history, product suite.

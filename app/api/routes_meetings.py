@@ -15,6 +15,7 @@ import threading
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel
 
 from app.api.deps import is_paid, require_user, throttle
@@ -30,7 +31,7 @@ class BotRequest(BaseModel):
 
 
 @router.get("/api/meetings")
-async def my_meetings(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
+def my_meetings(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
     return {
         "invites_address": settings.INVITES_ADDRESS,
         "bot_enabled": recall_service.is_configured(),
@@ -41,7 +42,7 @@ async def my_meetings(user: Dict[str, Any] = Depends(require_user)) -> Dict[str,
 
 
 @router.post("/api/meetings/bot")
-async def send_bot(payload: BotRequest, user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
+def send_bot(payload: BotRequest, user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
     if not is_paid(user):
         raise HTTPException(status_code=402, detail="El bot de reuniones está incluido en Apex Pro.")
     throttle(f"bot:{user['user_id']}", limit=10, window_seconds=3600)
@@ -52,7 +53,7 @@ async def send_bot(payload: BotRequest, user: Dict[str, Any] = Depends(require_u
 
 
 @router.delete("/api/meetings/bot/{bot_id}")
-async def cancel_bot(bot_id: str, user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
+def cancel_bot(bot_id: str, user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
     if not any(b["bot_id"] == bot_id for b in recall_service.list_bots(user["user_id"])):
         raise HTTPException(status_code=404, detail="Bot no encontrado.")
     recall_service.cancel_bot(bot_id)
@@ -68,7 +69,7 @@ async def recall_webhook(request: Request) -> Dict[str, Any]:
         payload = json.loads(body or b"{}")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="JSON inválido") from exc
-    return recall_service.handle_status_event(payload)
+    return await run_in_threadpool(recall_service.handle_status_event, payload)
 
 
 @router.post("/api/inbound/resend", include_in_schema=False)

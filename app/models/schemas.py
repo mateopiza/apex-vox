@@ -429,6 +429,7 @@ class BoxBlockInfo(BaseModel):
     timeline_range: str
     size_bytes: int
     transcribed: bool = False
+    placeholder: bool = False  # no real transcript: the block's text is a stand-in and it was not charged
     segments_count: int = 0
     uploaded_at: str = ""
 
@@ -477,8 +478,6 @@ class BoxSessionStateResponse(BaseModel):
 
 class BoxFinalizeRequest(BaseModel):
     """Request payload to finalize a multi-hour recording session and generate full Apex Summa & Minutes."""
-    api_key: Optional[str] = None
-    deepgram_api_key: Optional[str] = None
     run_full_pipeline: bool = False
     generate_minutes: bool = True
     organization_name: Optional[str] = "Apex Vox Enterprise"

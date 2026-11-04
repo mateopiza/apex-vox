@@ -17,8 +17,9 @@ import threading
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import BinaryIO, Dict, List, Optional, Union
 
+from app.errors import UserFacingError, public_error
 from app.logsafe import clean
 from app.config import (
     get_public_engine_label,
@@ -53,6 +54,48 @@ from app.services.transcript_cleaner import filter_hallucinated_segments
 
 logger = logging.getLogger("app.services.job_manager")
 
+_COPY_CHUNK_BYTES = 1024 * 1024
+
+
+class UploadTooLargeError(ValueError):
+    """An uploaded file went over its size limit. The message is safe to show to the user."""
+
+
+def upload_too_large_message(limit_bytes: int) -> str:
+    limit_mb = max(1, limit_bytes // (1024 * 1024))
+    return f"El archivo supera el límite de {limit_mb} MB. / The file is over the {limit_mb} MB limit."
+
+
+def _store_upload(content: Union[bytes, BinaryIO], dest: Path, max_bytes: Optional[int]) -> int:
+    """Write an upload to disk without holding it in memory. Returns its size; nothing stays on failure."""
+    if isinstance(content, (bytes, bytearray)):
+        if max_bytes is not None and len(content) > max_bytes:
+            raise UploadTooLargeError(upload_too_large_message(max_bytes))
+        dest.write_bytes(content)
+        return len(content)
+    written = 0
+    try:
+        with open(dest, "wb") as out:
+            while chunk := content.read(_COPY_CHUNK_BYTES):
+                written += len(chunk)
+                if max_bytes is not None and written > max_bytes:
+                    raise UploadTooLargeError(upload_too_large_message(max_bytes))
+                out.write(chunk)
+    except BaseException:
+        dest.unlink(missing_ok=True)
+        raise
+    return written
+
+
+@dataclass
+class QuotaCharge:
+    """What a job used of a plan or guest allowance, so a failure can give it back exactly once."""
+    owner: str
+    day: str
+    audios: int
+    seconds: float = 0.0
+    guest: bool = False
+
 
 @dataclass
 class UploadedTrack:
@@ -82,6 +125,8 @@ class JobManager:
         self._jobs: Dict[str, JobStatusResponse] = {}
         self._results: Dict[str, TranscriptionResult] = {}
         self._job_owners: Dict[str, str] = {}  # job id -> cuenta o clave del invitado
+        self._charges: Dict[str, QuotaCharge] = {}  # job id -> cargo pendiente de un trabajo en curso
+        self._result_edit_locks: Dict[str, threading.Lock] = {}
 
     # -------------------------------------------------------------------------
     # Session Management
@@ -130,13 +175,11 @@ class JobManager:
         self,
         session_id: str,
         filename: str,
-        content: bytes,
+        content: Union[bytes, BinaryIO],
         owner: Optional[str] = None,
+        max_bytes: Optional[int] = None,
     ) -> ProbedAudio:
-        """Save uploaded bytes, probe with ffprobe, and register in session."""
-        if not content:
-            raise ValueError(f"El archivo '{filename}' está vacío (0 bytes).")
-
+        """Save an upload (bytes or an open file), probe with ffprobe, and register in session."""
         ext = Path(filename).suffix.lower()
         if ext not in settings.ALLOWED_EXTENSIONS:
             raise ValueError(
@@ -148,13 +191,19 @@ class JobManager:
         file_id = f"track_{uuid.uuid4().hex[:8]}"
         safe_name = Path(filename).name
         dest_path = session.session_dir / f"{file_id}_{safe_name}"
-        dest_path.write_bytes(content)
+        if _store_upload(content, dest_path, max_bytes) == 0:
+            dest_path.unlink(missing_ok=True)
+            raise ValueError(f"El archivo '{filename}' está vacío (0 bytes).")
 
         try:
             meta = probe_audio(dest_path)
         except Exception as exc:
             dest_path.unlink(missing_ok=True)
-            raise ValueError(f"Archivo de audio inválido o corrupto '{safe_name}': {exc}") from exc
+            logger.warning("Could not probe an upload: %s", type(exc).__name__)
+            raise ValueError(
+                f"El archivo '{safe_name}' no es un audio válido o está dañado. / "
+                f"'{safe_name}' is not a valid audio file or is damaged."
+            ) from exc
 
         probed = meta.to_probed_audio(file_id=file_id)
         # Preserve original user-facing filename
@@ -171,6 +220,11 @@ class JobManager:
             session.ordered_ids.append(file_id)
 
         return probed
+
+    def session_size_bytes(self, session_id: str) -> int:
+        with self._lock:
+            session = self._sessions.get(session_id)
+            return sum(t.probed.size_bytes for t in session.tracks.values()) if session else 0
 
     def get_session_files(self, session_id: str) -> List[ProbedAudio]:
         with self._lock:
@@ -276,6 +330,24 @@ class JobManager:
         with self._lock:
             return self._job_owners.get(job_id)
 
+    def record_charge(self, job_id: str, charge: QuotaCharge) -> None:
+        with self._lock:
+            self._charges[job_id] = charge
+
+    def _settle_charge(self, job_id: str, refund: bool) -> None:
+        """Forget a job's charge, giving it back if the job failed. Safe to call more than once."""
+        with self._lock:
+            charge = self._charges.pop(job_id, None)
+        if not charge or not refund:
+            return
+        try:
+            if charge.guest:
+                supabase_service.refund_guest_audios(charge.owner, charge.audios, charge.day)
+            else:
+                supabase_service.refund_quota(charge.owner, charge.seconds, charge.day, charge.audios)
+        except Exception:
+            logger.exception("Could not refund the quota of job %s", clean(job_id))
+
     def _update_job(
         self,
         job_id: str,
@@ -349,6 +421,7 @@ class JobManager:
         """
         job_temp_dir = settings.TEMP_DIR / job_id
         job_temp_dir.mkdir(parents=True, exist_ok=True)
+        is_guest = bool(req.guest_key) and not req.user_id
 
         try:
             self._update_job(
@@ -360,7 +433,7 @@ class JobManager:
 
             session = self.get_session(req.session_id)
             if not session:
-                raise RuntimeError(f"Sesión '{req.session_id}' no encontrada.")
+                raise UserFacingError(f"Sesión '{req.session_id}' no encontrada.")
 
             ordered_tracks = [
                 session.tracks[fid]
@@ -368,7 +441,7 @@ class JobManager:
                 if fid in session.tracks
             ]
             if not ordered_tracks:
-                raise RuntimeError("No hay archivos de audio en la sesión para procesar.")
+                raise UserFacingError("No hay archivos de audio en la sesión para procesar.")
 
             ordered_paths = [t.file_path for t in ordered_tracks]
             ordered_filenames = [t.filename for t in ordered_tracks]
@@ -388,18 +461,23 @@ class JobManager:
             total_duration = round(sum(p.duration_sec for p in probed_list), 3)
 
             # Plan comes from the account set by the server (never from the client).
-            is_guest = bool(req.guest_key) and not req.user_id
             effective_user = None if is_guest else supabase_service.get_user_by_id(req.user_id)
             resolved_uid = effective_user["user_id"] if effective_user else None
             if is_guest:
                 effective_plan = "guest"
             else:
+                charge_day = supabase_service.usage_day()
                 quota_state = supabase_service.check_and_consume_quota(
                     user_id=resolved_uid,
                     duration_seconds=total_duration,
                     audios_count=len(ordered_tracks),
                 )
                 effective_plan = quota_state.plan
+                if resolved_uid:
+                    self.record_charge(
+                        job_id,
+                        QuotaCharge(owner=resolved_uid, day=charge_day, audios=len(ordered_tracks), seconds=total_duration),
+                    )
 
             engine_brand = get_public_engine_label(req.diarization_engine)
             engine = resolve_engine_code(req.diarization_engine)
@@ -570,6 +648,7 @@ class JobManager:
                 timer.daemon = True
                 timer.start()
                 self.discard_session(req.session_id)
+                self._settle_charge(job_id, refund=False)
                 self._update_job(
                     job_id,
                     status="completed",
@@ -647,6 +726,7 @@ class JobManager:
             with self._lock:
                 self._results[job_id] = result
 
+            self._settle_charge(job_id, refund=False)
             self._update_job(
                 job_id,
                 status="completed",
@@ -657,11 +737,14 @@ class JobManager:
 
         except Exception as exc:
             logger.exception("Job %s failed: %s", job_id, exc)
+            self._settle_charge(job_id, refund=True)
+            if is_guest:  # sin cuenta no se guarda nada, tampoco si falló
+                self.discard_session(req.session_id)
             self._update_job(
                 job_id,
                 status="failed",
-                error=str(exc),
-                current_step=f"Error: {exc}",
+                error=public_error(exc),
+                current_step=f"Error: {public_error(exc)}",
             )
             raise
         finally:
@@ -694,6 +777,14 @@ class JobManager:
         self, job_id: str, speaker_map: Dict[str, str]
     ) -> TranscriptionResult:
         """Rename speaker labels across all segments of a completed job."""
+        with self._lock:
+            edit_lock = self._result_edit_locks.setdefault(job_id, threading.Lock())
+        with edit_lock:  # dos renombres seguidos no se pisan
+            return self._rename_speakers(job_id, speaker_map)
+
+    def _rename_speakers(
+        self, job_id: str, speaker_map: Dict[str, str]
+    ) -> TranscriptionResult:
         result = self.get_job_result(job_id)
         if not result:
             raise KeyError(f"Resultado del trabajo '{job_id}' no encontrado.")

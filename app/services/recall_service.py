@@ -25,6 +25,7 @@ from urllib.parse import urlparse
 
 import httpx
 
+from app.errors import UserFacingError, public_error
 from app.logsafe import clean
 from app.config import settings
 from app.services.supabase_service import supabase_service
@@ -42,7 +43,7 @@ MEETING_URL_RE = re.compile(
 BLOCK_SEC = 180
 
 
-class RecallError(Exception):
+class RecallError(UserFacingError):
     pass
 
 
@@ -71,7 +72,8 @@ def _request(method: str, path: str, json_body: Optional[Dict[str, Any]] = None)
             resp = client.request(method, f"{_base()}{path}", json=json_body,
                                   headers={"Authorization": f"Token {settings.RECALL_API_KEY}"})
     except httpx.HTTPError as exc:
-        raise RecallError(f"No se pudo contactar al servicio del bot: {exc}") from exc
+        logger.warning("Recall request failed: %s", type(exc).__name__)
+        raise RecallError("No se pudo contactar al servicio del bot.") from exc
     if resp.status_code >= 400:
         logger.warning("Recall %s /%s -> HTTP %s", clean(method), clean(path.split("/")[1]), resp.status_code)
         raise RecallError(f"El servicio del bot respondió {resp.status_code}.")
@@ -278,7 +280,7 @@ def process_finished_bot(bot_id: str) -> Optional[str]:
             extract_chunk(src, part, start, end)
             apex_box_manager.ingest_block(
                 box_session_id=session.box_session_id, filename=part.name, content=part.read_bytes(),
-                block_index=index, duration_hint_sec=end - start, transcribe_immediately=True,
+                block_index=index, transcribe_immediately=True,
             )
             start, index = end, index + 1
         fin = apex_box_manager.finalize_session(
@@ -295,7 +297,7 @@ def process_finished_bot(bot_id: str) -> Optional[str]:
         return fin.job_id
     except Exception as exc:  # noqa: BLE001 — se registra y se marca el bot como fallido
         logger.exception("No se pudo procesar el bot %s", bot_id)
-        _update(bot_id, status="failed", error=str(exc)[:200])
+        _update(bot_id, status="failed", error=public_error(exc)[:200])
         return None
     finally:
         shutil.rmtree(work, ignore_errors=True)

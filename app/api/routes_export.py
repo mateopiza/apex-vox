@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api", tags=["Export"])
 
 
 @router.get("/jobs/{job_id}/export/{fmt}")
-async def export_job_transcript(fmt: str, job_id: str = Depends(require_job_media)) -> Response:
+def export_job_transcript(fmt: str, job_id: str = Depends(require_job_media)) -> Response:
     """Download the formatted transcript for a completed job."""
     result = job_manager.get_job_result(job_id)
     if not result:

@@ -27,6 +27,10 @@ Preparation of the public open-source release.
 
 ### Fixed
 
+- API errors no longer show messages wrapped in stray quotes.
+- One slow request no longer freezes the whole server. Upload, Apex Box, login, minutes, webhooks and other routes ran ffmpeg, Groq calls, password hashing or file reads on the only event loop. They now run in worker threads, with long work limited by `HEAVY_ROUTE_CONCURRENCY`.
+- A failed transcription gives back the plan or guest quota it used, on the day it was charged. An Apex Box block with no real transcript is not charged. A failed guest job no longer leaves its audio on disk.
+- Apex Box: free accounts get the Summa preview and no minutes, as on normal uploads and as documented; finalizing twice returns the same result; a failed finalize can be retried instead of staying stuck; blocks and status changes are refused once a recording is closed; audio and transcript follow the timeline even when blocks finish out of order.
 - Authenticated requests no longer reparse the whole accounts file (about 100 ms per parse at 10k accounts): read paths share a snapshot that is reparsed only when the file changes. Password hashing and the Supabase Auth call no longer run under the global state lock.
 - State files (accounts, storage index, voice profiles, results) are replaced atomically. A damaged or missing accounts file now returns 503 and fails `/api/health` instead of being read as empty, which let the next save erase every account. A damaged storage index or voice-profile file is never overwritten.
 - The test suite no longer writes to the real `uploads/` and `outputs/` directories and refuses outbound network. The CI JavaScript check now fails on a syntax error in any file, not only the last one, and covers nested extension files.
@@ -38,6 +42,9 @@ Preparation of the public open-source release.
 
 ### Security
 
+- Exception text no longer reaches clients: job status, API errors, Telegram replies, stored call and bot errors and MCP results could include server paths, ffprobe output and provider messages. They now show messages written for users, and the details go to the logs.
+- Apex Box charges the plan from the measured duration of each block. Before, the client chose the charge: leaving out `duration_hint_sec` made recording free, and the hint could also shorten the timeline. A retried block is no longer charged twice. `api_key` is no longer accepted from Box clients.
+- Upload limits are enforced: `MAX_FILE_SIZE_MB`, `MAX_TOTAL_UPLOAD_SIZE_MB` and `MAX_FILES_PER_UPLOAD` were never applied. New limits cover Apex Box blocks, voice samples and every other request body. Oversized requests get 413 before the body is stored, and uploads go to disk instead of memory.
 - Session tokens and OAuth hand-off codes are stored as keyed digests, so the state file and its backups hold no usable session. Existing sessions are migrated at start-up and keep working. Changing `APP_SECRET_KEY` (or losing `outputs/.app_secret`) signs everyone out.
 - Supabase Auth login requires a confirmed e-mail and an account linked by id. Before, signing up to Supabase with someone's address could replace the password of their local account.
 - Twilio webhooks and TwiML are built only from `PUBLIC_BASE_URL` (an `https://` origin is now required to enable calls). Before, an unset `PUBLIC_BASE_URL` let a client's `Host` header point Twilio at an attacker's server that could dial any number.

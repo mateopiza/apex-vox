@@ -24,7 +24,9 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 
 from app.logsafe import clean
-from app.api.deps import is_paid, require_user
+from app.api.deps import is_paid, require_user, run_heavy
+from app.config import settings
+from app.errors import GENERIC_ERROR, detail_of
 from app.models.schemas import (
     BoxBlockUploadResponse,
     BoxCreateSessionRequest,
@@ -36,6 +38,7 @@ from app.models.schemas import (
     BoxSessionStateResponse,
 )
 from app.services.apex_box import (
+    BoxConflictError,
     OPTIMAL_BLOCK_SECONDS,
     RECOMMENDED_BITRATE_BPS,
     apex_box_manager,
@@ -44,6 +47,7 @@ from app.services.apex_box import (
     ensure_extension_published_to_s4,
     extension_download_name,
 )
+from app.services.job_manager import UploadTooLargeError
 from app.services.storage_s4 import mega_s4_storage
 from app.services.supabase_service import supabase_service
 
@@ -80,7 +84,7 @@ async def get_optimal_block_configuration(
 
 
 @router.post("/sessions", response_model=BoxSessionStateResponse)
-async def create_box_recording_session(
+def create_box_recording_session(
     payload: BoxCreateSessionRequest,
     user: Dict[str, Any] = Depends(require_user),
 ) -> BoxSessionStateResponse:
@@ -101,7 +105,7 @@ async def create_box_recording_session(
 
 
 @router.get("/sessions", response_model=List[BoxSessionStateResponse])
-async def list_box_recording_sessions(
+def list_box_recording_sessions(
     user: Dict[str, Any] = Depends(require_user),
 ) -> List[BoxSessionStateResponse]:
     """List the signed-in account's active and recent Apex Box recording sessions."""
@@ -109,7 +113,7 @@ async def list_box_recording_sessions(
 
 
 @router.get("/sessions/{box_session_id}", response_model=BoxSessionStateResponse)
-async def get_box_recording_session(
+def get_box_recording_session(
     box_session_id: str,
     user: Dict[str, Any] = Depends(require_user),
 ) -> BoxSessionStateResponse:
@@ -118,11 +122,11 @@ async def get_box_recording_session(
     try:
         return apex_box_manager.get_session_state(box_session_id)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
 
 
 @router.patch("/sessions/{box_session_id}/status", response_model=BoxSessionStateResponse)
-async def update_box_recording_status(
+def update_box_recording_status(
     box_session_id: str,
     status: str = Query(..., description="recording | paused"),
     user: Dict[str, Any] = Depends(require_user),
@@ -132,7 +136,11 @@ async def update_box_recording_status(
     try:
         return apex_box_manager.update_session_status(box_session_id, status)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except BoxConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.post("/sessions/{box_session_id}/blocks", response_model=BoxBlockUploadResponse)
@@ -142,7 +150,6 @@ async def upload_recording_block(
     block_index: Optional[int] = Form(default=None),
     duration_hint_sec: Optional[float] = Form(default=None),
     transcribe_immediately: bool = Form(default=True),
-    api_key: Optional[str] = Form(default=None),
     user: Dict[str, Any] = Depends(require_user),
 ) -> BoxBlockUploadResponse:
     """
@@ -151,23 +158,27 @@ async def upload_recording_block(
     """
     _owned_session(box_session_id, user)
     try:
-        # Los bloques descuentan del límite diario del plan gratis (Apex Pro: ilimitado).
-        supabase_service.check_and_consume_quota(user["user_id"], max(0.0, float(duration_hint_sec or 0.0)))
-    except PermissionError as exc:
-        raise HTTPException(status_code=402, detail=str(exc)) from exc
-    content = await file.read()
-    try:
-        return apex_box_manager.ingest_block(
+        # La duración del cliente solo sirve para rechazar pronto: lo que se cobra es lo medido.
+        if duration_hint_sec and duration_hint_sec > 0:
+            await run_in_threadpool(supabase_service.check_quota, user["user_id"], duration_hint_sec)
+        return await run_heavy(
+            apex_box_manager.ingest_block,
             box_session_id=box_session_id,
             filename=file.filename or "block.webm",
-            content=content,
+            content=file.file,
             block_index=block_index,
-            duration_hint_sec=duration_hint_sec,
             transcribe_immediately=transcribe_immediately,
-            api_key=api_key,
+            max_bytes=settings.MAX_BOX_BLOCK_MB * 1024 * 1024,
+            charge_quota=True,
         )
+    except PermissionError as exc:
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
+    except BoxConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except UploadTooLargeError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
@@ -176,7 +187,7 @@ async def upload_recording_block(
 
 
 @router.post("/sessions/{box_session_id}/notes", response_model=BoxNoteItem)
-async def add_live_meeting_note(
+def add_live_meeting_note(
     box_session_id: str,
     payload: BoxNoteRequest,
     user: Dict[str, Any] = Depends(require_user),
@@ -186,13 +197,13 @@ async def add_live_meeting_note(
     try:
         return apex_box_manager.add_note(box_session_id, payload)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.put("/sessions/{box_session_id}/notes/{note_id}", response_model=BoxNoteItem)
-async def update_live_meeting_note(
+def update_live_meeting_note(
     box_session_id: str,
     note_id: str,
     payload: BoxNoteRequest,
@@ -203,11 +214,11 @@ async def update_live_meeting_note(
     try:
         return apex_box_manager.update_note(box_session_id, note_id, payload)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
 
 
 @router.delete("/sessions/{box_session_id}/notes/{note_id}", response_model=List[BoxNoteItem])
-async def delete_live_meeting_note(
+def delete_live_meeting_note(
     box_session_id: str,
     note_id: str,
     user: Dict[str, Any] = Depends(require_user),
@@ -217,7 +228,7 @@ async def delete_live_meeting_note(
     try:
         return apex_box_manager.delete_note(box_session_id, note_id)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
 
 
 @router.post("/sessions/{box_session_id}/finalize", response_model=BoxFinalizeResponse)
@@ -233,9 +244,11 @@ async def finalize_box_recording_session(
     """
     _owned_session(box_session_id, user)
     try:
-        return apex_box_manager.finalize_session(box_session_id, payload)
+        return await run_heavy(apex_box_manager.finalize_session, box_session_id, payload)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
+    except BoxConflictError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("Error finalizing Apex Box session %s", clean(box_session_id))
         raise HTTPException(status_code=500, detail="Error al finalizar la sesión.") from exc
@@ -245,7 +258,7 @@ _extension_cache: Dict[str, bytes] = {}
 
 
 @router.get("/extension/download")
-async def download_chrome_extension() -> Response:
+def download_chrome_extension() -> Response:
     """
     Descarga de la extensión desde nuestro dominio. El archivo vive en el almacenamiento
     privado; el servidor lo trae y lo entrega, así el cliente nunca ve el proveedor ni
@@ -255,10 +268,10 @@ async def download_chrome_extension() -> Response:
     data: Optional[bytes] = None
     if mega_s4_storage.is_cloud_configured:
         try:
-            key = await run_in_threadpool(ensure_extension_published_to_s4)
+            key = ensure_extension_published_to_s4()
             data = _extension_cache.get(key)
             if data is None:
-                data = await run_in_threadpool(mega_s4_storage.get_bytes, key)
+                data = mega_s4_storage.get_bytes(key)
                 _extension_cache.clear()
                 _extension_cache[key] = data
         except Exception:
@@ -274,12 +287,13 @@ async def download_chrome_extension() -> Response:
 
 
 @router.get("/extension.zip")
-async def download_chrome_extension_package() -> Response:
+def download_chrome_extension_package() -> Response:
     """Download the packaged Chrome Extension (Manifest V3) ZIP archive."""
     try:
         zip_bytes = build_extension_zip_bytes()
     except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        logger.exception("Extension package not available")
+        raise HTTPException(status_code=404, detail=GENERIC_ERROR) from exc
 
     return Response(
         content=zip_bytes,

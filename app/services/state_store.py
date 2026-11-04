@@ -48,7 +48,7 @@ def atomic_write_bytes(path: Path, data: bytes) -> None:
     try:
         os.fsync(dir_fd)
     except OSError:
-        pass
+        pass  # the file itself is already safe; some filesystems cannot sync a directory
     finally:
         os.close(dir_fd)
 

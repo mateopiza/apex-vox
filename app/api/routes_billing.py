@@ -16,6 +16,7 @@ import logging
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.concurrency import run_in_threadpool
 
 from app.api.deps import client_ip, public_base_url, require_user
 from app.models.schemas import (
@@ -44,13 +45,13 @@ async def trial_retired() -> Dict[str, Any]:
 
 
 @router.get("/offer", response_model=BillingOfferResponse)
-async def billing_offer(request: Request, user: Dict[str, Any] = Depends(require_user)) -> BillingOfferResponse:
+def billing_offer(request: Request, user: Dict[str, Any] = Depends(require_user)) -> BillingOfferResponse:
     """Price this account would pay now, including the first-24-hours welcome promo."""
     return BillingOfferResponse(**supabase_service.billing_offer(user["user_id"], client_ip(request)))
 
 
 @router.post("/checkout", response_model=BoldCheckoutResponse)
-async def create_checkout(
+def create_checkout(
     payload: BoldCheckoutRequest,
     request: Request,
     user: Dict[str, Any] = Depends(require_user),
@@ -88,7 +89,7 @@ async def create_checkout(
 
 
 @router.post("/confirm", response_model=UserProfileResponse)
-async def confirm_payments(user: Dict[str, Any] = Depends(require_user)) -> UserProfileResponse:
+def confirm_payments(user: Dict[str, Any] = Depends(require_user)) -> UserProfileResponse:
     """
     Ask Bold for the status of this account's pending links and activate the paid ones.
     Covers the case where the payer returns before (or without) the webhook arriving.
@@ -123,4 +124,4 @@ async def bold_webhook_receiver(request: Request) -> Dict[str, Any]:
         body = json.loads(raw or b"{}")
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="Invalid JSON payload") from exc
-    return bold_service.process_bold_webhook_event(body)
+    return await run_in_threadpool(bold_service.process_bold_webhook_event, body)

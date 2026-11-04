@@ -2,17 +2,31 @@
 
 from __future__ import annotations
 
+import functools
 import hmac
 import ipaddress
 import re
 import threading
 import time
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
+import anyio
+import anyio.to_thread
 from fastapi import Depends, HTTPException, Header, Query, Request
 
 from app.config import settings
 from app.services.supabase_service import supabase_service
+
+
+_heavy_limiter = anyio.CapacityLimiter(max(1, settings.HEAVY_ROUTE_CONCURRENCY))
+
+
+async def run_heavy(func: Callable[..., Any], *args: Any, **kwargs: Any) -> Any:
+    """
+    Run long work (ffmpeg, Groq, an LLM) outside the event loop, at most HEAVY_ROUTE_CONCURRENCY
+    at a time. Waiting holds no thread, so slow transcriptions cannot starve quick requests.
+    """
+    return await anyio.to_thread.run_sync(functools.partial(func, *args, **kwargs), limiter=_heavy_limiter)
 
 
 IP_LIMIT_DETAIL = (

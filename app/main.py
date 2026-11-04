@@ -35,6 +35,7 @@ from app.api import (
     transcribe_router,
     upload_router,
 )
+from app.api.body_limit import BodyLimitMiddleware
 from app.api.deps import public_base_url, request_language
 from app.config import settings
 from app.services.state_store import StateCorruptError
@@ -78,6 +79,7 @@ app.add_middleware(
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 if settings.ALLOWED_HOSTS and "*" not in settings.ALLOWED_HOSTS:
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=settings.ALLOWED_HOSTS)
+app.add_middleware(BodyLimitMiddleware)
 
 # Content-Security-Policy for the web UI. Fonts come from Google Fonts; inline
 # style attributes are used for progress bars and charts rendered from JS.
@@ -253,6 +255,7 @@ def _render_index() -> str | None:
     return html.replace("{{ASSET_VERSION}}", _asset_version())
 
 
+@lru_cache(maxsize=1)
 def _asset_version() -> str:
     """Content hash of the CSS/JS bundle, so every deploy busts long-lived caches."""
     digest = hashlib.sha256()
@@ -501,7 +504,7 @@ async def api_info() -> Dict[str, Any]:
 
 
 @app.get("/api/health", tags=["Health"])
-async def health_check(x_admin_key: Optional[str] = Header(default=None)) -> JSONResponse:
+def health_check(x_admin_key: Optional[str] = Header(default=None)) -> JSONResponse:
     """
     Container and application health check endpoint.
     Verifies system runtime, storage accessibility, ffmpeg binaries,

@@ -24,6 +24,7 @@ from typing import Any, Dict, Optional
 import httpx
 
 from app.config import settings
+from app.errors import public_error
 from app.services.supabase_service import supabase_service
 
 logger = logging.getLogger("app.services.telegram_service")
@@ -313,7 +314,7 @@ def transcribe_media(user: Dict[str, Any], chat_id: int, media: Dict[str, Any], 
         return
     except Exception as exc:  # pipeline errors are reported, never raised to Telegram
         logger.exception("Telegram transcription failed")
-        send_message(chat_id, f"No se pudo transcribir el audio: {exc}")
+        send_message(chat_id, f"No se pudo transcribir el audio. {public_error(exc)}")
         return
 
     text = result.full_text or "(sin voz detectada)"

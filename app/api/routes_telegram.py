@@ -36,12 +36,12 @@ async def telegram_webhook(
 
 
 @router.get("/link")
-async def telegram_link_status(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
+def telegram_link_status(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
     return telegram_service.link_status(user)
 
 
 @router.post("/link-code")
-async def telegram_link_code(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
+def telegram_link_code(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
     if not telegram_service.is_configured():
         raise HTTPException(status_code=503, detail="El bot de Telegram aún no está configurado.")
     try:
@@ -51,13 +51,13 @@ async def telegram_link_code(user: Dict[str, Any] = Depends(require_user)) -> Di
 
 
 @router.delete("/link")
-async def telegram_unlink(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
+def telegram_unlink(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
     telegram_service.unlink(user["user_id"])
     return {"linked": False}
 
 
 @router.post("/setup", dependencies=[Depends(require_admin)], include_in_schema=False)
-async def telegram_setup(request: Request) -> Dict[str, Any]:
+def telegram_setup(request: Request) -> Dict[str, Any]:
     if not telegram_service.is_configured():
         raise HTTPException(status_code=503, detail="TELEGRAM_BOT_TOKEN no está configurado.")
     return telegram_service.set_webhook(public_base_url(request))

@@ -98,7 +98,7 @@ async def register_client(request: Request) -> JSONResponse:
     if not isinstance(metadata, dict):
         return _oauth_error(OAuthError("invalid_client_metadata", "Se esperaba un objeto JSON."))
     try:
-        record = mcp_oauth.register_client(metadata)
+        record = await run_in_threadpool(mcp_oauth.register_client, metadata)
     except OAuthError as exc:
         return _oauth_error(exc)
     return JSONResponse(record, status_code=201, headers={"Cache-Control": "no-store"})
@@ -155,7 +155,7 @@ _CONSENT = {
 
 
 @router.get("/oauth/authorize", include_in_schema=False)
-async def authorize(request: Request) -> HTMLResponse:
+def authorize(request: Request) -> HTMLResponse:
     params = dict(request.query_params)
     lang = request_language(request)
     c = _CONSENT[lang]
@@ -186,6 +186,10 @@ async def authorize(request: Request) -> HTMLResponse:
 async def authorize_decision(request: Request, user: Dict[str, Any] = Depends(require_user)) -> JSONResponse:
     """La pantalla envía la decisión con la sesión web del usuario (Bearer apx_...)."""
     data = await request.json()
+    return await run_in_threadpool(_decide_authorization, data, user)
+
+
+def _decide_authorization(data: Dict[str, Any], user: Dict[str, Any]) -> JSONResponse:
     params = {k: str(v) for k, v in (data.get("params") or {}).items()}
     try:
         client = mcp_oauth.validate_authorize_request(params)
@@ -207,6 +211,10 @@ async def authorize_decision(request: Request, user: Dict[str, Any] = Depends(re
 async def token(request: Request) -> JSONResponse:
     throttle(f"mcp-token:{client_ip(request)}", limit=60, window_seconds=600)
     form = await request.form()
+    return await run_in_threadpool(_issue_tokens, dict(form))
+
+
+def _issue_tokens(form: Dict[str, Any]) -> JSONResponse:
     grant, client_id = form.get("grant_type"), str(form.get("client_id") or "")
     try:
         if not mcp_oauth.get_client(client_id):
@@ -227,7 +235,7 @@ async def token(request: Request) -> JSONResponse:
 @router.post("/oauth/revoke", include_in_schema=False)
 async def revoke(request: Request) -> Response:
     form = await request.form()
-    mcp_oauth.revoke_token(str(form.get("token") or ""))
+    await run_in_threadpool(mcp_oauth.revoke_token, str(form.get("token") or ""))
     return Response(status_code=200)
 
 
@@ -250,7 +258,9 @@ async def mcp_endpoint(request: Request) -> Response:
     if origin and origin not in ALLOWED_ORIGINS and origin != public_base_url(request):
         return JSONResponse({"error": "origin_not_allowed"}, status_code=403)  # anti DNS-rebinding
     auth = request.headers.get("authorization", "")
-    user = mcp_oauth.user_for_access_token(auth[7:].strip() if auth.lower().startswith("bearer ") else "")
+    user = await run_in_threadpool(
+        mcp_oauth.user_for_access_token, auth[7:].strip() if auth.lower().startswith("bearer ") else ""
+    )
     if not user:
         return _unauthorized(request)
     body_bytes = await request.body()
@@ -286,10 +296,10 @@ async def mcp_other_methods() -> Response:
 # ---------------------------------------------------------------------------
 
 @router.get("/api/mcp/connections")
-async def list_connections(request: Request, user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
+def list_connections(request: Request, user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
     return {"mcp_url": f"{public_base_url(request)}/mcp", "connections": mcp_oauth.list_connections(user["user_id"])}
 
 
 @router.delete("/api/mcp/connections")
-async def revoke_connections(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
+def revoke_connections(user: Dict[str, Any] = Depends(require_user)) -> Dict[str, Any]:
     return {"revoked_tokens": mcp_oauth.revoke_all_for_user(user["user_id"])}

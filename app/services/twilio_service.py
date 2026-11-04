@@ -33,6 +33,7 @@ from xml.sax.saxutils import escape, quoteattr
 
 import httpx
 
+from app.errors import UserFacingError, public_error
 from app.logsafe import clean
 from app.config import settings
 from app.services.supabase_service import supabase_service
@@ -54,7 +55,7 @@ NOTE_STATUSES = ACTIVE_STATUSES + ("awaiting_recording",)
 FINAL_STATUSES = ("done", "failed", "ended", "no_answer", "busy", "cancelled", "contact_no_answer", "contact_busy")
 
 
-class TwilioError(Exception):
+class TwilioError(UserFacingError):
     pass
 
 
@@ -90,14 +91,11 @@ def _request(method: str, url: str, data: Optional[Sequence[Tuple[str, str]]] = 
         with httpx.Client(timeout=30.0) as client:
             resp = client.request(method, url, data=list(data or []), auth=_auth())
     except httpx.HTTPError as exc:
-        raise TwilioError(f"No se pudo contactar al servicio de llamadas: {exc}") from exc
+        logger.warning("Twilio request failed: %s", type(exc).__name__)
+        raise TwilioError("No se pudo contactar al servicio de llamadas.") from exc
     if resp.status_code >= 400:
         logger.warning("Twilio %s %s -> %s %s", method, url.split("?")[0], resp.status_code, resp.text[:300])
-        try:
-            detail = resp.json().get("message") or ""
-        except ValueError:
-            detail = ""
-        raise TwilioError(f"El servicio de llamadas respondió {resp.status_code}. {detail}".strip())
+        raise TwilioError(f"El servicio de llamadas respondió {resp.status_code}.")
     return resp.json() if resp.content else {}
 
 
@@ -540,7 +538,8 @@ def _download_recording(rec: Dict[str, Any], dst) -> int:
             return channels
         except httpx.HTTPError as exc:
             last = exc
-    raise TwilioError(f"No se pudo descargar la grabación: {last}")
+    logger.warning("Twilio recording download failed: %s", type(last).__name__)
+    raise TwilioError("No se pudo descargar la grabación.")
 
 
 def channel_energy(path, frame_sec: float = FRAME_SEC):
@@ -658,7 +657,7 @@ def process_recording(call_id: str) -> Optional[str]:
             extract_chunk(src, part, start, end)
             apex_box_manager.ingest_block(
                 box_session_id=session.box_session_id, filename=part.name, content=part.read_bytes(),
-                block_index=index, duration_hint_sec=end - start, transcribe_immediately=True,
+                block_index=index, transcribe_immediately=True,
             )
             start, index = end, index + 1
 
@@ -701,7 +700,7 @@ def process_recording(call_id: str) -> Optional[str]:
         return fin.job_id
     except Exception as exc:  # noqa: BLE001 — se registra y la llamada queda como fallida
         logger.exception("No se pudo procesar la llamada %s", call_id)
-        _update(call_id, status="failed", error=str(exc)[:200])
+        _update(call_id, status="failed", error=public_error(exc)[:200])
         return None
     finally:
         shutil.rmtree(work, ignore_errors=True)

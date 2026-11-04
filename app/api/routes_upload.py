@@ -13,10 +13,18 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 
-from app.api.deps import media_token, optional_user, requester_key, require_session_media, require_session_owner
+from app.api.deps import (
+    media_token,
+    optional_user,
+    requester_key,
+    require_session_media,
+    require_session_owner,
+    run_heavy,
+)
 from app.config import settings
+from app.errors import GENERIC_ERROR, detail_of
 from app.models.schemas import ReorderRequest, UploadResponse
-from app.services.job_manager import job_manager
+from app.services.job_manager import UploadTooLargeError, job_manager, upload_too_large_message
 from app.services.supabase_service import supabase_service
 
 logger = logging.getLogger("app.api.routes_upload")
@@ -39,9 +47,27 @@ async def upload_audio_files(
     """
     if not files:
         raise HTTPException(status_code=400, detail="No se recibieron archivos de audio.")
+    if len(files) > settings.MAX_FILES_PER_UPLOAD:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                f"Puedes subir hasta {settings.MAX_FILES_PER_UPLOAD} archivos a la vez. / "
+                f"You can upload up to {settings.MAX_FILES_PER_UPLOAD} files at a time."
+            ),
+        )
+    return await run_heavy(_store_uploads, request, files, session_id, user)
 
+
+def _store_uploads(
+    request: Request,
+    files: List[UploadFile],
+    session_id: Optional[str],
+    user: Optional[Dict[str, Any]],
+) -> UploadResponse:
     owner = requester_key(request, user)
     session = job_manager.create_or_get_session(session_id, owner)
+    max_file = settings.MAX_FILE_SIZE_MB * 1024 * 1024
+    max_total = settings.MAX_TOTAL_UPLOAD_SIZE_MB * 1024 * 1024
 
     for upload in files:
         filename = upload.filename or "audio.mp3"
@@ -56,13 +82,16 @@ async def upload_audio_files(
                         f"Without an account: {settings.GUEST_MAX_AUDIOS_PER_DAY} audios per day ({allowed} left)."
                     ),
                 )
-        content = await upload.read()
+        limit = min(max_file, max_total - job_manager.session_size_bytes(session.session_id))
+        if limit <= 0 or (upload.size is not None and upload.size > limit):
+            raise HTTPException(status_code=413, detail=upload_too_large_message(max(limit, max_file)))
         try:
             probed = job_manager.add_file_to_session(
                 session_id=session.session_id,
                 filename=filename,
-                content=content,
+                content=upload.file,
                 owner=owner,
+                max_bytes=limit,
             )
             if not user and probed.duration_sec > settings.GUEST_MAX_AUDIO_SECONDS:
                 job_manager.remove_file_from_session(session.session_id, probed.file_id)
@@ -77,13 +106,13 @@ async def upload_audio_files(
                 )
         except HTTPException:
             raise
+        except UploadTooLargeError as exc:
+            raise HTTPException(status_code=413, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         except Exception as exc:
             logger.exception("Unexpected error uploading %s", filename)
-            raise HTTPException(
-                status_code=500, detail=f"Error al procesar '{filename}': {exc}"
-            ) from exc
+            raise HTTPException(status_code=500, detail=GENERIC_ERROR) from exc
 
     ordered_files = job_manager.get_session_files(session.session_id)
     return _upload_response(session.session_id, ordered_files)
@@ -94,17 +123,17 @@ def _upload_response(session_id: str, files) -> UploadResponse:
 
 
 @router.get("/sessions/{session_id}", response_model=UploadResponse)
-async def get_session_files(session_id: str = Depends(require_session_owner)) -> UploadResponse:
+def get_session_files(session_id: str = Depends(require_session_owner)) -> UploadResponse:
     """Retrieve the current ordered list of audio files in a session."""
     try:
         files = job_manager.get_session_files(session_id)
         return _upload_response(session_id, files)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
 
 
 @router.put("/sessions/{session_id}/order", response_model=UploadResponse)
-async def update_session_order(
+def update_session_order(
     payload: ReorderRequest, session_id: str = Depends(require_session_owner)
 ) -> UploadResponse:
     """Update the processing sequence order of uploaded audio files."""
@@ -112,11 +141,11 @@ async def update_session_order(
         files = job_manager.reorder_session_files(session_id, payload.file_order)
         return _upload_response(session_id, files)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
 
 
 @router.delete("/sessions/{session_id}/files/{file_id}", response_model=UploadResponse)
-async def delete_session_file(
+def delete_session_file(
     file_id: str, session_id: str = Depends(require_session_owner)
 ) -> UploadResponse:
     """Remove a specific audio track from the session."""
@@ -124,7 +153,7 @@ async def delete_session_file(
         files = job_manager.remove_file_from_session(session_id, file_id)
         return _upload_response(session_id, files)
     except KeyError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
+        raise HTTPException(status_code=404, detail=detail_of(exc)) from exc
 
 
 _AUDIO_MIME_MAP = {
@@ -139,7 +168,7 @@ _AUDIO_MIME_MAP = {
 
 
 @router.get("/sessions/{session_id}/files/{file_id}/audio")
-async def stream_session_track_audio(file_id: str, session_id: str = Depends(require_session_media)) -> FileResponse:
+def stream_session_track_audio(file_id: str, session_id: str = Depends(require_session_media)) -> FileResponse:
     """Stream an individual uploaded audio file inline for interactive preview in the UI."""
     session = job_manager.get_session(session_id)
     if not session or file_id not in session.tracks:
