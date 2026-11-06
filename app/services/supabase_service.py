@@ -541,6 +541,7 @@ class SupabaseCloudService:
         provider: str,
         preferred_language: str = "es",
         supabase_id: Optional[str] = None,
+        app_metadata: Optional[Dict[str, Any]] = None,
     ) -> UserProfileResponse:
         """Sign in (or create) the account that owns this provider-verified e-mail."""
         clean_email = (email or "").strip().lower()
@@ -579,6 +580,7 @@ class SupabaseCloudService:
                     user["full_name"] = full_name.strip()
             if supabase_id:
                 user["supabase_id"] = supabase_id
+            self._apply_lifetime_pro(user, {"app_metadata": app_metadata})
             token = self._issue_token(db, user["user_id"])
             self._save_db(db)
 
@@ -589,7 +591,7 @@ class SupabaseCloudService:
                     "id": user["user_id"],
                     "email": clean_email,
                     "full_name": user["full_name"],
-                    "plan": "free",
+                    "plan": user["plan"],
                     "preferred_language": user["preferred_language"],
                     "created_at": now_iso,
                 },

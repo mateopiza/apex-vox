@@ -205,6 +205,40 @@ def test_oauth_callback_creates_account_and_hands_off_session(monkeypatch: pytes
     assert "auth_error=expired" in fresh.headers["location"]
 
 
+def _oauth_sign_in(monkeypatch: pytest.MonkeyPatch, email: str, **auth_user: object) -> dict:
+    monkeypatch.setattr(settings, "SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setattr(settings, "SUPABASE_ANON_KEY", "anon")
+    monkeypatch.setattr(
+        oauth_service,
+        "exchange_code",
+        lambda code, verifier: {"email": email, "email_confirmed_at": "2026-01-01T00:00:00Z", **auth_user},
+    )
+    client = TestClient(app, base_url="https://apex-vox.test")
+    client.cookies.set("apx_oauth", "google:verifier123", path="/api/auth/oauth")
+    location = client.get("/api/auth/oauth/callback?code=abc", follow_redirects=False).headers["location"]
+    return client.post("/api/auth/oauth/exchange", json={"code": location.split("auth_code=", 1)[1]}).json()
+
+
+def test_oauth_applies_lifetime_pro_to_new_and_existing_accounts(monkeypatch: pytest.MonkeyPatch) -> None:
+    lifetime = {"provider": "google", "plan": "pro"}
+    new = f"gh_{uuid.uuid4().hex[:8]}@example.com"
+    assert _oauth_sign_in(monkeypatch, new, app_metadata=lifetime)["plan"] == "pro"
+
+    existing = f"gh_{uuid.uuid4().hex[:8]}@example.com"
+    first = _oauth_sign_in(monkeypatch, existing, app_metadata={"provider": "google"})
+    assert first["plan"] == "free"
+    again = _oauth_sign_in(monkeypatch, existing, app_metadata=lifetime)
+    assert again["plan"] == "pro" and again["user_id"] == first["user_id"]
+
+
+def test_oauth_does_not_grant_pro_from_user_metadata_or_a_dated_plan(monkeypatch: pytest.MonkeyPatch) -> None:
+    email = f"gh_{uuid.uuid4().hex[:8]}@example.com"
+    # user_metadata lo edita el propio usuario: nunca da un plan.
+    assert _oauth_sign_in(monkeypatch, email, user_metadata={"plan": "pro"})["plan"] == "free"
+    dated = {"plan": "pro", "pro_until": "2030-01-01T00:00:00+00:00"}
+    assert _oauth_sign_in(monkeypatch, email, app_metadata=dated)["plan"] == "free"
+
+
 def test_page_language_follows_browser() -> None:
     client = TestClient(app)
     es = client.get("/", headers={"Accept-Language": "es-CO,es;q=0.9,en;q=0.8"}).text

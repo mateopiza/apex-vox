@@ -31,6 +31,7 @@ Preparation of the public open-source release.
 
 ### Fixed
 
+- Signing in with Google or GitHub now applies lifetime Pro from Supabase Auth `app_metadata`, as password sign-in already did.
 - The served extension ZIP no longer includes documentation, a nested ZIP or a whole old copy of the extension. Extension 3.3.1 removes `extension/versionenvio/`: `extension/scripts/package-extension.sh` builds the Chrome Web Store package from the main code, without localhost permissions and locked to the official server.
 - A dropped connection or a server restart no longer stops the progress bar while the job keeps running: the page waits longer between checks, one at a time, and only gives up after about 5 minutes. A link to a job still running follows it, an expired one says so, the progress box no longer stays on screen after a failure, and a short network drop no longer hides an active call.
 - Apex Summa reads the whole meeting. It only saw the first 10,000 characters (some 10-15 minutes of speech) and missed Apex Box notes. Long meetings are now summarized in parts and combined, and failures are logged instead of silently falling back; `analysis_source` says how each report was made.
