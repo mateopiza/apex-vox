@@ -1,5 +1,5 @@
 # FastAPI Web Backend
-fastapi>=0.115.0,<1.0.0
+fastapi>=0.162.0,<1.0.0
 uvicorn[standard]>=0.30.0,<1.0.0
 python-multipart>=0.0.12,<1.0.0
 jinja2>=3.1.4,<4.0.0
