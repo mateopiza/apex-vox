@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="robots" content="noindex, nofollow, noarchive" />
+  <meta name="referrer" content="no-referrer" />
+  <title>{{ heading }} · Apex Vox</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&amp;family=Share+Tech+Mono&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" />
+  <link rel="stylesheet" href="/static/css/tokens.css?v={{ asset_version }}" />
+  <link rel="stylesheet" href="/static/css/styles.css?v={{ asset_version }}" />
+</head>
+<body class="share-page">
+  <header class="app-header">
+    <div class="header-inner">
+      <a class="brand-title" href="/?lang={{ lang }}" aria-label="Apex Vox">
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 0h8v8H8zM0 8h8v8H0zM16 8h8v8h-8zM0 16h24v8H0z"/></svg>
+        <span class="brand-wordmark">Apex Vox</span>
+      </a>
+    </div>
+  </header>
+  <main class="share-container share-message" id="main-content">
+    <p class="overline">{{ code }}</p>
+    <h1 class="legal-title">{{ heading }}</h1>
+    <p>{{ body }}</p>
+    <p><a class="text-link-strong" href="/?lang={{ lang }}">{{ back }} &gt;</a></p>
+  </main>
+</body>
+</html>

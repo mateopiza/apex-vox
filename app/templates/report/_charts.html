@@ -1,0 +1,20 @@
+{#- Gráficas del informe en SVG, dibujadas en el servidor (sin JavaScript). -#}
+{% macro donut(d) -%}
+<svg class="chart-donut" width="96" height="96" viewBox="0 0 42 42" role="img" aria-label="{{ d.label }}">
+  <circle r="15.915" cx="21" cy="21" fill="transparent" stroke="#e8e8de" stroke-width="5.5"></circle>
+  {% for a in d.arcs %}
+  <circle r="15.915" cx="21" cy="21" fill="transparent" stroke="{{ a.color }}" stroke-width="5.5" stroke-dasharray="{{ a.dasharray }}" stroke-dashoffset="{{ a.dashoffset }}"></circle>
+  {% endfor %}
+</svg>
+{%- endmacro %}
+
+{% macro timeline(t, label) -%}
+<svg class="chart-timeline" viewBox="0 0 {{ t.width }} {{ t.height }}" width="100%" preserveAspectRatio="xMinYMid meet" role="img" aria-label="{{ label }}">
+  <line x1="0" y1="{{ t.base_y }}" x2="{{ t.width }}" y2="{{ t.base_y }}" stroke="#cecebf" stroke-width="1"></line>
+  {% for b in t.bars %}
+  <rect x="{{ b.x }}" y="{{ b.y }}" width="{{ b.w }}" height="{{ b.h }}" fill="{{ b.color }}"><title>{{ b.label }}: {{ b.value }}</title></rect>
+  <text x="{{ b.cx }}" y="{{ b.value_y }}" text-anchor="middle" font-size="8" fill="#a22c00" font-family="Share Tech Mono, monospace">{{ b.value }}</text>
+  <text x="{{ b.cx }}" y="{{ t.base_y + 12 }}" text-anchor="middle" font-size="5" fill="#6b6b62" font-family="Share Tech Mono, monospace">{{ b.label }}</text>
+  {% endfor %}
+</svg>
+{%- endmacro %}

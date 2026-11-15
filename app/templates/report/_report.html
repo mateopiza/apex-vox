@@ -1,0 +1,233 @@
+{#- Informe de un resultado: cifras, reproductor, Apex Summa, acta y transcripción.
+    Lo usan la página compartida (/s/<token>) y la exportación a PDF. Contexto: report_view.report_context. -#}
+{% import "report/_charts.html" as charts %}
+<div class="report" data-report>
+  <div class="kpi-grid">
+    <div class="kpi-card">
+      <div class="kpi-label">{{ L.kpi_duration }}</div>
+      <div class="kpi-value">{{ result.total_duration_formatted }}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">{{ L.kpi_speakers }}</div>
+      <div class="kpi-value">{{ result.detected_speakers_count }}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">{{ L.kpi_engine }}</div>
+      <div class="kpi-value kpi-value--sm">{{ result.engine_brand }}</div>
+    </div>
+    {% if date %}
+    <div class="kpi-card">
+      <div class="kpi-label">{{ L.kpi_date }}</div>
+      <div class="kpi-value kpi-value--sm">{{ date }}</div>
+    </div>
+    {% endif %}
+  </div>
+
+  {% if audio_url and not for_print %}
+  <div class="player-box">
+    <div class="player-caption">{{ L.player_caption }}</div>
+    <audio id="share-audio" controls preload="metadata" src="{{ audio_url }}"></audio>
+  </div>
+  {% endif %}
+
+  {% if report %}
+  <div class="summa-wrapper">
+    <div class="summa-banner">
+      <div>
+        <span class="summa-pill">{{ L.summa_pill }}</span>
+        <h3 class="summa-title">{{ L.summa_title }}</h3>
+      </div>
+    </div>
+    {% if locked %}
+    <div class="summa-locked-notice"><p>{{ L.summa_locked }}</p></div>
+    {% endif %}
+
+    <div class="summa-grid-2">
+      <div class="summa-box">
+        <h4 class="summa-sec-title">{{ L.sec_who }}</h4>
+        {% set top = report.speaker_stats[0] if report.speaker_stats else None %}
+        {% if top %}
+        <div class="dominant-speaker-highlight">
+          <div class="dominant-speaker-title">{{ L.led.format(speaker=top.speaker, pct=top.talk_percentage) }}</div>
+          <div class="dominant-speaker-meta">
+            {{ L.spoken }}: <strong>{{ top.duration_formatted }}</strong> ·
+            {{ L.words }}: <strong>{{ top.word_count }}</strong> ·
+            {{ L.turns }}: <strong>{{ top.turn_count }}</strong> ·
+            {{ L.pace }}: <strong>{{ top.words_per_minute }} {{ L.wpm }}</strong>
+          </div>
+        </div>
+        {% endif %}
+        <div class="speaker-bars-list">
+          {% for s in report.speaker_stats %}
+          <div class="spk-stat-row">
+            <div class="spk-stat-top">
+              <span>{{ s.speaker }}</span>
+              <span>{{ s.talk_percentage }}% ({{ s.duration_formatted }} · {{ s.word_count }} {{ L.words_short }})</span>
+            </div>
+            <div class="spk-bar-track"><div class="spk-bar-fill" style="width: {{ [4, s.talk_percentage] | max }}%;"></div></div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="summa-box">
+        <h4 class="summa-sec-title">{{ L.sec_charts }}</h4>
+        {% if donut %}
+        <div class="chart-flex-box">
+          {{ charts.donut(donut) }}
+          <div class="chart-legend">
+            {% for s in report.speaker_stats %}
+            <div class="chart-legend-row">
+              <span class="chart-legend-swatch" style="background: {{ donut.arcs[loop.index0].color }};"></span>
+              <strong>{{ s.speaker }}:</strong> {{ s.talk_percentage }}% ({{ s.turn_count }} {{ L.turns_short }})
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+        {% if timeline %}
+        <div class="chart-caption">{{ L.timeline_caption }}</div>
+        {{ charts.timeline(timeline, L.timeline_chart) }}
+        {% endif %}
+      </div>
+    </div>
+
+    {% if not locked %}
+    <div class="summa-grid-2">
+      <div class="summa-box">
+        <h4 class="summa-sec-title">{{ L.sec_what }}</h4>
+        <p class="summa-paragraph">{{ report.executive_summary }}</p>
+        <div class="topics-list">
+          {% for t in report.topics %}
+          <div class="topic-item-card">
+            <div class="topic-item-head"><span>{{ t.title }}</span><span>{{ t.relevance_pct }}%</span></div>
+            <div class="topic-item-body">{{ t.summary }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="summa-box">
+        <h4 class="summa-sec-title">{{ L.sec_objectives }}</h4>
+        <ul class="summa-checklist">
+          {% for o in report.objectives %}<li>{{ o }}</li>{% else %}<li>{{ L.none_yet }}</li>{% endfor %}
+        </ul>
+        <h4 class="summa-sec-title summa-sec-title--spaced">{{ L.sec_callouts }}</h4>
+        <div class="callouts-list">
+          {% for c in report.callouts %}
+          <div class="callout-item-card">
+            <div class="callout-item-title"><span class="callout-item-sev">{{ c.severity | upper }}</span> {{ c.title }}</div>
+            <div class="callout-item-body">{{ c.description }}</div>
+            <div class="callout-item-meta">{{ c.speaker }} · {{ c.timestamp }}</div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <div class="summa-box">
+      <div class="summa-calendar-head"><h4 class="summa-sec-title">{{ L.sec_calendar }}</h4></div>
+      <div class="calendar-grid">
+        {% for t in report.calendar_tasks %}
+        <div class="calendar-card">
+          <div class="calendar-date-badge">{{ t.due_date }} · {{ t.due_time }}</div>
+          <div class="calendar-card-title">{{ t.title }}</div>
+          <div class="calendar-card-body">{{ t.description }}</div>
+          <div class="calendar-card-foot">
+            <span>{{ t.assignee }}</span>
+            <span class="badge-pill {{ 'warn' if t.priority == 'alta' else 'info' }}">{{ t.priority | upper }}</span>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    {% if minutes %}
+    <div class="summa-box minutes-generator-box">
+      <h4 class="summa-sec-title">{{ L.sec_minutes }}</h4>
+      <div class="minutes-preview">
+        <div class="minutes-document">
+          <div class="minutes-header">
+            <h2>{{ minutes.title }}</h2>
+            <p>{{ L.minutes_type }}: {{ minutes.title }} · {{ L.minutes_date }}: {{ minutes.date }}</p>
+            <p class="minutes-meta">{{ L.minutes_duration }}: {{ minutes.duration }} · {{ result.engine_brand }}</p>
+          </div>
+          <hr/>
+          <h3>{{ L.minutes_quorum }}</h3>
+          <p><strong>{{ L.minutes_dominant }}:</strong> {{ report.dominant_speaker }} ({{ report.dominant_speaker_pct }}%)</p>
+          <ul>
+            {% for s in report.speaker_stats %}
+            <li><strong>{{ s.speaker }}</strong>: {{ s.talk_percentage }}% ({{ s.duration_formatted }}, {{ s.word_count }} {{ L.words_short }})</li>
+            {% endfor %}
+          </ul>
+          <h3>{{ L.minutes_agenda }}</h3>
+          <p>{{ report.executive_summary }}</p>
+          <ol>
+            {% for t in report.topics %}<li><strong>{{ t.title }}</strong> ({{ t.relevance_pct }}%): {{ t.summary }}</li>{% endfor %}
+          </ol>
+          <h3>{{ L.minutes_resolutions }}</h3>
+          <ul>{% for o in report.objectives %}<li>{{ o }}</li>{% endfor %}</ul>
+          <h3>{{ L.minutes_callouts }}</h3>
+          <ul>
+            {% for c in report.callouts %}
+            <li><strong>[{{ c.severity | upper }}] {{ c.title }}</strong> ({{ c.speaker }} @ {{ c.timestamp }}): {{ c.description }}</li>
+            {% endfor %}
+          </ul>
+          <h3>{{ L.minutes_tasks }}</h3>
+          <table class="minutes-table">
+            <thead><tr>
+              <th>{{ L.minutes_col_date }}</th><th>{{ L.minutes_col_task }}</th>
+              <th>{{ L.minutes_col_owner }}</th><th>{{ L.minutes_col_priority }}</th>
+            </tr></thead>
+            <tbody>
+              {% for t in report.calendar_tasks %}
+              <tr>
+                <td>{{ t.due_date }} {{ t.due_time }}</td>
+                <td><strong>{{ t.title }}</strong><br/><small>{{ t.description }}</small></td>
+                <td>{{ t.assignee }}</td>
+                <td>{{ t.priority | upper }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+          <div class="minutes-signatures">
+            <div>___________________________<br/><strong>{{ report.dominant_speaker }}</strong></div>
+            <div>___________________________<br/><strong>{{ L.minutes_secretary }}</strong></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <h3 class="report-section-title">{{ L.transcript }}</h3>
+  <div class="segments-container">
+    {% set ns = namespace(last=None) %}
+    {% for item in segments %}
+    {% set seg = item.seg %}
+    {% if seg.source_file and seg.source_file != ns.last %}
+    {% set ns.last = seg.source_file %}
+    <div class="file-divider">
+      <span>{{ L.file.format(n=seg.file_order_index + 1, name=seg.source_file) }}</span>
+      <span>{{ L.start }}: {{ seg.start_formatted }}</span>
+    </div>
+    {% endif %}
+    <div class="segment-card{{ ' spk-alt' if item.alt }}">
+      <div class="segment-header">
+        <span class="speaker-badge {{ item.badge }}">{{ seg.speaker }}</span>
+        {% if audio_url and not for_print %}
+        <button type="button" class="timestamp-btn" data-start="{{ seg.start }}" title="{{ L.play_from.format(ts=seg.start_formatted) }}">[{{ seg.start_formatted }} - {{ seg.end_formatted }}]</button>
+        {% else %}
+        <span class="timestamp-btn">[{{ seg.start_formatted }} - {{ seg.end_formatted }}]</span>
+        {% endif %}
+      </div>
+      <p class="segment-text">{{ seg.text }}</p>
+    </div>
+    {% else %}
+    <div class="empty-state empty-state--compact">{{ L.no_segments }}</div>
+    {% endfor %}
+  </div>
+  <p class="report-ai-notice">{{ L.ai_notice }}</p>
+</div>

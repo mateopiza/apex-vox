@@ -589,6 +589,10 @@ class Settings:
     JOB_RETENTION_HOURS: int = field(
         default_factory=lambda: int(os.getenv("JOB_RETENTION_HOURS", "24"))
     )
+    # Views of the public share pages (/s/<token>) per visitor network and minute.
+    SHARE_VIEWS_PER_MINUTE: int = field(
+        default_factory=lambda: int(os.getenv("SHARE_VIEWS_PER_MINUTE", "60"))
+    )
 
     # -------------------------------------------------------------------------
     # Post-initialization & Directory Creation

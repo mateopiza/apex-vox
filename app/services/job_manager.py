@@ -963,6 +963,9 @@ class JobManager:
         job_file = self._job_file(job_id)
         if job_file:
             job_file.unlink(missing_ok=True)
+        from app.services import share_links
+
+        share_links.delete_for_job(job_id)  # un enlace a un resultado que ya no existe no debe quedar
 
     def forget_owner(self, owner: str) -> None:
         """An account was deleted: nothing of it stays in memory or in its upload folders."""

@@ -297,6 +297,9 @@ from app.api.routes_calls import router as calls_router  # noqa: E402
 
 app.include_router(calls_router)
 app.include_router(upload_router)
+from app.api.routes_share import router as share_router  # noqa: E402
+
+app.include_router(share_router)
 app.include_router(transcribe_router)
 app.include_router(export_router)
 app.include_router(telegram_router)
@@ -316,7 +319,7 @@ def _render_index() -> str | None:
 def _asset_version() -> str:
     """Content hash of the CSS/JS bundle, so every deploy busts long-lived caches."""
     digest = hashlib.sha256()
-    for rel in ("css/tokens.css", "css/styles.css", "js/app.js"):
+    for rel in ("css/tokens.css", "css/styles.css", "js/app.js", "js/share.js"):
         path = STATIC_DIR / rel
         if path.exists():
             digest.update(path.read_bytes())
@@ -541,7 +544,7 @@ async def robots(request: Request) -> Response:
     """Allow the landing page, keep API and job artefacts out of indexes."""
     return Response(
         content=(
-            "User-agent: *\nAllow: /$\nAllow: /legal/\nDisallow: /api/\nDisallow: /oauth/\nDisallow: /mcp\n"
+            "User-agent: *\nAllow: /$\nAllow: /legal/\nDisallow: /api/\nDisallow: /oauth/\nDisallow: /mcp\nDisallow: /s/\n"
             f"Sitemap: {public_base_url(request)}/sitemap.xml\n"
         ),
         media_type="text/plain",
