@@ -86,7 +86,8 @@ PRIVACY_ES: List[Section] = [
         "Cada uno trata los datos solo para prestarnos su servicio. Algunos están fuera de Colombia, lo que implica una transferencia internacional de datos.",
         ("<strong>Enlaces que tú creas:</strong> si compartes un resultado con un enlace, cualquier persona que lo tenga puede ver su resumen, acta y transcripción "
          "(y escuchar el audio, si lo incluyes) sin iniciar sesión, según lo que incluye tu plan. Estas páginas no se indexan en buscadores. Puedes revocar el enlace cuando quieras; "
-         "también deja de funcionar cuando el resultado vence o eliminas tu cuenta."),
+         "también deja de funcionar cuando el resultado vence o eliminas tu cuenta. Si envías un resultado por correo, lo enviamos con Resend solo a las direcciones que indiques, "
+         "con tu correo como dirección de respuesta, y creamos el enlace de ese resultado si aún no existía."),
     ]),
     ("Tus derechos", [
         ("Conforme a la Ley 1581 de 2012 y el Decreto 1377 de 2013 puedes conocer, actualizar, rectificar y suprimir tus datos, revocar la autorización y presentar quejas ante la Superintendencia de Industria y Comercio. "
@@ -126,7 +127,8 @@ PRIVACY_EN: List[Section] = [
         "Telegram (only if you link the bot), Cloudflare (DNS) and Google Fonts (web fonts). Some are outside Colombia, which means an international data transfer.",
         ("<strong>Links you create:</strong> if you share a result with a link, anyone who has it can see its summary, minutes and transcript (and play the audio, if you include it) "
          "without signing in, as far as your plan includes them. These pages are not indexed by search engines. You can revoke the link at any time; it also stops working when the "
-         "result expires or you delete your account."),
+         "result expires or you delete your account. If you email a result, we send it through Resend only to the addresses you enter, with your email "
+         "as the reply-to address, and create the result's link if it did not exist yet."),
     ]),
     ("Your rights", [
         ("Under Colombian Law 1581 of 2012 you may access, update, correct and delete your data, withdraw consent and complain to the Superintendencia de Industria y Comercio. "

@@ -52,6 +52,7 @@ The in-process sliding window (`deps.throttle`) returns 429:
 | OAuth token per IP | 60 per 10 min |
 | MCP calls per account | 120 per minute |
 | Share links created per account | 30 per hour |
+| Result emails per account | `EMAIL_SHARE_DAILY_LIMIT` (50) recipients per day |
 | Share page views per IP | `SHARE_VIEWS_PER_MINUTE` (60) per minute |
 
 Guests are also limited by daily audio count and duration. Counters live in memory, so they reset on restart and are not shared between processes. Add edge rate limiting (Cloudflare) on top.

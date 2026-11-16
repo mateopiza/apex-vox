@@ -300,6 +300,9 @@ app.include_router(upload_router)
 from app.api.routes_share import router as share_router  # noqa: E402
 
 app.include_router(share_router)
+from app.api.routes_email import router as email_router  # noqa: E402
+
+app.include_router(email_router)
 app.include_router(transcribe_router)
 app.include_router(export_router)
 app.include_router(telegram_router)

@@ -56,6 +56,7 @@ Notes on the columns below:
 | `RETENTION_PRO_LAPSE_GRACE_DAYS` | `7` | No | After Apex Pro lapses, days before Free retention starts to count on files kept without an expiry. |
 | `JOB_RETENTION_HOURS` | `24` | No | Original uploads and leftovers are deleted this long after their last change, on every plan. Merged audio and results follow the plan's retention. |
 | `SHARE_VIEWS_PER_MINUTE` | `60` | No | Share pages (`/s/<token>`) one network may open per minute. Above it the page answers 429. |
+| `EMAIL_SHARE_DAILY_LIMIT` | `50` | No | Recipients one account may send results to per day with `POST /api/jobs/{id}/email` (each address counts, including the account's own). Above it the endpoint answers 429. |
 | `SUMMA_MAX_MAP_BLOCKS` | `8` | No | A long meeting is summarized in parts of up to 24,000 characters and then combined. Above this many parts, an even sample is used and the report says `analysis_source: llm_partial`. |
 | `SUMMA_LLM_BUDGET_SECONDS` | `90` | No | Time for all LLM calls of one report. Past it, the report uses what it has. |
 | `STATE_BACKEND` | `json` | No | `postgres` also keeps a copy of the account state in Supabase. Follow the steps in [deployment.md](deployment.md) first: the app refuses to start without an imported replica. |

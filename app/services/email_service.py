@@ -9,6 +9,7 @@ Transactional email and newsletter contacts through Resend (app/services/email_s
 
 from __future__ import annotations
 
+import base64
 import html
 import logging
 import re
@@ -25,6 +26,7 @@ logger = logging.getLogger("app.services.email_service")
 _EMAIL_RE = re.compile(r"[^@\s/?#]{1,64}@[A-Za-z0-9.-]{1,253}\.[A-Za-z]{2,63}")
 RESEND_API = "https://api.resend.com"
 _TIMEOUT = httpx.Timeout(10.0, connect=5.0)
+_ATTACHMENT_TIMEOUT = httpx.Timeout(30.0, connect=5.0)
 
 # Brand tokens (subset of tokens.css, inlined for email clients)
 PAPER = "#f3f3ee"
@@ -341,6 +343,85 @@ def render_meeting_ready(name: str, title: str, duration: str, link: str, lang: 
     return subject, _layout("es", f"{title} está lista.", "Reunión", "Tu reunión está lista.", body), f"{title} está lista: {link}"
 
 
+def _list(items: List[str]) -> str:
+    rows = "".join(
+        f'<li style="margin:0 0 6px;font-family:{MONO};font-size:14px;line-height:1.45;color:{TEXT};">{_esc(i)}</li>'
+        for i in items
+    )
+    return f'<ul style="margin:0 0 16px;padding-left:20px;">{rows}</ul>' if rows else ""
+
+
+def render_result_share(
+    sender_name: str,
+    sender_email: str,
+    title: str,
+    duration: str,
+    report: Any,
+    share_url: str,
+    message: str = "",
+    attached_pdf: bool = True,
+    lang: str = "es",
+) -> Tuple[str, str, str]:
+    """
+    A result someone sends from Apex Vox: their note, the summary their plan includes, a button to
+    the shared page and (attached) the PDF. `report` is the ApexSummaReport to show, or None.
+    """
+    en = lang == "en"
+    sender = (sender_name or "").strip() or sender_email
+    subject = f"{sender} shared: {title}" if en else f"{sender} te compartió: {title}"
+    note = ""
+    if message.strip():
+        quoted = "<br>".join(_esc(line) for line in message.strip().splitlines())
+        note = (
+            f'<div style="margin:0 0 20px;padding:12px 16px;border-left:3px solid {ORANGE};background:{PAPER};'
+            f'font-family:{MONO};font-size:14px;line-height:1.5;color:{TEXT};">{quoted}</div>'
+        )
+    intro = (
+        f"<strong>{_esc(sender)}</strong> shared the summary of <strong>{_esc(title)}</strong> ({_esc(duration)}) with you."
+        if en else
+        f"<strong>{_esc(sender)}</strong> te compartió el resumen de <strong>{_esc(title)}</strong> ({_esc(duration)})."
+    )
+    parts = [_p(intro), note]
+    text_parts = [f"{sender} {'shared' if en else 'te compartió'}: {title} ({duration})"]
+    if message.strip():
+        text_parts.append(message.strip())
+    if report is not None and not report.is_locked and report.executive_summary:
+        parts.append(_label("Summary" if en else "Resumen"))
+        parts.append(_p(_esc(report.executive_summary)))
+        text_parts.append(report.executive_summary)
+        if report.objectives:
+            parts.append(_label("Objectives" if en else "Objetivos"))
+            parts.append(_list(report.objectives[:6]))
+            text_parts += [f"- {o}" for o in report.objectives[:6]]
+        tasks = [f"{t.title} · {t.assignee} · {t.due_date}" for t in report.calendar_tasks[:6]]
+        if tasks:
+            parts.append(_label("Next tasks" if en else "Próximas tareas"))
+            parts.append(_list(tasks))
+            text_parts += [f"- {t}" for t in tasks]
+    elif report is not None and report.speaker_stats:
+        speakers = [f"{st.speaker}: {st.talk_percentage}%" for st in report.speaker_stats[:6]]
+        parts.append(_label("Who spoke" if en else "Quién habló"))
+        parts.append(_list(speakers))
+        text_parts += [f"- {sp}" for sp in speakers]
+    parts.append(_button("See the full transcript" if en else "Ver la transcripción completa", share_url))
+    if attached_pdf:
+        parts.append(_p("The full report is attached as a PDF." if en else "Adjuntamos el informe completo en PDF."))
+    footer = (
+        f"{sender_email} sent you this email from Apex Vox. Reply to write to them."
+        if en else
+        f"{sender_email} te envió este correo desde Apex Vox. Responde para escribirle."
+    )
+    text_parts.append(share_url)
+    html_body = _layout(
+        lang, subject, "Shared meeting" if en else "Reunión compartida", title, "".join(parts), footer_note=footer,
+    )
+    return subject, html_body, "\n\n".join(text_parts)
+
+
+def valid_email(value: str) -> bool:
+    return bool(_EMAIL_RE.fullmatch(value or ""))
+
+
 def render_payment_confirmed(name: str, pro_until: Optional[str], amount_display: str, reference: str, lang: str = "es") -> Tuple[str, str, str]:
     url = _app_url("/")
     until = _fmt_date(pro_until, lang)
@@ -481,8 +562,13 @@ def _category(tags: Optional[List[Dict[str, str]]]) -> str:
 
 
 def send_email(to: str, rendered: Tuple[str, str, str], tags: Optional[List[Dict[str, str]]] = None,
-               headers: Optional[Dict[str, str]] = None) -> bool:
-    """Send one email synchronously. Returns True on success; never raises."""
+               headers: Optional[Dict[str, str]] = None, attachments: Optional[List[Dict[str, Any]]] = None,
+               reply_to: Optional[str] = None) -> bool:
+    """
+    Send one email synchronously. Returns True on success; never raises.
+    `attachments`: [{"filename": "x.pdf", "content": b"..."}] (sent base64-encoded). `reply_to`
+    replaces EMAIL_REPLY_TO for this email.
+    """
     if not settings.is_email_configured:
         logger.info("Email not sent (RESEND_API_KEY missing): %s", _category(tags))
         return False
@@ -494,14 +580,19 @@ def send_email(to: str, rendered: Tuple[str, str, str], tags: Optional[List[Dict
         "html": html_body,
         "text": text_body,
     }
-    if settings.EMAIL_REPLY_TO:
-        payload["reply_to"] = settings.EMAIL_REPLY_TO
+    if reply_to or settings.EMAIL_REPLY_TO:
+        payload["reply_to"] = reply_to or settings.EMAIL_REPLY_TO
+    if attachments:
+        payload["attachments"] = [
+            {"filename": str(a["filename"]), "content": base64.b64encode(a["content"]).decode("ascii")}
+            for a in attachments
+        ]
     if tags:
         payload["tags"] = tags
     if headers:
         payload["headers"] = headers
     try:
-        with httpx.Client(timeout=_TIMEOUT) as client:
+        with httpx.Client(timeout=_ATTACHMENT_TIMEOUT if attachments else _TIMEOUT) as client:
             resp = client.post(f"{RESEND_API}/emails", json=payload, headers=_headers())
         if resp.status_code >= 400:
             logger.warning("Resend rejected an email (%s): HTTP %s", _category(tags), resp.status_code)
