@@ -49,6 +49,13 @@ Notes on the columns below:
 | `MAX_BOX_BLOCK_MB` | `50` | No | Largest Apex Box recording block. |
 | `MAX_VOICE_SAMPLE_MB` | `25` | No | Largest voice-profile sample. |
 | `MAX_REQUEST_BODY_MB` | `10` | No | Largest request body on every other endpoint. |
+| `DICTATION_MODEL` | `whisper-large-v3-turbo` | No | Whisper model for `/api/dictation`. |
+| `DICTATION_LLM_MODEL` | empty | No | LLM that rewrites a dictation in a tone. Empty uses `DEFAULT_LLM_MODEL`, then `FALLBACK_LLM_MODEL`. |
+| `DICTATION_MAX_MB` | `8` | No | Largest dictation clip. |
+| `DICTATION_MAX_TEXT_CHARS` | `6000` | No | Longest text accepted by `/api/dictation/rewrite`. |
+| `DICTATION_PER_MINUTE` | `30` | No | Dictations and rewrites per account per minute. |
+| `DICTATION_PER_DAY` | `1000` | No | Dictations and rewrites per account per day. |
+| `DICTATION_TIMEOUT_SECONDS` | `30` | No | Timeout of each provider call made for a dictation. |
 | `HEAVY_ROUTE_CONCURRENCY` | `8` | No | Requests that may run long work (ffmpeg, Groq, an LLM) at the same time. Others wait without using a thread. |
 | `GROQ_PARALLEL_CHUNKS` | `3` | No | Chunks of one audio sent to Groq at once. Faster on long audio, but each chunk loses the text of the previous one as context. `1` sends them one by one and keeps that context. |
 | `RETENTION_DRY_RUN` | `true` | No | While `true`, the retention sweep only logs what it would delete. Set it to `false` to delete. Expired results stop being served either way. |

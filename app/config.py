@@ -504,6 +504,32 @@ class Settings:
     MAX_REQUEST_BODY_MB: int = field(
         default_factory=lambda: int(os.getenv("MAX_REQUEST_BODY_MB", "10"))
     )
+
+    # -------------------------------------------------------------------------
+    # Dictation (mobile keyboard and app): short clips, answered in one request
+    # -------------------------------------------------------------------------
+    DICTATION_MODEL: str = field(
+        default_factory=lambda: os.getenv("DICTATION_MODEL", "whisper-large-v3-turbo").strip()
+    )
+    # Empty = DEFAULT_LLM_MODEL, then FALLBACK_LLM_MODEL.
+    DICTATION_LLM_MODEL: str = field(
+        default_factory=lambda: os.getenv("DICTATION_LLM_MODEL", "").strip()
+    )
+    DICTATION_MAX_MB: int = field(
+        default_factory=lambda: int(os.getenv("DICTATION_MAX_MB", "8"))
+    )
+    DICTATION_MAX_TEXT_CHARS: int = field(
+        default_factory=lambda: int(os.getenv("DICTATION_MAX_TEXT_CHARS", "6000"))
+    )
+    DICTATION_PER_MINUTE: int = field(
+        default_factory=lambda: int(os.getenv("DICTATION_PER_MINUTE", "30"))
+    )
+    DICTATION_PER_DAY: int = field(
+        default_factory=lambda: int(os.getenv("DICTATION_PER_DAY", "1000"))
+    )
+    DICTATION_TIMEOUT_SECONDS: float = field(
+        default_factory=lambda: float(os.getenv("DICTATION_TIMEOUT_SECONDS", "30"))
+    )
     HEAVY_ROUTE_CONCURRENCY: int = field(
         default_factory=lambda: int(os.getenv("HEAVY_ROUTE_CONCURRENCY", "8"))
     )

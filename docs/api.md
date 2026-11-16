@@ -98,6 +98,16 @@ Accepted extensions: `.mp3 .ogg .wav .m4a .flac .webm .mp4`.
 | GET | `/api/metrics/daily?date=YYYY-MM-DD` | Admin | Usage, estimated cost and revenue. *Hidden.* |
 | POST | `/api/metrics/send-report` | Admin | Save the report to `outputs/reports/` and send it to the configured Telegram chat or `REPORT_WEBHOOK_URL`. Destinations are never taken from the request. *Hidden.* |
 
+## Dictation (`routes_dictation.py`, prefix `/api/dictation`)
+
+Short clips from the mobile keyboard and app, answered in one request. The audio stays in memory: neither it nor the text is stored or logged.
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| GET | `/api/dictation/tones?lang=es\|en` | Optional | Tones the client can offer (`id`, `label`, `description`, `uses_llm`), the default tone, `allowed` (whether this account may dictate) and the limits (`max_audio_mb`, `max_instructions_chars`, `max_text_chars`). |
+| POST | `/api/dictation` | Pro | Multipart `file` (one clip, same extensions as uploads, up to `DICTATION_MAX_MB`), `tone` (`literal\|clean\|formal\|professional\|friendly\|concise\|custom`, default `clean`; unknown ids fall back to the default), `instructions` (extra style request, up to 300 characters; required for `custom`), `language` (ISO 639-1 or `auto`), `vocabulary` (names and terms, up to 400 characters). Returns `{"text", "raw_text", "tone", "rewritten", "language", "duration_sec"}`: `raw_text` is what was said and `text` the same in the chosen tone. `literal` skips the LLM. If the rewrite fails, `text` equals `raw_text` and `rewritten` is `false`. A clip with no speech returns empty text. 402 without Apex Pro, 413/415 for a clip that is too large or of another type, 429 above `DICTATION_PER_MINUTE` or `DICTATION_PER_DAY` per account, 502 when the provider fails (not counted against the limits). |
+| POST | `/api/dictation/rewrite` | Pro | Body `{"text", "tone", "instructions"}` (text up to `DICTATION_MAX_TEXT_CHARS`). Rewrites text without recording again. Same response and limits. |
+
 ## Share links (`routes_share.py`)
 
 | Method | Path | Auth | Purpose |
