@@ -613,6 +613,19 @@
             <a id="export-csv" class="export-btn" href="#" target="_blank" rel="noopener">CSV</a>
             <a id="export-md" class="export-btn" href="#" target="_blank" rel="noopener">Markdown</a>
             <button type="button" id="copy-transcript-btn" class="export-btn green">Copiar texto</button>
+            <button type="button" id="share-result-btn" class="export-btn hidden" aria-expanded="false" aria-controls="share-panel" data-i18n="btn_share">Compartir</button>
+          </div>
+
+          <div id="share-panel" class="share-panel hidden">
+            <div class="share-panel-title" data-i18n="share_panel_title">Compartir con un enlace de solo lectura</div>
+            <p class="field-hint" data-i18n="share_panel_hint">Quien tenga el enlace verá el resumen, el acta y la transcripción sin iniciar sesión, según lo que incluye tu plan. Puedes dejar de compartir cuando quieras.</p>
+            <label class="share-check"><input type="checkbox" id="share-include-audio" /> <span data-i18n="share_include_audio">Incluir el audio</span></label>
+            <div class="share-panel-row">
+              <input type="text" id="share-url-input" class="form-control share-url-input hidden" readonly aria-label="Enlace para compartir" />
+              <button type="button" id="share-create-btn" class="btn-primary btn-small" data-i18n="share_create">Crear enlace</button>
+              <button type="button" id="share-copy-btn" class="btn-secondary btn-small hidden" data-i18n="share_copy">Copiar enlace</button>
+              <button type="button" id="share-revoke-btn" class="btn-secondary btn-small hidden" data-i18n="share_revoke">Dejar de compartir</button>
+            </div>
           </div>
 
           <!-- APEX SUMMA -->

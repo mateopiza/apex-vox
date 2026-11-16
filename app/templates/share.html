@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="robots" content="noindex, nofollow, noarchive" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="color-scheme" content="light" />
+  <title>{{ title }} · Apex Vox</title>
+  <link rel="icon" href="/static/favicon.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600&amp;family=Share+Tech+Mono&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" />
+  <link rel="stylesheet" href="/static/css/tokens.css?v={{ asset_version }}" />
+  <link rel="stylesheet" href="/static/css/styles.css?v={{ asset_version }}" />
+  {% if audio_url %}<script src="/static/js/share.js?v={{ asset_version }}" defer></script>{% endif %}
+</head>
+<body class="share-page">
+  <header class="app-header">
+    <div class="header-inner">
+      <a class="brand-title" href="/?lang={{ lang }}" aria-label="Apex Vox">
+        <svg class="brand-mark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path fill="currentColor" d="M8 0h8v8H8zM0 8h8v8H0zM16 8h8v8h-8zM0 16h24v8H0z"/></svg>
+        <span class="brand-wordmark">Apex Vox</span>
+      </a>
+      <span class="status-pill share-readonly-pill">{{ L.read_only }}</span>
+      <a class="lang-btn" href="?lang={{ other_lang }}">{{ other_lang | upper }}</a>
+    </div>
+  </header>
+
+  <main class="share-container" id="main-content">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <p class="overline">{{ shared_by }}</p>
+          <h1 class="card-title share-title">{{ title }}</h1>
+        </div>
+      </div>
+      {% include "report/_report.html" %}
+    </div>
+    <p class="share-footer">{{ L.footer }} <a class="text-link-strong" href="/?lang={{ lang }}">{{ L.footer_cta }} &gt;</a></p>
+  </main>
+</body>
+</html>

@@ -1271,7 +1271,7 @@ class SupabaseCloudService:
             }
             for jid in jobs:
                 db["transcriptions"].pop(jid, None)
-            for coll in ("oauth_tokens", "oauth_codes", "handoffs", "telegram_codes", "password_resets"):
+            for coll in ("oauth_tokens", "oauth_codes", "handoffs", "telegram_codes", "password_resets", "share_links"):
                 items = db.get(coll) or {}
                 for key in [k for k, v in items.items() if isinstance(v, dict) and v.get("user_id") == user_id]:
                     items.pop(key, None)

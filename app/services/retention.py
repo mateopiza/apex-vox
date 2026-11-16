@@ -138,6 +138,20 @@ def _sweep_index(report: Dict[str, Any], dry_run: bool) -> None:
             report["failed"].append(key)
 
 
+def _sweep_share_links(report: Dict[str, Any], dry_run: bool) -> None:
+    """Links whose result is gone (deleted by hand, or a restart cut off its cleanup)."""
+    from app.services import share_links
+
+    for job_id in share_links.job_ids():
+        if job_manager.is_active(job_id) or job_manager.has_live_result(job_id):
+            continue
+        if (settings.OUTPUT_DIR / f"{job_id}{_RESULT_SUFFIX}").exists():
+            continue  # vencido o no, lo decide _sweep_jobs; la página responde 410 mientras tanto
+        report["share_links"].append(job_id)
+        if not dry_run:
+            share_links.delete_for_job(job_id)
+
+
 def process_pending_erasures(only_user: Optional[str] = None) -> int:
     """
     Finish deleting accounts: the user asked for it, so RETENTION_DRY_RUN does not apply. What a
@@ -176,13 +190,16 @@ def _erase_account_data(user_id: str, entry: Dict[str, Any]) -> bool:
 def sweep(dry_run: Optional[bool] = None) -> Dict[str, Any]:
     """One pass. Returns what it deleted, or in a dry run what it would have."""
     dry_run = settings.RETENTION_DRY_RUN if dry_run is None else dry_run
-    report: Dict[str, Any] = {"dry_run": dry_run, "jobs": [], "uploads": [], "leftovers": [], "objects": [], "failed": []}
+    report: Dict[str, Any] = {
+        "dry_run": dry_run, "jobs": [], "uploads": [], "leftovers": [], "objects": [], "share_links": [], "failed": [],
+    }
     cutoff = time.time() - settings.JOB_RETENTION_HOURS * 3600
     for step in (
         lambda: _sweep_jobs(report, dry_run),
         lambda: _sweep_uploads(report, dry_run, cutoff),
         lambda: _sweep_leftovers(report, dry_run, cutoff),
         lambda: _sweep_index(report, dry_run),
+        lambda: _sweep_share_links(report, dry_run),
     ):
         try:
             step()
@@ -195,9 +212,10 @@ def sweep(dry_run: Optional[bool] = None) -> Dict[str, Any]:
         logger.exception("Could not retry pending uploads or account deletions")
 
     logger.info(
-        "Retention sweep%s: %d job(s), %d upload folder(s), %d leftover(s), %d object(s), %d failed. Jobs: %s",
+        "Retention sweep%s: %d job(s), %d upload folder(s), %d leftover(s), %d object(s), %d share link(s), "
+        "%d failed. Jobs: %s",
         " (dry run, nothing was deleted)" if dry_run else "",
         len(report["jobs"]), len(report["uploads"]), len(report["leftovers"]), len(report["objects"]),
-        len(report["failed"]), clean(",".join(report["jobs"][:50])),
+        len(report["share_links"]), len(report["failed"]), clean(",".join(report["jobs"][:50])),
     )
     return report
