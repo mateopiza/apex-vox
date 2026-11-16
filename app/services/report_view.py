@@ -248,5 +248,12 @@ def report_context(
     }
 
 
+def report_title(result: TranscriptionResult, lang: str) -> str:
+    """The name the history shows for this result, or its first file."""
+    record = supabase_service._read_snapshot().get("transcriptions", {}).get(result.job_id) or {}
+    title = str(record.get("title") or (result.file_order[0] if result.file_order else "")).strip()
+    return title[:160] or ("Transcript" if lang == "en" else "Transcripción")
+
+
 def render(template: str, **context: Any) -> str:
     return _env.get_template(template).render(**context)

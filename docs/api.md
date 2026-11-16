@@ -110,6 +110,7 @@ Accepted extensions: `.mp3 .ogg .wav .m4a .flac .webm .mp4`.
 
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
+| GET | `/api/jobs/{job_id}/export/pdf?lang=es\|en` | Capability | The report as a PDF (WeasyPrint): figures, Apex Summa summary with SVG charts, minutes and transcript, from the same template as the share page. Same plan rules as the summary and the minutes: guests get the transcript, without active Apex Pro the preview and no minutes; for a Pro owner the full report in `lang` is built first if missing. 410 when expired, 503 when the server lacks WeasyPrint or Pango. |
 | GET | `/api/jobs/{job_id}/export/{fmt}` | Capability | Download the transcript as `txt`, `srt`, `vtt`, `json`, `csv` or `md`. |
 
 ## Apex Box (`routes_box.py`, prefix `/api/box`)

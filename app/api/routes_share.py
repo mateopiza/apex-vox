@@ -140,12 +140,6 @@ def _message_page(code: int, lang: str) -> HTMLResponse:
     return HTMLResponse(html, status_code=code, headers=_PAGE_HEADERS)
 
 
-def _title(result: TranscriptionResult, lang: str) -> str:
-    record = supabase_service._read_snapshot().get("transcriptions", {}).get(result.job_id) or {}
-    title = str(record.get("title") or (result.file_order[0] if result.file_order else "")).strip()
-    return title[:160] or ("Transcript" if lang == "en" else "Transcripción")
-
-
 def _shared_by(owner_id: Optional[str], lang: str) -> str:
     L = report_view.LABELS[lang]
     user = supabase_service._read_snapshot()["users"].get(owner_id) if owner_id else None
@@ -181,7 +175,7 @@ def shared_page(token: str, request: Request) -> HTMLResponse:
     html = report_view.render(
         "share.html",
         **context,
-        title=_title(result, lang),
+        title=report_view.report_title(result, lang),
         shared_by=_shared_by(result.user_id, lang),
         other_lang="es" if lang == "en" else "en",
         asset_version=_asset_version(),

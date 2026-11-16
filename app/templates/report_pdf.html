@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="UTF-8" />
+  <title>{{ title }} · Apex Vox</title>
+  <meta name="generator" content="Apex Vox" />
+  <style>{{ print_css | safe }}</style>
+</head>
+<body>
+  <header class="pdf-header">
+    <span class="pdf-brand">Apex Vox</span>
+    <h1 class="pdf-title">{{ title }}</h1>
+  </header>
+  {% include "report/_report.html" %}
+</body>
+</html>
