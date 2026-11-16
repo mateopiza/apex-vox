@@ -102,6 +102,60 @@ Other proxies (nginx, Caddy) work the same way, as long as they append the real 
 
 Do not cache `/api/*`, `/oauth/*` or `/mcp`. Static assets under `/static/` are versioned (`?v=<hash>`) and sent with long `Cache-Control` headers.
 
+## YouTube links (residential proxy)
+
+`POST /api/upload/url` reads YouTube videos with yt-dlp. YouTube refuses data-centre IPs, the production VPS included ("Sign in to confirm you're not a bot"; other yt-dlp clients and IPv4 were tried and fail too). Without a residential proxy, YouTube links fail in production with a 502; direct links to audio files work without it. The proxy carries only YouTube traffic.
+
+### Decodo setup
+
+1. In the Decodo dashboard, open **Residential → Proxy setup**. Choose **Authentication: User:pass**, **Location: Random** (or the country of your users), **Session type: Sticky, 10 minutes**, **Protocol: HTTP**. Note the username and password it shows (the proxy user, not your Decodo login).
+2. Build the value. Replace the session id the generator shows with `{session}`, so each pasted link gets its own sticky IP:
+
+   ```text
+   URL_INGEST_PROXY=http://user-USERNAME-session-{session}-sessionduration-10:PASSWORD@gate.decodo.com:7000
+   ```
+
+   - Keep whatever extra parts the generator adds to the username (for example `-country-co`).
+   - If the password has `@`, `:`, `/` or `#`, URL-encode it (`@` → `%40`, `:` → `%3A`, `/` → `%2F`, `#` → `%23`).
+   - `sessionduration-10` keeps the IP for 10 minutes, enough for one link. A link larger than what downloads in 10 minutes would change IP mid-download; raise it (up to 1440) if that happens.
+   - Without `{session}` the gateway rotates on every request and YouTube refuses the audio URLs, because it ties them to the IP that read the video.
+3. In Dokploy, open the **apex-vox** application → **Environment**, add `URL_INGEST_PROXY` with that value and save. Optional: `URL_INGEST_MAX_MINUTES` (default 240) and `URL_INGEST_TIMEOUT_SECONDS` (default 300) bound what one link can spend.
+4. **Deploy** the application (environment changes apply only after a redeploy).
+
+### Check it
+
+From the server, inside the running container (reads metadata only, downloads nothing):
+
+```bash
+C=$(docker ps -q -f name=apex-vox-k7wpck | head -1)
+docker exec $C python -c "
+from app.services import url_ingest
+info = url_ingest.youtube_info('https://www.youtube.com/watch?v=jNQXAC9IVRw', url_ingest.proxy_for_request())
+print('OK', info['title'], info['duration'], 's')
+"
+```
+
+`OK Me at the zoo 19 s` means the proxy works. Then paste a short video in the web app ("Paste link") and transcribe it. Errors:
+
+| Message | Cause |
+| --- | --- |
+| `407 Proxy Authentication Required` | Wrong proxy user or password, or a special character not URL-encoded. |
+| Still "Sign in to confirm you're not a bot" | The value did not reach the container (redeploy), or the plan is not residential. Try another location. |
+| `403` while downloading the audio | The IP changed between reading and downloading: check that `{session}` is in the value. |
+| Connection refused / timeout | Host or port wrong (`gate.decodo.com:7000`), or the plan has no traffic left. |
+
+### Cost and monitoring
+
+- YouTube audio is about 60 MB per hour of video (plus about 1-2 MB of metadata per link), so roughly 0.06 GB per hour of video. Check Decodo's current price per GB on your plan.
+- Only YouTube links use traffic. Pasted links are limited to 20 per hour per account or guest, and to `URL_INGEST_MAX_MINUTES` each, checked before downloading.
+- Watch usage in the Decodo dashboard and set a usage alert there. When the traffic runs out, YouTube links fail with a 502 and everything else keeps working.
+
+### Security
+
+- The value contains the proxy password: keep it only in Dokploy's environment. It is never logged or returned by the API, and `.env.example` holds a placeholder only.
+- Rotate it from the Decodo dashboard (new password), update the variable in Dokploy and redeploy.
+- The proxy is used only by yt-dlp for YouTube hosts. Direct links are fetched by the server itself with the SSRF checks in [security.md](security.md#links-fetched-by-the-server-appservicesurl_ingestpy), never through the proxy.
+
 ## Retention
 
 The sweep starts in simulation (`RETENTION_DRY_RUN=true`). Look for `Retention sweep (dry run` in the logs, check what it would delete, and only then set `RETENTION_DRY_RUN=false`. **Deletions are permanent**, including from object storage. Expired results stop being served from the first deploy, whether or not anything is deleted.

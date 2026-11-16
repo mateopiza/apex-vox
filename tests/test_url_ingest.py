@@ -115,14 +115,17 @@ def ydl(monkeypatch: pytest.MonkeyPatch, wav_bytes: bytes):
     FakeYDL.fail_info = FakeYDL.fail_audio = False
     FakeYDL.audio = wav_bytes
     FakeYDL.calls, FakeYDL.params_seen = [], []
-    monkeypatch.setattr(url_ingest, "_ydl", lambda extra=None: FakeYDL({**url_ingest_params(), **(extra or {})}))
+    monkeypatch.setattr(
+        url_ingest, "_ydl",
+        lambda extra=None, proxy=None: FakeYDL({**url_ingest_params(proxy), **(extra or {})}),
+    )
     return FakeYDL
 
 
-def url_ingest_params() -> Dict:
+def url_ingest_params(proxy=None) -> Dict:
     params = {"allowed_extractors": ["youtube"], "noplaylist": True}
-    if settings.URL_INGEST_PROXY:
-        params["proxy"] = settings.URL_INGEST_PROXY
+    if proxy:
+        params["proxy"] = proxy
     return params
 
 
@@ -217,6 +220,26 @@ def test_no_audio_and_no_captions_is_a_clear_error(ydl) -> None:
     ydl.info.pop("automatic_captions")
     res = _client().post("/api/upload/url", json={"url": YT})
     assert res.status_code == 502 and "subtítulos" in res.json()["detail"]
+
+
+def test_one_sticky_proxy_session_per_link(ydl, monkeypatch: pytest.MonkeyPatch) -> None:
+    """YouTube ties the audio URLs to the IP that read the video: the whole link uses one session."""
+    monkeypatch.setattr(settings, "URL_INGEST_PROXY", "http://user-u-session-{session}-sessionduration-10:p@gate.decodo.com:7000")
+    ydl.fail_audio = True  # metadatos, audio y subtítulos: tres llamadas
+    client = _client()
+    assert client.post("/api/upload/url", json={"url": YT}).status_code == 200
+    first = {p["proxy"] for p in ydl.params_seen}
+    assert len(first) == 1 and "{session}" not in next(iter(first))
+    ydl.params_seen.clear()
+    client.post("/api/upload/url", json={"url": YT})
+    assert {p["proxy"] for p in ydl.params_seen}.isdisjoint(first)  # otro enlace, otra sesión
+
+
+def test_proxy_without_placeholder_is_used_as_is(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings, "URL_INGEST_PROXY", "http://u:p@proxy.example:3128")
+    assert url_ingest.proxy_for_request() == "http://u:p@proxy.example:3128"
+    monkeypatch.setattr(settings, "URL_INGEST_PROXY", "")
+    assert url_ingest.proxy_for_request() == ""
 
 
 # Direct links ----------------------------------------------------------------------------------------

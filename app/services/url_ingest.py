@@ -17,6 +17,7 @@ from __future__ import annotations
 import ipaddress
 import logging
 import re
+import secrets
 import socket
 import time
 from dataclasses import dataclass
@@ -203,7 +204,17 @@ def _too_slow() -> str:
 # -----------------------------------------------------------------------------
 
 
-def _ydl(extra: Optional[Dict[str, Any]] = None):
+def proxy_for_request() -> str:
+    """
+    URL_INGEST_PROXY for one pasted link. A `{session}` in it becomes a new random id, so a
+    provider's sticky session keeps one exit IP for the whole link: YouTube ties the audio URLs
+    to the IP that read the video, and a rotating IP would get them refused.
+    """
+    proxy = settings.URL_INGEST_PROXY
+    return proxy.replace("{session}", secrets.token_hex(6)) if "{session}" in proxy else proxy
+
+
+def _ydl(extra: Optional[Dict[str, Any]] = None, proxy: Optional[str] = None):
     from yt_dlp import YoutubeDL
 
     params: Dict[str, Any] = {
@@ -215,18 +226,19 @@ def _ydl(extra: Optional[Dict[str, Any]] = None):
         "allowed_extractors": ["youtube"],
         "socket_timeout": 20,
     }
-    if settings.URL_INGEST_PROXY:
-        params["proxy"] = settings.URL_INGEST_PROXY
+    proxy = proxy if proxy is not None else proxy_for_request()
+    if proxy:
+        params["proxy"] = proxy
     params.update(extra or {})
     return YoutubeDL(params)
 
 
-def youtube_info(url: str) -> Dict[str, Any]:
+def youtube_info(url: str, proxy: Optional[str] = None) -> Dict[str, Any]:
     """Title, length and available captions, without downloading anything."""
     from yt_dlp.utils import DownloadError
 
     try:
-        with _ydl() as ydl:
+        with _ydl(proxy=proxy) as ydl:
             info = ydl.extract_info(url, download=False)
     except DownloadError as exc:
         logger.info("YouTube metadata failed: %s", type(exc).__name__)
@@ -241,7 +253,7 @@ def youtube_info(url: str) -> Dict[str, Any]:
     return info
 
 
-def youtube_audio(info: Dict[str, Any], dest_dir: Path, max_bytes: int) -> Fetched:
+def youtube_audio(info: Dict[str, Any], dest_dir: Path, max_bytes: int, proxy: Optional[str] = None) -> Fetched:
     """Download only the audio stream. Raises UrlIngestError when YouTube refuses it."""
     from yt_dlp.utils import DownloadError
 
@@ -251,7 +263,7 @@ def youtube_audio(info: Dict[str, Any], dest_dir: Path, max_bytes: int) -> Fetch
         "max_filesize": max_bytes,
     }
     try:
-        with _ydl(params) as ydl:
+        with _ydl(params, proxy=proxy) as ydl:
             done = ydl.process_ie_result(dict(info), download=True)
     except DownloadError as exc:
         logger.info("YouTube audio download failed: %s", type(exc).__name__)
@@ -322,13 +334,13 @@ def parse_vtt(text: str) -> List[Caption]:
     return cues
 
 
-def youtube_captions(info: Dict[str, Any], lang: str) -> List[Caption]:
+def youtube_captions(info: Dict[str, Any], lang: str, proxy: Optional[str] = None) -> List[Caption]:
     """The video's captions (uploaded first, then automatic). Empty when it has none."""
     track = _pick_caption_track(info, lang)
     if not track:
         return []
     try:
-        with _ydl() as ydl:
+        with _ydl(proxy=proxy) as ydl:
             raw = ydl.urlopen(track["url"]).read()
     except Exception as exc:  # red, proxy o respuesta inválida: sin respaldo
         logger.info("YouTube captions download failed: %s", type(exc).__name__)
