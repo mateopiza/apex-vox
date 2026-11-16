@@ -195,6 +195,14 @@
       btn_rename_speakers: "Renombrar Oradores",
       btn_share: "Compartir",
       btn_export_pdf: "Informe PDF",
+      btn_email_result: "Enviar por correo",
+      email_panel_title: "Enviar por correo",
+      email_panel_hint: "Va el resumen en el cuerpo, un botón al enlace para compartir y el informe en PDF adjunto. Las respuestas llegan a tu correo.",
+      email_free_note: "Con el plan Gratis puedes enviártelo a ti mismo. Enviar a otras personas está incluido en Apex Pro.",
+      email_recipients_lbl: "Para (hasta 10 correos, separados por comas)",
+      email_message_lbl: "Mensaje (opcional)",
+      email_language_lbl: "Idioma",
+      email_send: "Enviar",
       share_panel_title: "Compartir con un enlace de solo lectura",
       share_panel_hint: "Quien tenga el enlace verá el resumen, el acta y la transcripción sin iniciar sesión, según lo que incluye tu plan. Puedes dejar de compartir cuando quieras.",
       share_include_audio: "Incluir el audio",
@@ -425,6 +433,14 @@
       btn_rename_speakers: "Rename Speakers",
       btn_share: "Share",
       btn_export_pdf: "PDF report",
+      btn_email_result: "Send by email",
+      email_panel_title: "Send by email",
+      email_panel_hint: "The summary goes in the body, with a button to the share link and the PDF report attached. Replies come to your email.",
+      email_free_note: "On the Free plan you can send it to yourself. Sending to other people is included in Apex Pro.",
+      email_recipients_lbl: "To (up to 10 emails, separated by commas)",
+      email_message_lbl: "Message (optional)",
+      email_language_lbl: "Language",
+      email_send: "Send",
       share_panel_title: "Share with a read-only link",
       share_panel_hint: "Anyone with the link sees the summary, minutes and transcript without signing in, as far as your plan includes them. You can stop sharing at any time.",
       share_include_audio: "Include the audio",
@@ -587,6 +603,8 @@
   const segmentsListEl = document.getElementById("segments-list");
   const copyTranscriptBtn = document.getElementById("copy-transcript-btn");
   const shareResultBtn = document.getElementById("share-result-btn");
+  const emailResultBtn = document.getElementById("email-result-btn");
+  const emailPanel = document.getElementById("email-panel");
   const sharePanel = document.getElementById("share-panel");
   const shareIncludeAudio = document.getElementById("share-include-audio");
   const shareUrlInput = document.getElementById("share-url-input");
@@ -2475,6 +2493,7 @@
 
     if (!isGuestResult) renderApexSumma(result);
     resetSharePanel(Boolean(state.token) && !isGuestResult);
+    resetEmailPanel(Boolean(state.token) && !isGuestResult);
     renderSpeakerTabs(result);
     renderSegmentsList(result);
   }
@@ -2820,6 +2839,66 @@
     setTimeout(() => {
       shareCopyBtn.textContent = prev;
     }, 1800);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Send a result by email (summary, share link and PDF)
+  // ---------------------------------------------------------------------------
+
+  function resetEmailPanel(canSend) {
+    if (!emailResultBtn || !emailPanel) return;
+    emailResultBtn.classList.toggle("hidden", !canSend);
+    emailResultBtn.setAttribute("aria-expanded", "false");
+    emailPanel.classList.add("hidden");
+  }
+
+  function toggleEmailPanel() {
+    const opening = emailPanel.classList.contains("hidden");
+    emailPanel.classList.toggle("hidden", !opening);
+    emailResultBtn.setAttribute("aria-expanded", String(opening));
+    if (!opening) return;
+    const recipients = document.getElementById("email-recipients");
+    if (recipients && !recipients.value && state.user && state.user.email) recipients.value = state.user.email;
+    const lang = document.getElementById("email-language");
+    if (lang) lang.value = state.lang;
+    const paid = ["pro", "trial"].includes(String(state.plan || "").toLowerCase());
+    document.getElementById("email-free-note").classList.toggle("hidden", paid);
+  }
+
+  async function sendResultEmail(event) {
+    event.preventDefault();
+    if (!state.currentResult) return;
+    const sendBtn = document.getElementById("email-send-btn");
+    const recipients = document.getElementById("email-recipients").value
+      .split(/[,;\s]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    sendBtn.disabled = true;
+    try {
+      const res = await authFetch(`/api/jobs/${state.currentResult.job_id}/email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipients,
+          message: document.getElementById("email-message").value,
+          language: document.getElementById("email-language").value,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || t("No se pudo enviar el correo.", "Could not send the email."));
+      const failed = (data.failed || []).length;
+      showAlert(
+        failed
+          ? t(`Enviado a ${data.sent}. No se pudo enviar a: ${data.failed.join(", ")}.`, `Sent to ${data.sent}. Could not send to: ${data.failed.join(", ")}.`)
+          : t(`Enviado a ${data.sent} ${data.sent === 1 ? "destinatario" : "destinatarios"}.`, `Sent to ${data.sent} ${data.sent === 1 ? "recipient" : "recipients"}.`),
+        failed ? "error" : "success"
+      );
+      if (!failed) emailPanel.classList.add("hidden");
+    } catch (err) {
+      showAlert(err.message);
+    } finally {
+      sendBtn.disabled = false;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -3252,6 +3331,10 @@
   });
 
   renameSpeakersBtn.addEventListener("click", openRenamePanel);
+  if (emailResultBtn) {
+    emailResultBtn.addEventListener("click", toggleEmailPanel);
+    emailPanel.addEventListener("submit", sendResultEmail);
+  }
   if (shareResultBtn) {
     shareResultBtn.addEventListener("click", toggleSharePanel);
     shareCreateBtn.addEventListener("click", saveShareLink);

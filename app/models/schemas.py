@@ -115,6 +115,20 @@ class ShareLinkResponse(BaseModel):
     created_at: Optional[str] = None
 
 
+class EmailResultRequest(BaseModel):
+    """Send a result by email: summary in the body, link to the share page and the PDF attached."""
+    recipients: List[str] = Field(default_factory=list, description="Up to 10 addresses")
+    message: str = Field(default="", max_length=1000)
+    language: str = "es"
+
+
+class EmailResultResponse(BaseModel):
+    sent: int = 0
+    failed: List[str] = Field(default_factory=list)
+    share_url: Optional[str] = None
+    attached_pdf: bool = False
+
+
 class MinutesGenerationRequest(BaseModel):
     """Request payload to generate formal meeting minutes ('Actas')."""
     template_type: str = "consejo"  # consejo | comite | asamblea | seguimiento | ejecutiva
