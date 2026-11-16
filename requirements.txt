@@ -8,6 +8,9 @@ aiofiles>=24.1.0,<25.0.0
 # Audio from YouTube links (POST /api/upload/url)
 yt-dlp>=2025.10.22
 
+# Server-side PDF export (needs Pango and HarfBuzz from the system, see Dockerfile)
+weasyprint>=62.0,<70.0
+
 # Groq Cloud SDK & Networking
 groq>=0.11.0,<1.0.0
 requests>=2.32.0,<3.0.0

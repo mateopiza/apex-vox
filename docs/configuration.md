@@ -58,6 +58,8 @@ Notes on the columns below:
 | `URL_INGEST_PROXY` | empty | No | Proxy used by yt-dlp for YouTube links in `POST /api/upload/url` (`http://user:pass@host:port`, `socks5://host:port`). YouTube often blocks data-centre IPs; a residential proxy avoids it. Direct links never use it: they are fetched from the server itself with the SSRF checks. Treat it as a secret if it carries credentials. |
 | `URL_INGEST_TIMEOUT_SECONDS` | `300` | No | Longest download of one pasted link. Past it the link is refused. |
 | `URL_INGEST_MAX_MINUTES` | `240` | No | Longest video or audio accepted from a link (guests keep their own per-audio limit). |
+| `SHARE_VIEWS_PER_MINUTE` | `60` | No | Share pages (`/s/<token>`) one network may open per minute. Above it the page answers 429. |
+| `EMAIL_SHARE_DAILY_LIMIT` | `50` | No | Recipients one account may send results to per day with `POST /api/jobs/{id}/email` (each address counts, including the account's own). Above it the endpoint answers 429. |
 | `SUMMA_MAX_MAP_BLOCKS` | `8` | No | A long meeting is summarized in parts of up to 24,000 characters and then combined. Above this many parts, an even sample is used and the report says `analysis_source: llm_partial`. |
 | `SUMMA_LLM_BUDGET_SECONDS` | `90` | No | Time for all LLM calls of one report. Past it, the report uses what it has. |
 | `STATE_BACKEND` | `json` | No | `postgres` also keeps a copy of the account state in Supabase. Follow the steps in [deployment.md](deployment.md) first: the app refuses to start without an imported replica. |

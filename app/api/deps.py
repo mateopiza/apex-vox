@@ -284,6 +284,7 @@ def public_base_url(request: Optional[Request] = None) -> str:
 
 _throttle_lock = threading.Lock()
 _throttle_hits: Dict[str, list] = {}
+_throttle_windows: Dict[str, int] = {}  # keys with a window longer than the default pruning age
 
 
 def prune_throttle(max_window_seconds: int = 3600) -> None:
@@ -291,17 +292,31 @@ def prune_throttle(max_window_seconds: int = 3600) -> None:
     now = time.monotonic()
     with _throttle_lock:
         for key, hits in list(_throttle_hits.items()):
-            if not hits or now - hits[-1] >= max_window_seconds:
+            window = max(max_window_seconds, _throttle_windows.get(key, 0))
+            if not hits or now - hits[-1] >= window:
                 del _throttle_hits[key]
+                _throttle_windows.pop(key, None)
 
 
-def throttle(key: str, limit: int, window_seconds: int) -> None:
-    """Simple in-process rate limit for e-mail-sending endpoints (429 when exceeded)."""
+def throttle(key: str, limit: int, window_seconds: int, cost: int = 1, detail: Optional[str] = None) -> None:
+    """
+    Simple in-process rate limit for e-mail-sending endpoints (429 when exceeded). `cost` counts
+    several units at once (e.g. one per recipient): either all fit or none is taken.
+    """
     now = time.monotonic()
     with _throttle_lock:
         hits = [t for t in _throttle_hits.get(key, []) if now - t < window_seconds]
-        if len(hits) >= limit:
+        if len(hits) + max(1, cost) > limit:
             _throttle_hits[key] = hits
-            raise HTTPException(status_code=429, detail="Demasiadas solicitudes. Intenta en unos minutos.")
-        hits.append(now)
+            raise HTTPException(status_code=429, detail=detail or "Demasiadas solicitudes. Intenta en unos minutos.")
+        hits.extend([now] * max(1, cost))
         _throttle_hits[key] = hits
+        if window_seconds > 3600:
+            _throttle_windows[key] = window_seconds
+
+
+def throttle_release(key: str, cost: int = 1) -> None:
+    """Give back units taken by `throttle` for work that did not happen (e.g. emails that failed)."""
+    with _throttle_lock:
+        hits = _throttle_hits.get(key, [])
+        del hits[max(0, len(hits) - cost):]

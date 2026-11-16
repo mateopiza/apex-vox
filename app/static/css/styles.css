@@ -1322,6 +1322,10 @@ select.form-control {
   background: var(--text-primary);
   color: var(--bg);
 }
+.export-btn[aria-expanded="true"] {
+  background: var(--text-primary);
+  color: var(--bg);
+}
 .export-btn.green {
   border-color: var(--brand);
   color: var(--orange-dark);
@@ -3441,4 +3445,78 @@ html.is-desktop .install-android { display: none; }
 .url-ingest-row .form-control {
   flex: 1 1 auto;
   min-width: 0;
+}
+.url-ingest-row .btn-secondary {
+  flex: none;
+  white-space: nowrap;
+}
+
+/* Share panel (result view) and public share page (/s/<token>) */
+.share-panel {
+  margin-bottom: var(--space-3);
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--bdrs-control);
+  background: var(--bg-section-98);
+}
+.share-panel .field-hint {
+  margin: 0 0 var(--space-2);
+}
+.share-panel-title {
+  margin-bottom: 8px;
+  color: var(--ink);
+  font-weight: 500;
+}
+.share-panel-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+.share-url-input {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+.share-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+.share-page .header-inner {
+  gap: var(--space-3);
+}
+.share-page .lang-btn {
+  margin-left: auto;
+  text-decoration: none;
+}
+.share-container {
+  max-width: var(--maw-w);
+  margin: 0 auto;
+  padding: var(--space-4) var(--page-inset) var(--space-6);
+}
+.share-container > .card {
+  overflow: hidden;
+}
+.share-title {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+.share-message {
+  max-width: var(--maw-xn);
+}
+.report-section-title {
+  margin: var(--space-4) 0 var(--space-2);
+  font-weight: 500;
+}
+.report-ai-notice,
+.share-footer {
+  margin-top: var(--space-3);
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+.chart-timeline {
+  display: block;
+  max-height: 140px;
 }

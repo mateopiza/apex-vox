@@ -195,6 +195,22 @@
       btn_enroll_vp: "Guardar voz",
       result_card_title: "Transcripción",
       btn_rename_speakers: "Renombrar Oradores",
+      btn_share: "Compartir",
+      btn_export_pdf: "Informe PDF",
+      btn_email_result: "Enviar por correo",
+      email_panel_title: "Enviar por correo",
+      email_panel_hint: "Va el resumen en el cuerpo, un botón al enlace para compartir y el informe en PDF adjunto. Las respuestas llegan a tu correo.",
+      email_free_note: "Con el plan Gratis puedes enviártelo a ti mismo. Enviar a otras personas está incluido en Apex Pro.",
+      email_recipients_lbl: "Para (hasta 10 correos, separados por comas)",
+      email_message_lbl: "Mensaje (opcional)",
+      email_language_lbl: "Idioma",
+      email_send: "Enviar",
+      share_panel_title: "Compartir con un enlace de solo lectura",
+      share_panel_hint: "Quien tenga el enlace verá el resumen, el acta y la transcripción sin iniciar sesión, según lo que incluye tu plan. Puedes dejar de compartir cuando quieras.",
+      share_include_audio: "Incluir el audio",
+      share_create: "Crear enlace",
+      share_copy: "Copiar enlace",
+      share_revoke: "Dejar de compartir",
       empty_state_heading: "Listo para transcribir",
       empty_state_desc: "Sube uno o varios audios a la izquierda, elige el modelo y pulsa <strong>Transcribir</strong>.",
       kpi_duration_lbl: "Duración Global",
@@ -419,6 +435,22 @@
       btn_enroll_vp: "Save voice",
       result_card_title: "Transcript",
       btn_rename_speakers: "Rename Speakers",
+      btn_share: "Share",
+      btn_export_pdf: "PDF report",
+      btn_email_result: "Send by email",
+      email_panel_title: "Send by email",
+      email_panel_hint: "The summary goes in the body, with a button to the share link and the PDF report attached. Replies come to your email.",
+      email_free_note: "On the Free plan you can send it to yourself. Sending to other people is included in Apex Pro.",
+      email_recipients_lbl: "To (up to 10 emails, separated by commas)",
+      email_message_lbl: "Message (optional)",
+      email_language_lbl: "Language",
+      email_send: "Send",
+      share_panel_title: "Share with a read-only link",
+      share_panel_hint: "Anyone with the link sees the summary, minutes and transcript without signing in, as far as your plan includes them. You can stop sharing at any time.",
+      share_include_audio: "Include the audio",
+      share_create: "Create link",
+      share_copy: "Copy link",
+      share_revoke: "Stop sharing",
       empty_state_heading: "Ready to transcribe",
       empty_state_desc: "Upload one or more audios on the left, choose the model and press <strong>Transcribe</strong>.",
       kpi_duration_lbl: "Total Duration",
@@ -574,6 +606,15 @@
   const speakerTabsEl = document.getElementById("speaker-tabs");
   const segmentsListEl = document.getElementById("segments-list");
   const copyTranscriptBtn = document.getElementById("copy-transcript-btn");
+  const shareResultBtn = document.getElementById("share-result-btn");
+  const emailResultBtn = document.getElementById("email-result-btn");
+  const emailPanel = document.getElementById("email-panel");
+  const sharePanel = document.getElementById("share-panel");
+  const shareIncludeAudio = document.getElementById("share-include-audio");
+  const shareUrlInput = document.getElementById("share-url-input");
+  const shareCreateBtn = document.getElementById("share-create-btn");
+  const shareCopyBtn = document.getElementById("share-copy-btn");
+  const shareRevokeBtn = document.getElementById("share-revoke-btn");
 
   const healthDot = document.getElementById("health-dot");
   const healthText = document.getElementById("health-text");
@@ -633,6 +674,7 @@
       "Subtítulos SRT": "SRT subtitles",
       "Subtítulos VTT": "VTT subtitles",
       "Copiar texto": "Copy text",
+      "Enlace para compartir": "Share link",
       "Apex Summa IA · Potenciado por Groq": "Apex Summa AI · Powered by Groq",
       "Desbloquear con Prueba Pro 3 Días": "Unlock with Apex Pro",
       "Activar Apex Pro": "Activate Apex Pro",
@@ -2489,8 +2531,15 @@
     ["txt", "srt", "vtt", "json", "csv", "md"].forEach((fmt) => {
       document.getElementById(`export-${fmt}`).href = withMediaToken(`/api/jobs/${jid}/export/${fmt}`, result.media_token);
     });
+    const pdfLink = document.getElementById("export-pdf");
+    if (pdfLink) {
+      const pdfUrl = withMediaToken(`/api/jobs/${jid}/export/pdf`, result.media_token);
+      pdfLink.href = `${pdfUrl}${pdfUrl.includes("?") ? "&" : "?"}lang=${state.lang}`;
+    }
 
     if (!isGuestResult) renderApexSumma(result);
+    resetSharePanel(Boolean(state.token) && !isGuestResult);
+    resetEmailPanel(Boolean(state.token) && !isGuestResult);
     renderSpeakerTabs(result);
     renderSegmentsList(result);
   }
@@ -2757,6 +2806,145 @@
     win.document.close();
     win.focus();
     win.print();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Share link (read-only page at /s/<token>)
+  // ---------------------------------------------------------------------------
+
+  function resetSharePanel(canShare) {
+    if (!shareResultBtn || !sharePanel) return;
+    shareResultBtn.classList.toggle("hidden", !canShare);
+    shareResultBtn.setAttribute("aria-expanded", "false");
+    sharePanel.classList.add("hidden");
+    shareIncludeAudio.checked = false;
+    renderShareLink({ active: false });
+  }
+
+  function renderShareLink(link) {
+    const active = Boolean(link && link.active);
+    shareUrlInput.value = active ? link.url : "";
+    shareUrlInput.classList.toggle("hidden", !active);
+    shareCopyBtn.classList.toggle("hidden", !active);
+    shareRevokeBtn.classList.toggle("hidden", !active);
+    shareCreateBtn.classList.toggle("hidden", active);
+    shareIncludeAudio.checked = active ? Boolean(link.include_audio) : shareIncludeAudio.checked;
+  }
+
+  async function shareRequest(method, body) {
+    if (!state.currentResult) return null;
+    const opts = { method };
+    if (body) {
+      opts.headers = { "Content-Type": "application/json" };
+      opts.body = JSON.stringify(body);
+    }
+    const res = await authFetch(`/api/jobs/${state.currentResult.job_id}/share`, opts);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.detail || t("No se pudo actualizar el enlace.", "Could not update the link."));
+    return data;
+  }
+
+  async function toggleSharePanel() {
+    const opening = sharePanel.classList.contains("hidden");
+    sharePanel.classList.toggle("hidden", !opening);
+    shareResultBtn.setAttribute("aria-expanded", String(opening));
+    if (!opening) return;
+    try {
+      renderShareLink(await shareRequest("GET"));
+    } catch (err) {
+      showAlert(err.message);
+    }
+  }
+
+  async function saveShareLink() {
+    try {
+      renderShareLink(await shareRequest("POST", { include_audio: shareIncludeAudio.checked }));
+    } catch (err) {
+      showAlert(err.message);
+    }
+  }
+
+  async function revokeShareLink() {
+    try {
+      renderShareLink(await shareRequest("DELETE"));
+      showAlert(t("El enlace dejó de funcionar.", "The link no longer works."), "success");
+    } catch (err) {
+      showAlert(err.message);
+    }
+  }
+
+  async function copyShareLink() {
+    try {
+      await navigator.clipboard.writeText(shareUrlInput.value);
+    } catch (err) {
+      shareUrlInput.select();
+      document.execCommand("copy");
+    }
+    const prev = shareCopyBtn.textContent;
+    shareCopyBtn.textContent = t("¡Copiado!", "Copied!");
+    setTimeout(() => {
+      shareCopyBtn.textContent = prev;
+    }, 1800);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Send a result by email (summary, share link and PDF)
+  // ---------------------------------------------------------------------------
+
+  function resetEmailPanel(canSend) {
+    if (!emailResultBtn || !emailPanel) return;
+    emailResultBtn.classList.toggle("hidden", !canSend);
+    emailResultBtn.setAttribute("aria-expanded", "false");
+    emailPanel.classList.add("hidden");
+  }
+
+  function toggleEmailPanel() {
+    const opening = emailPanel.classList.contains("hidden");
+    emailPanel.classList.toggle("hidden", !opening);
+    emailResultBtn.setAttribute("aria-expanded", String(opening));
+    if (!opening) return;
+    const recipients = document.getElementById("email-recipients");
+    if (recipients && !recipients.value && state.user && state.user.email) recipients.value = state.user.email;
+    const lang = document.getElementById("email-language");
+    if (lang) lang.value = state.lang;
+    const paid = ["pro", "trial"].includes(String(state.plan || "").toLowerCase());
+    document.getElementById("email-free-note").classList.toggle("hidden", paid);
+  }
+
+  async function sendResultEmail(event) {
+    event.preventDefault();
+    if (!state.currentResult) return;
+    const sendBtn = document.getElementById("email-send-btn");
+    const recipients = document.getElementById("email-recipients").value
+      .split(/[,;\s]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    sendBtn.disabled = true;
+    try {
+      const res = await authFetch(`/api/jobs/${state.currentResult.job_id}/email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipients,
+          message: document.getElementById("email-message").value,
+          language: document.getElementById("email-language").value,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || t("No se pudo enviar el correo.", "Could not send the email."));
+      const failed = (data.failed || []).length;
+      showAlert(
+        failed
+          ? t(`Enviado a ${data.sent}. No se pudo enviar a: ${data.failed.join(", ")}.`, `Sent to ${data.sent}. Could not send to: ${data.failed.join(", ")}.`)
+          : t(`Enviado a ${data.sent} ${data.sent === 1 ? "destinatario" : "destinatarios"}.`, `Sent to ${data.sent} ${data.sent === 1 ? "recipient" : "recipients"}.`),
+        failed ? "error" : "success"
+      );
+      if (!failed) emailPanel.classList.add("hidden");
+    } catch (err) {
+      showAlert(err.message);
+    } finally {
+      sendBtn.disabled = false;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -3191,6 +3379,19 @@
   });
 
   renameSpeakersBtn.addEventListener("click", openRenamePanel);
+  if (emailResultBtn) {
+    emailResultBtn.addEventListener("click", toggleEmailPanel);
+    emailPanel.addEventListener("submit", sendResultEmail);
+  }
+  if (shareResultBtn) {
+    shareResultBtn.addEventListener("click", toggleSharePanel);
+    shareCreateBtn.addEventListener("click", saveShareLink);
+    shareCopyBtn.addEventListener("click", copyShareLink);
+    shareRevokeBtn.addEventListener("click", revokeShareLink);
+    shareIncludeAudio.addEventListener("change", () => {
+      if (!shareRevokeBtn.classList.contains("hidden")) saveShareLink();
+    });
+  }
   applyRenameBtn.addEventListener("click", applySpeakerRename);
   cancelRenameBtn.addEventListener("click", () => renamePanel.classList.add("hidden"));
 

@@ -34,6 +34,7 @@ Out of scope by design: Apex Vox processes audio through third parties (Groq, De
 - Apex Box sessions return 404 to anyone but the owner (`routes_box._owned_session`). Meeting bots can only be cancelled by their owner.
 - Voice profiles are filtered by `owner_id`. MCP tools see only the authorized account's transcription index.
 - Plan gates: Apex Summa minutes and calendar export (402), meeting bot, Telegram linking and the MCP summary tools require Apex Pro.
+- Share links (`/s/<token>`): only the owner of a saved result can create, read or revoke its link (`POST/GET/DELETE /api/jobs/{id}/share`, 404 for anyone else, 401 for guests). The token is `<nonce>.<hmac>`: a 144-bit `secrets.token_urlsafe` nonce, unrelated to the job id, plus an HMAC of it with the app secret. The state (and its Postgres replica) stores only the nonce, so a copy of it cannot rebuild a working link. The page is read-only, rendered on the server with autoescaping, sent with `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex` and `Cache-Control: no-store`, and shows what the owner's plan allows at the time of the visit. The job id appears in the page only when the owner includes the audio (as the signed `?t=` audio URL). Links are deleted with the job, by the retention sweep and with the account.
 - Admin endpoints (`/api/metrics/*`, `/api/telegram/setup`, detailed `/api/health`) need `X-Admin-Key` compared in constant time. They return 404 when the key is missing or wrong, so they are not discoverable.
 
 ### Links fetched by the server (`app/services/url_ingest.py`)
@@ -61,6 +62,9 @@ The in-process sliding window (`deps.throttle`) returns 429:
 | OAuth token per IP | 60 per 10 min |
 | MCP calls per account | 120 per minute |
 | Links pasted (`/api/upload/url`) per account or guest | 20 per hour |
+| Share links created per account | 30 per hour |
+| Result emails per account | `EMAIL_SHARE_DAILY_LIMIT` (50) recipients per day |
+| Share page views per IP | `SHARE_VIEWS_PER_MINUTE` (60) per minute |
 
 Guests are also limited by daily audio count and duration. Counters live in memory, so they reset on restart and are not shared between processes. Add edge rate limiting (Cloudflare) on top.
 
@@ -106,7 +110,7 @@ Also:
 
 - Guests: uploaded files are deleted after transcription. The result stays in memory for `GUEST_RESULT_TTL_MINUTES`, then it and the merged audio are deleted. Guests get no Apex Summa report and no storage.
 - Free plan: transcriptions are listed for `FREE_RETENTION_HOURS`.
-- Account deletion removes the user, their sessions, transcription records, local result and audio files, voice profiles and daily usage. Payment records are kept but unlinked (`user_id = "deleted"`).
+- Account deletion removes the user, their sessions, share links, transcription records, local result and audio files, voice profiles and daily usage. Payment records are kept but unlinked (`user_id = "deleted"`).
 - The Supabase schema enables Row Level Security and revokes privileges from public roles. Only the service-role key, held by the server, writes. (`supabase/migrations/`)
 
 ### Secrets handling

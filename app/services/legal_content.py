@@ -84,6 +84,10 @@ PRIVACY_ES: List[Section] = [
         "Groq y Deepgram (transcripción y separación de voces), un proveedor de almacenamiento de objetos en la Unión Europea (archivos), Supabase (base de datos e inicio de sesión con Google/GitHub), "
         "Bold (pagos), Resend (envío de correos), Telegram (solo si vinculas el bot), Cloudflare (DNS) y Google Fonts (tipografías de la web). "
         "Cada uno trata los datos solo para prestarnos su servicio. Algunos están fuera de Colombia, lo que implica una transferencia internacional de datos.",
+        ("<strong>Enlaces que tú creas:</strong> si compartes un resultado con un enlace, cualquier persona que lo tenga puede ver su resumen, acta y transcripción "
+         "(y escuchar el audio, si lo incluyes) sin iniciar sesión, según lo que incluye tu plan. Estas páginas no se indexan en buscadores. Puedes revocar el enlace cuando quieras; "
+         "también deja de funcionar cuando el resultado vence o eliminas tu cuenta. Si envías un resultado por correo, lo enviamos con Resend solo a las direcciones que indiques, "
+         "con tu correo como dirección de respuesta, y creamos el enlace de ese resultado si aún no existía."),
     ]),
     ("Tus derechos", [
         ("Conforme a la Ley 1581 de 2012 y el Decreto 1377 de 2013 puedes conocer, actualizar, rectificar y suprimir tus datos, revocar la autorización y presentar quejas ante la Superintendencia de Industria y Comercio. "
@@ -121,6 +125,10 @@ PRIVACY_EN: List[Section] = [
     ("Processors", [
         "Groq and Deepgram (transcription and voice separation), an object-storage provider in the European Union (files), Supabase (database and Google/GitHub sign-in), Bold (payments), Resend (email), "
         "Telegram (only if you link the bot), Cloudflare (DNS) and Google Fonts (web fonts). Some are outside Colombia, which means an international data transfer.",
+        ("<strong>Links you create:</strong> if you share a result with a link, anyone who has it can see its summary, minutes and transcript (and play the audio, if you include it) "
+         "without signing in, as far as your plan includes them. These pages are not indexed by search engines. You can revoke the link at any time; it also stops working when the "
+         "result expires or you delete your account. If you email a result, we send it through Resend only to the addresses you enter, with your email "
+         "as the reply-to address, and create the result's link if it did not exist yet."),
     ]),
     ("Your rights", [
         ("Under Colombian Law 1581 of 2012 you may access, update, correct and delete your data, withdraw consent and complain to the Superintendencia de Industria y Comercio. "
@@ -175,6 +183,7 @@ TERMS_ES: List[Section] = [
         "Conservas todos los derechos sobre tus audios, transcripciones, notas y actas. Nos otorgas solo la licencia necesaria para procesarlos y prestarte el servicio; no los usamos para entrenar modelos propios.",
         "Declaras que tienes la autorización de las personas grabadas para grabarlas y tratar su voz y lo que dicen, conforme a la ley. Eres responsable del contenido que subes.",
         "Si pegas un enlace (por ejemplo, de YouTube), declaras que tienes derecho a usar ese contenido. Descargamos solo su audio, o sus subtítulos si el audio no está disponible, y lo tratamos como un archivo que subiste.",
+        "Si compartes un resultado con un enlace, decides tú a quién se lo envías y debes contar con la autorización de las personas grabadas para compartirlo. Quien tenga el enlace puede verlo hasta que lo revoques o el resultado venza.",
     ]),
     ("9. Uso aceptable", [
         "No puedes usar Apex Vox para: contenido ilegal; grabar o vigilar a personas sin su consentimiento; infringir derechos de autor o de imagen; suplantar a otros; enviar spam; "
@@ -241,6 +250,7 @@ TERMS_EN: List[Section] = [
         "You keep all rights to your audio, transcripts, notes and minutes. You grant us only the license needed to process them and provide the service; we do not use them to train our own models.",
         "You confirm you have the consent of the people recorded to record them and process their voice and words, as required by law. You are responsible for the content you upload.",
         "If you paste a link (for example, to YouTube), you confirm you have the right to use that content. We download only its audio, or its captions when the audio is not available, and treat it like a file you uploaded.",
+        "If you share a result with a link, you decide who receives it and must have the consent of the people recorded to share it. Anyone with the link can see it until you revoke it or the result expires.",
     ]),
     ("9. Acceptable use", [
         "You may not use Apex Vox for illegal content; recording or monitoring people without consent; infringing copyright or image rights; impersonation; spam; accessing other accounts or data, bypassing limits or payments, reverse engineering, overloading or attacking the service.",
@@ -317,6 +327,7 @@ HABEAS_ES: List[Section] = [
     ("11. Encargados y transferencias internacionales", [
         "Compartimos datos solo con proveedores que los tratan por nuestra cuenta: Groq y Deepgram (transcripción), un proveedor de almacenamiento de objetos en la Unión Europea, Supabase (base de datos e inicio de sesión), Bold (pagos), Resend (correos), Telegram (si vinculas el bot), Cloudflare (DNS) y Google Fonts (tipografías). "
         "Varios están fuera de Colombia (por ejemplo, Estados Unidos y la Unión Europea); la transmisión se hace bajo contratos que exigen confidencialidad y seguridad, conforme a los artículos 25 y 26 de la Ley 1581 de 2012.",
+        "Fuera de estos encargados, un resultado solo lo ve otra persona si tú creas un enlace para compartirlo. Puedes revocarlo cuando quieras y deja de funcionar cuando el resultado vence o eliminas tu cuenta.",
     ]),
     ("12. Seguridad", [
         "Aplicamos medidas técnicas y administrativas descritas en la <a href=\"/legal/seguridad\">Política de seguridad</a>: HTTPS, contraseñas con hash, sesiones revocables, aislamiento de datos por cuenta, control de acceso en la base de datos y almacenamiento privado con enlaces temporales.",
@@ -370,6 +381,7 @@ HABEAS_EN: List[Section] = [
     ]),
     ("10. Processors and international transfers", [
         "We share data only with providers acting on our behalf: Groq and Deepgram (transcription), an object-storage provider in the European Union, Supabase (database and sign-in), Bold (payments), Resend (email), Telegram (if you link the bot), Cloudflare (DNS) and Google Fonts. Several are outside Colombia (e.g. the US and the EU); transmissions are covered by confidentiality and security obligations under articles 25 and 26 of Law 1581 of 2012.",
+        "Beyond these processors, someone else sees a result only if you create a link to share it. You can revoke it at any time, and it stops working when the result expires or you delete your account.",
     ]),
     ("11. Security and retention", [
         "Security measures are described in the <a href=\"/legal/seguridad?lang=en\">Security policy</a>. Without an account, audio is deleted once processed and results are removed after {guest_ttl} minutes; Free plan data is kept {free_retention} hours; Apex Pro data while the account exists or until you delete it; payment records as long as the law requires.",
@@ -390,6 +402,7 @@ SECURITY_ES: List[Section] = [
         "<strong>Navegador:</strong> Content-Security-Policy estricta, protección contra clickjacking (X-Frame-Options), nosniff y Referrer-Policy.",
         "<strong>Abuso:</strong> límites de intentos en inicio de sesión, recuperación de contraseña y boletín.",
         "<strong>Datos:</strong> los perfiles de voz, sesiones de subida e historial están aislados por cuenta; los audios de visitantes se borran al terminar.",
+        "<strong>Enlaces para compartir:</strong> tokens aleatorios firmados, distintos del identificador del resultado y revocables; las páginas son de solo lectura, no se indexan, no envían la dirección a otros sitios (Referrer-Policy: no-referrer) y tienen límite de visitas.",
         "<strong>Supabase:</strong> las tablas tienen Row Level Security; solo el servidor (service role) accede a los datos.",
     ]),
     ("Reportar una vulnerabilidad", [
@@ -410,6 +423,7 @@ SECURITY_EN: List[Section] = [
         "<strong>Browser:</strong> strict Content-Security-Policy, clickjacking protection (X-Frame-Options), nosniff and Referrer-Policy.",
         "<strong>Abuse:</strong> rate limits on sign-in, password recovery and newsletter sign-up.",
         "<strong>Data:</strong> voice profiles, upload sessions and history are isolated per account; visitor audio is deleted once processed.",
+        "<strong>Share links:</strong> random signed tokens, unrelated to the result's id and revocable; the pages are read-only, not indexed, never send their address to other sites (Referrer-Policy: no-referrer) and are rate limited.",
         "<strong>Supabase:</strong> tables use Row Level Security; only the server (service role) can access the data.",
     ]),
     ("Reporting a vulnerability", [

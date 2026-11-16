@@ -102,6 +102,33 @@ class ApexSummaReport(BaseModel):
     available_minutes_templates: List[Dict[str, str]] = Field(default_factory=list)
 
 
+class ShareLinkRequest(BaseModel):
+    """Create or update the read-only share link of a result."""
+    include_audio: bool = Field(default=False, description="Let people with the link play the audio")
+
+
+class ShareLinkResponse(BaseModel):
+    """The share link of a result, if it has one."""
+    active: bool = False
+    url: Optional[str] = None
+    include_audio: bool = False
+    created_at: Optional[str] = None
+
+
+class EmailResultRequest(BaseModel):
+    """Send a result by email: summary in the body, link to the share page and the PDF attached."""
+    recipients: List[str] = Field(default_factory=list, description="Up to 10 addresses")
+    message: str = Field(default="", max_length=1000)
+    language: str = "es"
+
+
+class EmailResultResponse(BaseModel):
+    sent: int = 0
+    failed: List[str] = Field(default_factory=list)
+    share_url: Optional[str] = None
+    attached_pdf: bool = False
+
+
 class MinutesGenerationRequest(BaseModel):
     """Request payload to generate formal meeting minutes ('Actas')."""
     template_type: str = "consejo"  # consejo | comite | asamblea | seguimiento | ejecutiva

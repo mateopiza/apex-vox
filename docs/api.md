@@ -98,10 +98,21 @@ Accepted extensions: `.mp3 .ogg .wav .m4a .flac .webm .mp4`.
 | GET | `/api/metrics/daily?date=YYYY-MM-DD` | Admin | Usage, estimated cost and revenue. *Hidden.* |
 | POST | `/api/metrics/send-report` | Admin | Save the report to `outputs/reports/` and send it to the configured Telegram chat or `REPORT_WEBHOOK_URL`. Destinations are never taken from the request. *Hidden.* |
 
+## Share links (`routes_share.py`)
+
+| Method | Path | Auth | Purpose |
+| --- | --- | --- | --- |
+| POST | `/api/jobs/{job_id}/share` | User + Owner | Body `{"include_audio": false}`. Creates the read-only link of a saved result, or keeps the existing one and changes whether it plays the audio. Returns `{"active", "url", "include_audio", "created_at"}`. 401 for guests, 404 for someone else's job, 410 if the result expired. 30 per hour per account. |
+| GET | `/api/jobs/{job_id}/share` | User + Owner | The link, or `{"active": false}`. |
+| DELETE | `/api/jobs/{job_id}/share` | User + Owner | Revoke the link. It stops working at once. A new one has a different token. |
+| POST | `/api/jobs/{job_id}/email` | User + Owner (Pro for other recipients) | Body `{"recipients": [...], "message": "", "language": "es\|en"}`. Emails the summary the owner's plan includes, a button to the share link (created without audio if the result has none) and the PDF report attached (left out, with `attached_pdf: false`, when the server cannot render PDFs). One email per recipient, `Reply-To` the sender. Up to 10 recipients (400 above, or on an invalid address); anyone but the account itself needs Apex Pro (402). Each recipient counts toward `EMAIL_SHARE_DAILY_LIMIT` per account and day (429); failed deliveries are given back. Returns `{"sent", "failed", "share_url", "attached_pdf"}`. 410 when expired, 502 if no email could be sent, 503 without Resend. |
+| GET | `/s/{token}` | Public (token) | Read-only HTML page: figures, Apex Summa summary and charts, minutes, transcript and, if included, the player. Shows what the owner's plan allows (the preview without active Apex Pro). `?lang=es\|en`. `noindex`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`. 404 for an unknown or revoked link, 410 when the result expired, 429 above `SHARE_VIEWS_PER_MINUTE` per IP. *Hidden.* |
+
 ## Export (`routes_export.py`, prefix `/api`)
 
 | Method | Path | Auth | Purpose |
 | --- | --- | --- | --- |
+| GET | `/api/jobs/{job_id}/export/pdf?lang=es\|en` | Capability | The report as a PDF (WeasyPrint): figures, Apex Summa summary with SVG charts, minutes and transcript, from the same template as the share page. Same plan rules as the summary and the minutes: guests get the transcript, without active Apex Pro the preview and no minutes; for a Pro owner the full report in `lang` is built first if missing. 410 when expired, 503 when the server lacks WeasyPrint or Pango. |
 | GET | `/api/jobs/{job_id}/export/{fmt}` | Capability | Download the transcript as `txt`, `srt`, `vtt`, `json`, `csv` or `md`. |
 
 ## Apex Box (`routes_box.py`, prefix `/api/box`)
