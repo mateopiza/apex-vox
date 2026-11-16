@@ -62,3 +62,6 @@ Dockerfile*
 docker-compose*.yml
 .dockerignore
 README.md
+
+# Mobile apps (built by their own workflow, not part of the image)
+mobile/
