@@ -45,7 +45,7 @@ Out of scope by design: Apex Vox processes audio through third parties (Groq, De
 - The host is resolved once and **every** address must be global (no private, loopback, link-local such as `169.254.169.254`, CGNAT, multicast or reserved ranges, including IPv4-mapped IPv6). The request then goes to that checked address with the original `Host` header and TLS SNI, so a second DNS answer (DNS rebinding) cannot redirect it.
 - Redirects are followed by hand, at most 5, and each target is checked the same way. Environment proxies are ignored (`trust_env=False`).
 - Size (`MAX_FILE_SIZE_MB`, also enforced while streaming) and total time (`URL_INGEST_TIMEOUT_SECONDS`) are capped; the file must be audio and is probed with ffprobe like any upload.
-- YouTube links go only to yt-dlp's YouTube extractor (`allowed_extractors`), never its generic one, and only YouTube hosts take that path. `URL_INGEST_PROXY` applies to yt-dlp only.
+- YouTube links go only to yt-dlp's YouTube extractor (`allowed_extractors`), never its generic one, and only YouTube hosts take that path. `URL_INGEST_PROXY` holds the residential proxy password: it lives only in the deployment environment and is never logged. `URL_INGEST_PROXY` applies to yt-dlp only.
 
 ### Rate limits and throttling
 

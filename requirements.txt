@@ -6,7 +6,7 @@ jinja2>=3.1.4,<4.0.0
 aiofiles>=24.1.0,<25.0.0
 
 # Audio from YouTube links (POST /api/upload/url)
-yt-dlp>=2025.10.22
+yt-dlp[default]>=2025.10.22  # [default] adds yt-dlp-ejs, the YouTube JS challenge solver run by Deno
 
 # Server-side PDF export (needs Pango and HarfBuzz from the system, see Dockerfile)
 weasyprint>=62.0,<70.0

@@ -20,6 +20,7 @@ Browser ──HTTPS──▶ Cloudflare (proxy, WAF, rate limiting)
 
 - installs `ffmpeg` (which includes `ffprobe`) and `curl` for the healthcheck;
 - installs Pango, HarfBuzz and the DejaVu fonts that WeasyPrint needs for the PDF export (without them the app runs and `/export/pdf` answers 503);
+- copies the Deno binary, which yt-dlp needs to solve YouTube's JavaScript challenge (with `yt-dlp[default]`, which brings `yt-dlp-ejs`). Without it yt-dlp warns that YouTube extraction is deprecated and some formats may be missing;
 - creates a non-root user whose UID/GID come from the `APP_UID`/`APP_GID` build args (default 1000);
 - installs `requirements.txt` into `/opt/venv`. Pass `--build-arg INSTALL_DEV_DEPS=true` to add pytest;
 - sets `ENVIRONMENT=production` by default;
@@ -101,6 +102,64 @@ Other proxies (nginx, Caddy) work the same way, as long as they append the real 
 | `CF-IPCountry` header | On (default) | Picks the default UI language when the browser asks for neither Spanish nor English. |
 
 Do not cache `/api/*`, `/oauth/*` or `/mcp`. Static assets under `/static/` are versioned (`?v=<hash>`) and sent with long `Cache-Control` headers.
+
+## YouTube links (residential proxy)
+
+`POST /api/upload/url` reads YouTube videos with yt-dlp. YouTube refuses data-centre IPs, the production VPS included ("Sign in to confirm you're not a bot"; other yt-dlp clients and IPv4 were tried and fail too). Without a residential proxy, YouTube links fail in production with a 502; direct links to audio files work without it. The proxy carries only YouTube traffic.
+
+### Local development
+
+From a home connection YouTube usually works without a proxy: leave `URL_INGEST_PROXY` empty. The Docker image already has Deno; outside Docker, install it (`curl -fsSL https://deno.land/install.sh | sh`) so yt-dlp can solve YouTube's JavaScript challenge, and `pip install -r requirements.txt` brings `yt-dlp[default]`.
+
+### Decodo setup
+
+1. In the Decodo dashboard, open **Residential → Proxy setup**. Choose **Authentication: User:pass**, **Location: Random** (or the country of your users), **Session type: Sticky, 10 minutes**, **Protocol: HTTP**. Note the username and password it shows (the proxy user, not your Decodo login).
+2. Build the value. Replace the session id the generator shows with `{session}`, so each pasted link gets its own sticky IP:
+
+   ```text
+   URL_INGEST_PROXY=http://user-USERNAME-session-{session}-sessionduration-10:PASSWORD@gate.decodo.com:7000
+   ```
+
+   - Keep whatever extra parts the generator adds to the username (for example `-country-co`).
+   - If the password has `@`, `:`, `/` or `#`, URL-encode it (`@` → `%40`, `:` → `%3A`, `/` → `%2F`, `#` → `%23`).
+   - `sessionduration-10` keeps the IP for 10 minutes, enough for one link. A link larger than what downloads in 10 minutes would change IP mid-download; raise it (up to 1440) if that happens.
+   - Without `{session}` the gateway rotates on every request and YouTube refuses the audio URLs, because it ties them to the IP that read the video.
+3. In Dokploy, open the **apex-vox** application → **Environment**, add `URL_INGEST_PROXY` with that value and save. Optional: `URL_INGEST_MAX_MINUTES` (default 240) and `URL_INGEST_TIMEOUT_SECONDS` (default 300) bound what one link can spend.
+4. **Deploy** the application (environment changes apply only after a redeploy).
+
+### Check it
+
+From the server, inside the running container (reads metadata only, downloads nothing):
+
+```bash
+C=$(docker ps -q -f name=apex-vox-k7wpck | head -1)
+docker exec $C python -c "
+from app.services import url_ingest
+info = url_ingest.youtube_info('https://www.youtube.com/watch?v=jNQXAC9IVRw', url_ingest.proxy_for_request())
+print('OK', info['title'], info['duration'], 's')
+"
+```
+
+`OK Me at the zoo 19 s` means the proxy works. Then paste a short video in the web app ("Paste link") and transcribe it. Errors:
+
+| Message | Cause |
+| --- | --- |
+| `407 Proxy Authentication Required` | Wrong proxy user or password, or a special character not URL-encoded. |
+| Still "Sign in to confirm you're not a bot" | The value did not reach the container (redeploy), or the plan is not residential. Try another location. |
+| `403` while downloading the audio | The IP changed between reading and downloading: check that `{session}` is in the value. |
+| Connection refused / timeout | Host or port wrong (`gate.decodo.com:7000`), or the plan has no traffic left. |
+
+### Cost and monitoring
+
+- YouTube audio is about 60 MB per hour of video (plus about 1-2 MB of metadata per link), so roughly 0.06 GB per hour of video. Check Decodo's current price per GB on your plan.
+- Only YouTube links use traffic. Pasted links are limited to 20 per hour per account or guest, and to `URL_INGEST_MAX_MINUTES` each, checked before downloading.
+- Watch usage in the Decodo dashboard and set a usage alert there. When the traffic runs out, YouTube links fail with a 502 and everything else keeps working.
+
+### Security
+
+- The value contains the proxy password: keep it only in Dokploy's environment. It is never logged or returned by the API, and `.env.example` holds a placeholder only.
+- Rotate it from the Decodo dashboard (new password), update the variable in Dokploy and redeploy.
+- The proxy is used only by yt-dlp for YouTube hosts. Direct links are fetched by the server itself with the SSRF checks in [security.md](security.md#links-fetched-by-the-server-appservicesurl_ingestpy), never through the proxy.
 
 ## Retention
 
