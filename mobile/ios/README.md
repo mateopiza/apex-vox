@@ -2,7 +2,7 @@
 
 A SwiftUI app and a dictation keyboard that use the Apex Vox backend.
 
-> **Status: written, not yet compiled.** The code was authored on Linux. Every file passes a Swift syntax check and the networking, model and shared-store code type-checks against Foundation, but the SwiftUI, UIKit and AVFoundation code has never been built or run. The first run of the `iOS` workflow is the first real compile; expect to fix errors there before it reaches a phone.
+> **Status: compiles, not yet run.** The app and the keyboard build without warnings in the `iOS` workflow (Xcode on macOS, simulator, unsigned). Neither has run on a simulator or a phone, and the TestFlight upload has not been tried.
 
 ## What it does
 
