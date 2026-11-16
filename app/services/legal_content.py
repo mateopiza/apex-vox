@@ -11,7 +11,7 @@ from typing import Dict, List, Tuple
 
 from app.config import settings
 
-UPDATED = "2026-11-02"
+UPDATED = "2026-11-15"
 
 Section = Tuple[str, List[str]]  # (heading, paragraphs; HTML allowed)
 
@@ -174,6 +174,7 @@ TERMS_ES: List[Section] = [
     ("8. Tu contenido y la autorización de terceros", [
         "Conservas todos los derechos sobre tus audios, transcripciones, notas y actas. Nos otorgas solo la licencia necesaria para procesarlos y prestarte el servicio; no los usamos para entrenar modelos propios.",
         "Declaras que tienes la autorización de las personas grabadas para grabarlas y tratar su voz y lo que dicen, conforme a la ley. Eres responsable del contenido que subes.",
+        "Si pegas un enlace (por ejemplo, de YouTube), declaras que tienes derecho a usar ese contenido. Descargamos solo su audio, o sus subtítulos si el audio no está disponible, y lo tratamos como un archivo que subiste.",
     ]),
     ("9. Uso aceptable", [
         "No puedes usar Apex Vox para: contenido ilegal; grabar o vigilar a personas sin su consentimiento; infringir derechos de autor o de imagen; suplantar a otros; enviar spam; "
@@ -239,6 +240,7 @@ TERMS_EN: List[Section] = [
     ("8. Your content and third-party consent", [
         "You keep all rights to your audio, transcripts, notes and minutes. You grant us only the license needed to process them and provide the service; we do not use them to train our own models.",
         "You confirm you have the consent of the people recorded to record them and process their voice and words, as required by law. You are responsible for the content you upload.",
+        "If you paste a link (for example, to YouTube), you confirm you have the right to use that content. We download only its audio, or its captions when the audio is not available, and treat it like a file you uploaded.",
     ]),
     ("9. Acceptable use", [
         "You may not use Apex Vox for illegal content; recording or monitoring people without consent; infringing copyright or image rights; impersonation; spam; accessing other accounts or data, bypassing limits or payments, reverse engineering, overloading or attacking the service.",

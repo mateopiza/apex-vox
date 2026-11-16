@@ -589,6 +589,15 @@ class Settings:
     JOB_RETENTION_HOURS: int = field(
         default_factory=lambda: int(os.getenv("JOB_RETENTION_HOURS", "24"))
     )
+    # Audio from a pasted link (POST /api/upload/url): proxy for YouTube (yt-dlp) only, e.g.
+    # http://user:pass@host:port or socks5://host:port; download time and length caps.
+    URL_INGEST_PROXY: str = field(default_factory=lambda: os.getenv("URL_INGEST_PROXY", "").strip())
+    URL_INGEST_TIMEOUT_SECONDS: int = field(
+        default_factory=lambda: int(os.getenv("URL_INGEST_TIMEOUT_SECONDS", "300"))
+    )
+    URL_INGEST_MAX_MINUTES: int = field(
+        default_factory=lambda: int(os.getenv("URL_INGEST_MAX_MINUTES", "240"))
+    )
 
     # -------------------------------------------------------------------------
     # Post-initialization & Directory Creation
