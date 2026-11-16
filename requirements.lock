@@ -13,12 +13,15 @@ anyio==4.16.0
     #   starlette
     #   watchfiles
 brotli==1.2.1
-    # via fonttools
+    # via
+    #   fonttools
+    #   yt-dlp
 certifi==2026.10.23
     # via
     #   httpcore
     #   httpx
     #   requests
+    #   yt-dlp
 cffi==2.1.1
     # via weasyprint
 charset-normalizer==3.5.2
@@ -56,6 +59,8 @@ jinja2==3.1.6
     # via -r requirements.txt
 markupsafe==3.0.4
     # via jinja2
+mutagen==1.48.1
+    # via yt-dlp
 numpy==2.4.6
     # via -r requirements.txt
 opentelemetry-api==1.45.2
@@ -64,6 +69,8 @@ pillow==13.0.0
     # via weasyprint
 pycparser==3.12
     # via cffi
+pycryptodomex==3.24.2
+    # via yt-dlp
 pydantic==2.14.2
     # via
     #   -r requirements.txt
@@ -86,7 +93,9 @@ python-multipart==0.0.33
 pyyaml==6.0.3
     # via uvicorn
 requests==2.34.2
-    # via -r requirements.txt
+    # via
+    #   -r requirements.txt
+    #   yt-dlp
 sniffio==1.3.1
     # via groq
 starlette==1.10.0
@@ -112,7 +121,9 @@ typing-inspection==0.4.5
     #   fastapi
     #   pydantic
 urllib3==2.8.0
-    # via requests
+    # via
+    #   requests
+    #   yt-dlp
 uvicorn==0.54.0
     # via -r requirements.txt
 uvloop==0.23.0
@@ -127,8 +138,12 @@ webencodings==0.6.1
     #   tinycss2
     #   tinyhtml5
 websockets==17.4
-    # via uvicorn
+    # via
+    #   uvicorn
+    #   yt-dlp
 yt-dlp==2026.10.26
     # via -r requirements.txt
+yt-dlp-ejs==0.8.0
+    # via yt-dlp
 zopfli==0.4.3
     # via fonttools

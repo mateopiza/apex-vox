@@ -20,6 +20,7 @@ Browser ──HTTPS──▶ Cloudflare (proxy, WAF, rate limiting)
 
 - installs `ffmpeg` (which includes `ffprobe`) and `curl` for the healthcheck;
 - installs Pango, HarfBuzz and the DejaVu fonts that WeasyPrint needs for the PDF export (without them the app runs and `/export/pdf` answers 503);
+- copies the Deno binary, which yt-dlp needs to solve YouTube's JavaScript challenge (with `yt-dlp[default]`, which brings `yt-dlp-ejs`). Without it yt-dlp warns that YouTube extraction is deprecated and some formats may be missing;
 - creates a non-root user whose UID/GID come from the `APP_UID`/`APP_GID` build args (default 1000);
 - installs `requirements.txt` into `/opt/venv`. Pass `--build-arg INSTALL_DEV_DEPS=true` to add pytest;
 - sets `ENVIRONMENT=production` by default;
@@ -105,6 +106,10 @@ Do not cache `/api/*`, `/oauth/*` or `/mcp`. Static assets under `/static/` are 
 ## YouTube links (residential proxy)
 
 `POST /api/upload/url` reads YouTube videos with yt-dlp. YouTube refuses data-centre IPs, the production VPS included ("Sign in to confirm you're not a bot"; other yt-dlp clients and IPv4 were tried and fail too). Without a residential proxy, YouTube links fail in production with a 502; direct links to audio files work without it. The proxy carries only YouTube traffic.
+
+### Local development
+
+From a home connection YouTube usually works without a proxy: leave `URL_INGEST_PROXY` empty. The Docker image already has Deno; outside Docker, install it (`curl -fsSL https://deno.land/install.sh | sh`) so yt-dlp can solve YouTube's JavaScript challenge, and `pip install -r requirements.txt` brings `yt-dlp[default]`.
 
 ### Decodo setup
 

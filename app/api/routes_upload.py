@@ -285,15 +285,16 @@ def _ingest_url(
         info: Optional[Dict[str, Any]] = None
         if url_ingest.is_youtube(url):
             proxy = url_ingest.proxy_for_request()  # una sola IP de salida para todo el enlace
-            info = url_ingest.youtube_info(str(url), proxy)
-            if info.get("duration"):
-                _check_length(float(info["duration"]), user, session_seconds)
-            try:
-                fetched = url_ingest.youtube_audio(info, work_dir, limit, proxy)
-            except url_ingest.UrlIngestError as audio_error:
-                if audio_error.status_code == 413:
-                    raise
-                return _captions_result(info, lang, user, owner, session.session_id, audio_error, proxy)
+            with url_ingest.youtube_session(work_dir, limit, proxy) as ydl:  # y un solo cliente de YouTube
+                info = url_ingest.youtube_info(str(url), ydl=ydl)
+                if info.get("duration"):
+                    _check_length(float(info["duration"]), user, session_seconds)
+                try:
+                    fetched = url_ingest.youtube_audio(info, work_dir, limit, ydl=ydl)
+                except url_ingest.UrlIngestError as audio_error:
+                    if audio_error.status_code == 413:
+                        raise
+                    return _captions_result(info, lang, user, owner, session.session_id, audio_error, ydl)
         else:
             fetched = url_ingest.download_direct(str(url), work_dir, limit, settings.URL_INGEST_TIMEOUT_SECONDS)
 
@@ -323,10 +324,10 @@ def _ingest_url(
 
 def _captions_result(
     info: Dict[str, Any], lang: str, user: Optional[Dict[str, Any]], owner: str, session_id: str,
-    audio_error: url_ingest.UrlIngestError, proxy: Optional[str] = None,
+    audio_error: url_ingest.UrlIngestError, ydl: Any = None,
 ) -> UrlIngestResponse:
     """YouTube refused the audio: the captions become a transcript without speakers."""
-    cues = url_ingest.youtube_captions(info, lang, proxy)
+    cues = url_ingest.youtube_captions(info, lang, ydl=ydl)
     if not cues:
         raise HTTPException(
             status_code=502,

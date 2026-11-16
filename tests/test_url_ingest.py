@@ -140,6 +140,7 @@ def test_youtube_audio_becomes_one_more_track(ydl, monkeypatch: pytest.MonkeyPat
     assert body["kind"] == "audio" and body["title"] == "Comité / semanal" and len(body["files"]) == 1
     assert body["files"][0]["filename"] == "Comité semanal.webm"
     assert ydl.calls == ["info", "download"]
+    assert len(ydl.params_seen) == 1  # el mismo cliente lee el video y baja el audio (si no, YouTube da 403)
 
     again = client.post("/api/upload/url", json={"url": YT, "session_id": body["session_id"]})
     assert again.json()["session_id"] == body["session_id"] and len(again.json()["files"]) == 2
