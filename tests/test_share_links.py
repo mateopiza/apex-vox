@@ -93,7 +93,8 @@ def test_owner_creates_reads_and_revokes_the_link() -> None:
     assert owner.get(f"/api/jobs/{job_id}/share").json()["include_audio"] is True
 
     assert _visit(token).status_code == 200
-    assert owner.delete(f"/api/jobs/{job_id}/share").json()["active"] is False
+    revoked = owner.delete(f"/api/jobs/{job_id}/share")
+    assert revoked.json()["active"] is False
     assert _visit(token).status_code == 404
     # A new link after revoking is a different one.
     assert _share(owner, job_id) != token
