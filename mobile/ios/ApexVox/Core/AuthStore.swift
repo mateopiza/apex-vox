@@ -5,14 +5,13 @@ import Security
 /// the app to dictate.
 enum Keychain {
     private static let service = "app.ialabs.apexvox.session"
-    private static let account = "token"
 
-    private static var query: [String: Any] {
+    private static func query(_ account: String) -> [String: Any] {
         [kSecClass as String: kSecClassGenericPassword, kSecAttrService as String: service, kSecAttrAccount as String: account]
     }
 
-    static func readToken() -> String? {
-        var request = query
+    private static func read(_ account: String) -> String? {
+        var request = query(account)
         request[kSecReturnData as String] = true
         request[kSecMatchLimit as String] = kSecMatchLimitOne
         var item: CFTypeRef?
@@ -22,18 +21,30 @@ enum Keychain {
         return String(data: data, encoding: .utf8)
     }
 
-    static func saveToken(_ token: String) {
-        SecItemDelete(query as CFDictionary)
-        var item = query
-        item[kSecValueData as String] = Data(token.utf8)
+    private static func write(_ value: String, _ account: String) {
+        SecItemDelete(query(account) as CFDictionary)
+        var item = query(account)
+        item[kSecValueData as String] = Data(value.utf8)
         // Dictation uploads run while the phone is locked or the app is in the background.
         item[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
         SecItemAdd(item as CFDictionary, nil)
     }
 
-    static func deleteToken() {
-        SecItemDelete(query as CFDictionary)
-    }
+    static func readToken() -> String? { read("token") }
+    static func saveToken(_ token: String) { write(token, "token") }
+    static func deleteToken() { SecItemDelete(query("token") as CFDictionary) }
+
+    /// Random id of this install, sent at sign-in (`X-Apex-Device`). The server ties the session
+    /// to it and counts the phone once in the account's monthly network limit, whatever network
+    /// it is on. Kept when signing out, so signing in again does not count as a new device.
+    static let deviceID: String = {
+        if let existing = read("device"), !existing.isEmpty {
+            return existing
+        }
+        let created = UUID().uuidString
+        write(created, "device")
+        return created
+    }()
 }
 
 @MainActor

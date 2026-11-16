@@ -84,6 +84,7 @@ final class APIClient {
         request.httpMethod = method
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         request.setValue(Self.preferredLanguage, forHTTPHeaderField: "Accept-Language")
+        request.setValue(Keychain.deviceID, forHTTPHeaderField: "X-Apex-Device")
         if let token, !token.isEmpty {
             request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         }

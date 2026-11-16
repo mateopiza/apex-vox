@@ -57,7 +57,7 @@ def test_slow_login_does_not_delay_other_requests(monkeypatch: pytest.MonkeyPatc
     """Before, the wrong password path alone could stop every user for up to 10 s."""
     started, release = threading.Event(), threading.Event()
 
-    def slow_login(email: str, password: str):
+    def slow_login(email: str, password: str, device: str = ""):
         started.set()
         release.wait(5)
         raise ValueError("Credenciales inválidas.")

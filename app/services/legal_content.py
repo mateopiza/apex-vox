@@ -70,7 +70,7 @@ PRIVACY_ES: List[Section] = [
     ]),
     ("Para qué los usamos", [
         ("Prestar el servicio de transcripción, identificación de oradores y análisis; aplicar los límites de cada plan; procesar pagos; "
-         "proteger las cuentas (por ejemplo, limitar una cuenta a {max_ips} redes por mes para evitar que se comparta); "
+         "proteger las cuentas (por ejemplo, limitar una cuenta a {max_ips} redes o teléfonos por mes para evitar que se comparta); "
          "enviarte correos de la cuenta (bienvenida, recibos, restablecer contraseña) y, solo si te suscribes, el boletín."),
         "No vendemos tus datos ni usamos tus audios para entrenar modelos propios.",
     ]),
@@ -112,7 +112,7 @@ PRIVACY_EN: List[Section] = [
         "<strong>Newsletter (optional):</strong> your email and the confirmation date.",
     ]),
     ("Why we use it", [
-        ("To provide transcription, speaker identification and analysis; apply plan limits; process payments; protect accounts (for example, limiting an account to {max_ips} networks per month to prevent sharing); "
+        ("To provide transcription, speaker identification and analysis; apply plan limits; process payments; protect accounts (for example, limiting an account to {max_ips} networks or phones per month to prevent sharing); "
          "send account emails (welcome, receipts, password reset) and, only if you subscribe, the newsletter."),
         "We do not sell your data or use your audio to train our own models.",
     ]),
@@ -152,7 +152,7 @@ TERMS_ES: List[Section] = [
         "Podemos mejorar, cambiar o retirar funciones. No garantizamos disponibilidad ininterrumpida; haremos esfuerzos razonables para mantener el servicio operativo y avisar de mantenimientos programados.",
     ]),
     ("3. Cuentas", [
-        "La información de registro debe ser veraz. Las cuentas son personales e intransferibles: para evitar que se compartan, cada cuenta puede usarse desde un máximo de {max_ips} redes (IP) distintas por mes calendario; una red adicional queda bloqueada hasta el mes siguiente.",
+        "La información de registro debe ser veraz. Las cuentas son personales e intransferibles: para evitar que se compartan, cada cuenta puede usarse desde un máximo de {max_ips} redes (IP) distintas por mes calendario; la app móvil cuenta como un solo teléfono, sin importar la red. Una red o un teléfono adicional queda bloqueado hasta el mes siguiente.",
         "Las sesiones vencen a los {session_days} días. Eres responsable de la confidencialidad de tu contraseña y de la actividad de tu cuenta; avísanos de inmediato si sospechas un uso no autorizado.",
         "El bot de Telegram se vincula a un solo chat por cuenta de Apex Pro.",
     ]),
@@ -220,7 +220,7 @@ TERMS_EN: List[Section] = [
         "We may improve, change or retire features. We do not guarantee uninterrupted availability but make reasonable efforts to keep the service running and announce planned maintenance.",
     ]),
     ("3. Accounts", [
-        "Registration data must be accurate. Accounts are personal and non-transferable: each account may be used from at most {max_ips} different networks (IP) per calendar month; an additional network is blocked until next month.",
+        "Registration data must be accurate. Accounts are personal and non-transferable: each account may be used from at most {max_ips} different networks (IP) per calendar month; the mobile app counts as one phone, whatever its network. An additional network or phone is blocked until next month.",
         "Sessions expire after {session_days} days. You are responsible for your password and the activity on your account.",
         "The Telegram bot links to a single chat per Apex Pro account.",
     ]),
@@ -396,7 +396,7 @@ SECURITY_ES: List[Section] = [
         "<strong>Transporte:</strong> todo el tráfico usa HTTPS con certificados Let's Encrypt y HSTS.",
         "<strong>Contraseñas:</strong> PBKDF2-SHA256 con 310.000 iteraciones y sal por usuario. Nunca las vemos ni las guardamos en claro.",
         "<strong>Sesiones:</strong> tokens aleatorios de 256 bits que vencen a los {session_days} días y se revocan al cerrar sesión o al cambiar la contraseña. El identificador de usuario nunca sirve como credencial.",
-        "<strong>Uso compartido:</strong> una cuenta puede usarse desde un máximo de {max_ips} redes por mes. Guardamos solo un hash HMAC de cada IP, no la dirección.",
+        "<strong>Uso compartido:</strong> una cuenta puede usarse desde un máximo de {max_ips} redes por mes; la app móvil cuenta como un teléfono en cualquier red. Guardamos solo un hash HMAC de cada IP y de cada identificador de teléfono, no el valor.",
         "<strong>Pagos:</strong> los avisos de Bold se aceptan solo con firma HMAC-SHA256 válida; las referencias son de un solo uso.",
         "<strong>Bot de Telegram:</strong> el webhook exige el token secreto de Telegram; vincular un chat requiere un código de un solo uso que vence en 10 minutos.",
         "<strong>Navegador:</strong> Content-Security-Policy estricta, protección contra clickjacking (X-Frame-Options), nosniff y Referrer-Policy.",
@@ -417,7 +417,7 @@ SECURITY_EN: List[Section] = [
         "<strong>Transport:</strong> all traffic uses HTTPS with Let's Encrypt certificates and HSTS.",
         "<strong>Passwords:</strong> PBKDF2-SHA256, 310,000 iterations, per-user salt. Never stored or seen in clear text.",
         "<strong>Sessions:</strong> random 256-bit tokens that expire after {session_days} days and are revoked on sign-out or password change. User ids are never accepted as credentials.",
-        "<strong>Sharing:</strong> an account can be used from at most {max_ips} networks per month. We store only an HMAC of each IP, not the address.",
+        "<strong>Sharing:</strong> an account can be used from at most {max_ips} networks per month; the mobile app counts as one phone on any network. We store only an HMAC of each IP and phone id, not the value.",
         "<strong>Payments:</strong> Bold notifications are accepted only with a valid HMAC-SHA256 signature; references are single-use.",
         "<strong>Telegram bot:</strong> the webhook requires Telegram's secret token; linking a chat needs a one-time code that expires in 10 minutes.",
         "<strong>Browser:</strong> strict Content-Security-Policy, clickjacking protection (X-Frame-Options), nosniff and Referrer-Policy.",

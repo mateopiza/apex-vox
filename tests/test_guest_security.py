@@ -148,6 +148,55 @@ def test_account_limited_to_monthly_networks(monkeypatch) -> None:
     assert "10.0.0.1" not in str(stored)
 
 
+def test_mobile_session_counts_as_one_device_on_any_network(monkeypatch) -> None:
+    monkeypatch.setattr(settings, "MAX_IPS_PER_MONTH", 2)
+    web = _ip_client("10.1.0.1")
+    profile = _register(web)
+    phone_id = str(uuid.uuid4())
+    login = TestClient(app).post(
+        "/api/auth/login",
+        json={"email": profile["email"], "password": "longpassword1"},
+        headers={"X-Forwarded-For": "10.1.0.2", "X-Apex-Device": phone_id},
+    )
+    assert login.status_code == 200, login.text
+    phone = {"Authorization": f"Bearer {login.json()['access_token']}"}
+    # Wi-Fi, mobile data, a café...: still one device, so the web network keeps its slot.
+    for ip in ("10.1.0.2", "10.1.0.3", "10.1.0.4", "10.1.0.5"):
+        assert TestClient(app).get("/api/auth/me", headers={**phone, "X-Forwarded-For": ip}).status_code == 200
+    usage = TestClient(app).get("/api/auth/security", headers={**phone, "X-Forwarded-For": "10.1.0.6"}).json()
+    assert usage == {"used": 2, "limit": 2}
+    # A browser session from a third network is still blocked, and so is a second phone.
+    web_auth = {"Authorization": f"Bearer {profile['access_token']}"}
+    assert TestClient(app).get("/api/auth/me", headers={**web_auth, "X-Forwarded-For": "10.1.0.7"}).status_code == 403
+    other_phone = TestClient(app).post(
+        "/api/auth/login",
+        json={"email": profile["email"], "password": "longpassword1"},
+        headers={"X-Forwarded-For": "10.1.0.2", "X-Apex-Device": str(uuid.uuid4())},
+    )
+    assert other_phone.status_code == 403
+    # The device id is only read at sign-in: sending one later does not turn a browser session into a device.
+    spoofed = TestClient(app).get(
+        "/api/auth/me", headers={**web_auth, "X-Forwarded-For": "10.1.0.8", "X-Apex-Device": phone_id}
+    )
+    assert spoofed.status_code == 403
+    stored = str(supabase_service._load_db()["users"][profile["user_id"]]["ip_months"])
+    assert phone_id not in stored
+
+
+def test_malformed_device_header_is_ignored() -> None:
+    from starlette.requests import Request as StarletteRequest
+
+    from app.api.deps import device_id
+
+    def header(value: str) -> str:
+        return device_id(StarletteRequest({"type": "http", "headers": [(b"x-apex-device", value.encode())]}))
+
+    assert header("short") == ""
+    assert header("x" * 65) == ""
+    assert header("abc/../def-0123456789") == ""
+    assert header("0F8FAD5B-D9CB-469F-A165-70867728950E") == "0F8FAD5B-D9CB-469F-A165-70867728950E"
+
+
 def test_forged_forwarded_header_cannot_spoof_ip() -> None:
     from starlette.requests import Request as StarletteRequest
 

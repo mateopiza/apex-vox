@@ -36,24 +36,40 @@ IP_LIMIT_DETAIL = (
 )
 
 
-def enforce_ip_limit(request: Request, user_id: str) -> None:
-    """403 when the account is used from a new network beyond MAX_IPS_PER_MONTH."""
-    if not supabase_service.register_account_ip(user_id, client_ip(request)):
+def enforce_ip_limit(request: Request, user_id: str, token: Optional[str] = None) -> None:
+    """
+    403 when the account is used from a new network beyond MAX_IPS_PER_MONTH. A session opened
+    by the mobile app (see device_id) counts as one device instead, whatever its network.
+    """
+    device = supabase_service.session_device(token) if token else ""
+    if not supabase_service.register_account_ip(user_id, client_ip(request), device):
         raise HTTPException(status_code=403, detail=IP_LIMIT_DETAIL.format(limit=settings.MAX_IPS_PER_MONTH))
+
+
+_DEVICE_ID_RE = re.compile(r"^[A-Za-z0-9-]{16,64}$")
+
+
+def device_id(request: Request) -> str:
+    """
+    Install id the mobile app sends with `X-Apex-Device` when it signs in (a UUID kept in the
+    Keychain). Only read at sign-in: the session remembers it, so later requests cannot change it.
+    """
+    value = request.headers.get("x-apex-device", "").strip()
+    return value if _DEVICE_ID_RE.match(value) else ""
 
 
 def optional_user(request: Request, authorization: Optional[str] = Header(default=None)) -> Optional[Dict[str, Any]]:
     """User behind the `Authorization: Bearer apx_...` session token, if any."""
     user = supabase_service.get_user_by_token(authorization)
     if user:
-        enforce_ip_limit(request, user["user_id"])
+        enforce_ip_limit(request, user["user_id"], authorization)
     return user
 
 
 def require_user(request: Request, authorization: Optional[str] = Header(default=None)) -> Dict[str, Any]:
     user = supabase_service.get_user_by_token(authorization)
     if user:
-        enforce_ip_limit(request, user["user_id"])
+        enforce_ip_limit(request, user["user_id"], authorization)
     if not user:
         raise HTTPException(
             status_code=401,

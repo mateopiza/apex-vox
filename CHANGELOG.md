@@ -30,6 +30,7 @@ Preparation of the public open-source release.
 
 ### Changed
 
+- **Monthly network limit and phones.** A session opened by the iOS app (`X-Apex-Device` at sign-in) counts as one device in `MAX_IPS_PER_MONTH`, whatever network it is on; before, a phone moving between Wi-Fi and mobile data used up the limit within days and got 403. Browser sessions still count networks. The privacy policy and terms say so.
 - CI: lint rules live in `ruff.toml` with a pinned version and cover Ruff's default set, coverage is reported, the Docker image and CI install exact versions from `requirements.lock`, and the image must pass its health check.
 - Long audio is transcribed faster: up to `GROQ_PARALLEL_CHUNKS` chunks are sent at once and assembled in order. Set it to `1` to keep the text of the previous chunk as context.
 - The web interface is fully translated into Spanish and English. The default language follows the device, then the visitor's country. The plan card adapts to the device.

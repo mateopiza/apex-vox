@@ -61,7 +61,7 @@ This signing path (automatic signing with an API key on a fresh runner) has not 
 - **Opening the app from the keyboard.** Extensions have no public API for it; `KeyboardViewController.openContainingApp()` walks the responder chain to the application object. It is the approach dictation keyboards use, but it depends on iOS behaviour and App Review may question it. If it stops working, the fallback is to tell the user to open the app.
 - **Background lifetime.** That the session survives with the app in the background for its full length, and that iOS ends it cleanly on a phone call.
 - **Route changes.** Connecting AirPods mid-dictation closes the clip and continues in a new one; for a dictation only the second part is sent.
-- **Account network limit.** The backend allows `MAX_IPS_PER_MONTH` (3 by default) networks per account. A phone moving between Wi-Fi and mobile data will pass it within days and get 403. This needs a backend decision before release, for example sessions tied to a device that count devices instead of networks.
+- **Account network limit.** The app sends a random install id (`X-Apex-Device`, kept in the Keychain) when it signs in. The backend ties the session to it and counts the phone as one of the account's `MAX_IPS_PER_MONTH` slots on any network. Check that the id survives a reinstall (Keychain items normally do), or each reinstall takes a new slot.
 
 ## Not included yet
 

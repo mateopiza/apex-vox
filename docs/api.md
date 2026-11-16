@@ -18,7 +18,7 @@ In development the interactive OpenAPI docs are at `/docs` (Swagger) and `/redoc
 | **MCP token** | `Authorization: Bearer apx_at_<token>` issued by the OAuth flow. |
 | **Capability** | No account check. Access relies on knowing an unguessable random ID (`job_<16 hex>` or a 16-hex session id). Treat these URLs as secrets. |
 
-Session tokens come from `POST /api/auth/register`, `/login`, `/password/reset` or `/oauth/exchange` (field `access_token`). Every authenticated request also counts toward the account's monthly network limit (`MAX_IPS_PER_MONTH`). A request from one network too many gets 403.
+Session tokens come from `POST /api/auth/register`, `/login`, `/password/reset` or `/oauth/exchange` (field `access_token`). Every authenticated request also counts toward the account's monthly network limit (`MAX_IPS_PER_MONTH`). A request from one network too many gets 403. A mobile app sends its install id in `X-Apex-Device` (16 to 64 letters, digits or dashes) when it calls `register` or `login`: that session is tied to the device and takes a single slot, whatever network it is on. The header is ignored on every other request.
 
 Error bodies follow FastAPI's format, `{"detail": "..."}`. Messages are often bilingual (Spanish / English).
 

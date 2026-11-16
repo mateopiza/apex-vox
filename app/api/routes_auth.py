@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.responses import RedirectResponse
 
-from app.api.deps import client_ip, enforce_ip_limit, optional_user, public_base_url, require_user, requester_key, throttle
+from app.api.deps import client_ip, device_id, enforce_ip_limit, optional_user, public_base_url, require_user, requester_key, throttle
 from app.config import settings
 from app.models.schemas import (
     NewsletterSubscribeRequest,
@@ -53,10 +53,11 @@ def register_user_endpoint(payload: UserRegisterRequest, request: Request) -> Us
             password=payload.password,
             full_name=payload.full_name,
             preferred_language=payload.preferred_language,
+            device=device_id(request),
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    enforce_ip_limit(request, profile.user_id)
+    enforce_ip_limit(request, profile.user_id, profile.access_token)
     email_service.send_async(
         profile.email,
         email_service.render_welcome(profile.full_name, profile.preferred_language, _promo_ends(profile)),
@@ -83,11 +84,12 @@ def login_user_endpoint(payload: UserLoginRequest, request: Request) -> UserProf
         profile = supabase_service.login_user(
             email=payload.email,
             password=payload.password,
+            device=device_id(request),
         )
     except ValueError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     try:
-        enforce_ip_limit(request, profile.user_id)
+        enforce_ip_limit(request, profile.user_id, profile.access_token)
     except HTTPException:
         supabase_service.revoke_token(profile.access_token)
         raise

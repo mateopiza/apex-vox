@@ -320,6 +320,7 @@ class SupabaseCloudService:
         password: str,
         full_name: str = "",
         preferred_language: str = "es",
+        device: str = "",
     ) -> UserProfileResponse:
         """
         Register a new user in Supabase Cloud & grant the Free tier:
@@ -364,7 +365,7 @@ class SupabaseCloudService:
             }
 
             db["users"][user_id] = user_record
-            token = self._issue_token(db, user_id)
+            token = self._issue_token(db, user_id, device)
             self._save_db(db)
 
         # Sync to Supabase Cloud if configured
@@ -393,7 +394,7 @@ class SupabaseCloudService:
             quota=quota,
         )
 
-    def login_user(self, email: str, password: str) -> UserProfileResponse:
+    def login_user(self, email: str, password: str, device: str = "") -> UserProfileResponse:
         clean_email = email.strip().lower()
         invalid = "Credenciales inválidas. Verifica tu correo y contraseña."
         new_profile: Optional[Dict[str, Any]] = None
@@ -437,7 +438,7 @@ class SupabaseCloudService:
                 if new_hash:
                     matched_user["password_hash"] = new_hash
             user_id = matched_user["user_id"]
-            token = self._issue_token(db, user_id)
+            token = self._issue_token(db, user_id, device)
             self._save_db(db)
 
         if new_profile:
@@ -448,11 +449,26 @@ class SupabaseCloudService:
     # Sessions
     # -------------------------------------------------------------------------
 
-    def _issue_token(self, db: Dict[str, Any], user_id: str) -> str:
+    def _issue_token(self, db: Dict[str, Any], user_id: str, device: str = "") -> str:
+        """
+        New session. `device` is the install id a mobile app sends at sign-in: the session is then
+        tied to it, and the network limit counts that device once instead of every network it uses.
+        """
         token = f"apx_{secrets.token_urlsafe(32)}"
         expires = _now() + dt.timedelta(days=settings.SESSION_TTL_DAYS)
-        db["tokens"][self._token_key(token)] = {"user_id": user_id, "expires_at": expires.isoformat()}
+        entry = {"user_id": user_id, "expires_at": expires.isoformat()}
+        if device:
+            entry["device"] = self._digest(f"device:{device}")[:20]
+        db["tokens"][self._token_key(token)] = entry
         return token
+
+    def session_device(self, authorization: Optional[str]) -> str:
+        """Hashed device a session was opened on, or "" for a browser session."""
+        token = self._clean_token(authorization)
+        if not token.startswith("apx_"):
+            return ""
+        entry = self._read_snapshot()["tokens"].get(self._token_key(token)) or {}
+        return str(entry.get("device") or "")
 
     @staticmethod
     def _clean_token(authorization: Optional[str]) -> str:
@@ -1063,15 +1079,18 @@ class SupabaseCloudService:
     # Account sharing guard: at most MAX_IPS_PER_MONTH networks per account
     # -------------------------------------------------------------------------
 
-    def register_account_ip(self, user_id: str, client_ip: str) -> bool:
+    def register_account_ip(self, user_id: str, client_ip: str, device: str = "") -> bool:
         """
         Record the (hashed) network an account is used from this month.
         Returns False when it would be a new network beyond the monthly limit.
+
+        A session opened on a mobile device (`device`, from session_device) takes one slot for the
+        device, whatever network it is on: a phone moves between Wi-Fi and mobile data all day.
         """
-        if not user_id or not client_ip:
+        if not user_id or not (client_ip or device):
             return True
         month = _now().strftime("%Y-%m")
-        ip_hash = self._digest(f"ip:{client_ip}")[:20]
+        ip_hash = f"d:{device}" if device else self._digest(f"ip:{client_ip}")[:20]
         known = self._read_snapshot()["users"].get(user_id)
         if not known or known.get("unlimited_ips"):
             return True

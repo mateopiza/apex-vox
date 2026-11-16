@@ -125,7 +125,7 @@ These are commented out in `.env.example`. Uncomment them to override the defaul
 | `GUEST_MAX_AUDIOS_PER_DAY` | `3` | No | Audios per day without an account (per hashed IP). |
 | `GUEST_MAX_AUDIO_MINUTES` | `30` | No | Maximum length of each guest audio. |
 | `GUEST_RESULT_TTL_MINUTES` | `60` | No | Guest results are deleted from memory and disk after this time. |
-| `MAX_IPS_PER_MONTH` | `3` | No | Distinct networks an account may use per calendar month. Beyond that, requests get 403. |
+| `MAX_IPS_PER_MONTH` | `3` | No | Distinct networks an account may use per calendar month. A session opened by the mobile app counts as one device on any network. Beyond that, requests get 403. |
 | `SESSION_TTL_DAYS` | `30` | No | Lifetime of `apx_...` session tokens. |
 
 ## Email (Resend)
