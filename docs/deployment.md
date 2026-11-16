@@ -19,6 +19,7 @@ Browser ──HTTPS──▶ Cloudflare (proxy, WAF, rate limiting)
 `Dockerfile` builds from `python:3.11-slim`. It:
 
 - installs `ffmpeg` (which includes `ffprobe`) and `curl` for the healthcheck;
+- installs Pango, HarfBuzz and the DejaVu fonts that WeasyPrint needs for the PDF export (without them the app runs and `/export/pdf` answers 503);
 - creates a non-root user whose UID/GID come from the `APP_UID`/`APP_GID` build args (default 1000);
 - installs `requirements.txt` into `/opt/venv`. Pass `--build-arg INSTALL_DEV_DEPS=true` to add pytest;
 - sets `ENVIRONMENT=production` by default;

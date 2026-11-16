@@ -194,6 +194,7 @@
       result_card_title: "Transcripción",
       btn_rename_speakers: "Renombrar Oradores",
       btn_share: "Compartir",
+      btn_export_pdf: "Informe PDF",
       share_panel_title: "Compartir con un enlace de solo lectura",
       share_panel_hint: "Quien tenga el enlace verá el resumen, el acta y la transcripción sin iniciar sesión, según lo que incluye tu plan. Puedes dejar de compartir cuando quieras.",
       share_include_audio: "Incluir el audio",
@@ -423,6 +424,7 @@
       result_card_title: "Transcript",
       btn_rename_speakers: "Rename Speakers",
       btn_share: "Share",
+      btn_export_pdf: "PDF report",
       share_panel_title: "Share with a read-only link",
       share_panel_hint: "Anyone with the link sees the summary, minutes and transcript without signing in, as far as your plan includes them. You can stop sharing at any time.",
       share_include_audio: "Include the audio",
@@ -2465,6 +2467,11 @@
     ["txt", "srt", "vtt", "json", "csv", "md"].forEach((fmt) => {
       document.getElementById(`export-${fmt}`).href = withMediaToken(`/api/jobs/${jid}/export/${fmt}`, result.media_token);
     });
+    const pdfLink = document.getElementById("export-pdf");
+    if (pdfLink) {
+      const pdfUrl = withMediaToken(`/api/jobs/${jid}/export/pdf`, result.media_token);
+      pdfLink.href = `${pdfUrl}${pdfUrl.includes("?") ? "&" : "?"}lang=${state.lang}`;
+    }
 
     if (!isGuestResult) renderApexSumma(result);
     resetSharePanel(Boolean(state.token) && !isGuestResult);

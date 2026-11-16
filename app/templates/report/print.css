@@ -1,0 +1,93 @@
+/* PDF export (WeasyPrint): same report as the share page, laid out for A4. System fonts only. */
+@page {
+  size: A4;
+  margin: 18mm 16mm 18mm 16mm;
+  @bottom-right {
+    content: counter(page) " / " counter(pages);
+    font-family: "DejaVu Sans Mono", monospace;
+    font-size: 8pt;
+    color: #6b6b62;
+  }
+  @bottom-left {
+    content: "Apex Vox";
+    font-family: "DejaVu Sans Mono", monospace;
+    font-size: 8pt;
+    color: #6b6b62;
+  }
+}
+html { font-family: "DejaVu Sans", "Liberation Sans", sans-serif; font-size: 9.5pt; color: #2d2f33; line-height: 1.4; }
+h1, h2, h3, h4 { color: #302b28; font-weight: 600; margin: 0; }
+p { margin: 0 0 6pt; }
+.pdf-header { border-bottom: 2pt solid #f43e01; padding-bottom: 6pt; margin-bottom: 10pt; }
+.pdf-brand { font-family: "DejaVu Sans Mono", monospace; font-size: 8pt; letter-spacing: 0.08em; text-transform: uppercase; color: #f43e01; }
+.pdf-title { font-size: 16pt; margin-top: 2pt; }
+
+.kpi-grid { display: flex; border: 0.75pt solid #cecebf; margin-bottom: 10pt; }
+.kpi-card { flex: 1; padding: 6pt 8pt; border-right: 0.75pt solid #cecebf; }
+.kpi-card:last-child { border-right: none; }
+.kpi-label, .summa-sec-title, .chart-caption, .summa-pill, .calendar-date-badge, .file-divider {
+  font-family: "DejaVu Sans Mono", monospace; font-size: 7pt; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.kpi-label { color: #6b6b62; }
+.kpi-value { font-size: 13pt; margin-top: 2pt; }
+.kpi-value--sm { font-size: 10pt; }
+
+.summa-banner { background: #2d2f33; color: #f3f3ee; padding: 8pt 10pt; margin-bottom: 8pt; }
+.summa-pill { color: #ff9b71; }
+.summa-title { color: #f3f3ee; font-size: 12pt; margin-top: 2pt; }
+.summa-locked-notice { border: 0.75pt solid #f43e01; padding: 6pt 8pt; margin-bottom: 8pt; color: #a22c00; }
+.summa-grid-2 { display: flex; gap: 8pt; }
+.summa-grid-2 > .summa-box { flex: 1; }
+.summa-box { border: 0.75pt solid #cecebf; padding: 8pt; margin-bottom: 8pt; page-break-inside: avoid; }
+.summa-sec-title { color: #f43e01; margin-bottom: 6pt; }
+.summa-sec-title--spaced { margin-top: 10pt; }
+.dominant-speaker-title { font-size: 10.5pt; font-weight: 600; }
+.dominant-speaker-meta { font-size: 8pt; color: #6b6b62; margin: 2pt 0 6pt; }
+.spk-stat-row { margin-bottom: 4pt; }
+.spk-stat-top { display: flex; justify-content: space-between; font-size: 8pt; }
+.spk-bar-track { height: 4pt; background: #e8e8de; }
+.spk-bar-fill { height: 100%; background: #f43e01; }
+.chart-flex-box { display: flex; align-items: center; gap: 10pt; }
+.chart-donut { transform: rotate(-90deg); flex: none; }
+.chart-legend-row { font-size: 8pt; margin-bottom: 2pt; }
+.chart-legend-swatch { display: inline-block; width: 7pt; height: 7pt; margin-right: 4pt; }
+.chart-caption { color: #6b6b62; margin: 6pt 0 2pt; }
+.chart-timeline { width: 100%; height: auto; }
+.topic-item-card { border-top: 0.75pt solid #cecebf; padding: 4pt 0; }
+.topic-item-head { display: flex; justify-content: space-between; font-weight: 600; }
+.topic-item-body { font-size: 8.5pt; color: #4a4a44; }
+.summa-checklist { margin: 0; padding-left: 12pt; }
+.callout-item-card { border-left: 2pt solid #e0003c; padding: 3pt 6pt; margin-bottom: 4pt; background: #f7f7f2; }
+.callout-item-sev { font-size: 7pt; color: #ffffff; background: #e0003c; padding: 0 3pt; }
+.callout-item-meta { font-size: 7.5pt; color: #6b6b62; }
+.calendar-grid { display: flex; flex-wrap: wrap; gap: 6pt; }
+.calendar-card { width: 48%; border: 0.75pt solid #cecebf; padding: 6pt; page-break-inside: avoid; }
+.calendar-date-badge { color: #a22c00; }
+.calendar-card-title { font-weight: 600; margin: 2pt 0; }
+.calendar-card-body { font-size: 8.5pt; color: #4a4a44; }
+.calendar-card-foot { display: flex; justify-content: space-between; font-size: 8pt; margin-top: 4pt; }
+.badge-pill { font-size: 7pt; padding: 0 3pt; background: #ffe2d6; color: #a22c00; }
+.badge-pill.info { background: #e3e3fa; color: #4646dd; }
+
+.minutes-generator-box { page-break-before: always; }
+.minutes-document h2 { font-size: 13pt; border-bottom: 1.5pt solid #f43e01; padding-bottom: 4pt; margin-bottom: 4pt; }
+.minutes-document h3 { font-size: 10pt; margin: 10pt 0 4pt; }
+.minutes-meta { color: #6b6b62; font-size: 8pt; }
+.minutes-table { width: 100%; border-collapse: collapse; margin-top: 4pt; }
+.minutes-table th, .minutes-table td { border: 0.75pt solid #cecebf; padding: 4pt; text-align: left; font-size: 8pt; vertical-align: top; }
+.minutes-table th { background: #e8e8de; font-family: "DejaVu Sans Mono", monospace; text-transform: uppercase; font-weight: normal; }
+.minutes-signatures { display: flex; justify-content: space-around; margin-top: 30pt; text-align: center; font-size: 8pt; }
+
+.report-section-title { font-size: 12pt; margin: 12pt 0 6pt; }
+.summa-wrapper + .report-section-title { page-break-before: always; }
+.file-divider { display: flex; justify-content: space-between; color: #a22c00; border-bottom: 0.75pt solid #cecebf; padding: 3pt 0; margin: 6pt 0 2pt; }
+.segment-card { padding: 4pt 0; border-bottom: 0.5pt solid #e8e8de; page-break-inside: avoid; }
+.segment-header { display: flex; justify-content: space-between; }
+.speaker-badge { font-family: "DejaVu Sans Mono", monospace; font-size: 7.5pt; text-transform: uppercase; color: #ffffff; padding: 0 4pt; background: #4646dd; }
+.speaker-badge.speaker-1 { background: #225c05; }
+.speaker-badge.speaker-2 { background: #a2003f; }
+.speaker-badge.speaker-3 { background: #a27900; }
+.timestamp-btn { font-family: "DejaVu Sans Mono", monospace; font-size: 7.5pt; color: #a22c00; }
+.segment-text { margin: 2pt 0 0; }
+.empty-state { color: #6b6b62; }
+.report-ai-notice { margin-top: 12pt; font-size: 7.5pt; color: #6b6b62; }

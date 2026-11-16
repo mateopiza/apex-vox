@@ -19,11 +19,16 @@ ARG APP_GID=1000
 # Set to "true" to include pytest in the image (CI / local test runs)
 ARG INSTALL_DEV_DEPS=false
 
-# 1. Install system runtime dependencies: ffmpeg (audio processing) & curl (healthcheck)
+# 1. Install system runtime dependencies: ffmpeg (audio processing), curl (healthcheck),
+#    and Pango, HarfBuzz and fonts for the PDF export (WeasyPrint)
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ffmpeg \
-        curl && \
+        curl \
+        libpango-1.0-0 \
+        libpangoft2-1.0-0 \
+        libharfbuzz-subset0 \
+        fonts-dejavu-core && \
     rm -rf /var/lib/apt/lists/*
 
 # 2. Create non-root application user matching host UID/GID
