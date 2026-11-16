@@ -1,0 +1,103 @@
+# XcodeGen project (https://github.com/yonaskolb/XcodeGen). Run `xcodegen generate` in this folder.
+#
+# To ship under other identifiers, change APP_BUNDLE_ID and APP_GROUP_ID below AND the two
+# `com.apple.security.application-groups` entries further down (entitlements are not expanded
+# from build settings here).
+name: ApexVox
+
+options:
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Automatic
+    TARGETED_DEVICE_FAMILY: "1"
+    APP_BUNDLE_ID: app.ialabs.apexvox
+    APP_GROUP_ID: group.app.ialabs.apexvox
+    API_HOST: apex-vox.ialabs.app
+
+targets:
+  ApexVox:
+    type: application
+    platform: iOS
+    sources:
+      - ApexVox
+      - Shared
+    dependencies:
+      - target: ApexVoxKeyboard
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID)
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    info:
+      path: ApexVox/Info.plist
+      properties:
+        CFBundleDisplayName: Apex Vox
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        AppGroupID: $(APP_GROUP_ID)
+        APIHost: $(API_HOST)
+        ITSAppUsesNonExemptEncryption: false
+        NSMicrophoneUsageDescription: Apex Vox usa el micrófono para transcribir lo que dictas y grabar tus reuniones.
+        UIBackgroundModes:
+          - audio
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        CFBundleURLTypes:
+          - CFBundleURLName: $(APP_BUNDLE_ID)
+            CFBundleURLSchemes:
+              - apexvox
+    entitlements:
+      path: ApexVox/ApexVox.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.app.ialabs.apexvox
+
+  ApexVoxKeyboard:
+    type: app-extension
+    platform: iOS
+    sources:
+      - ApexVoxKeyboard
+      - Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(APP_BUNDLE_ID).keyboard
+        APPLICATION_EXTENSION_API_ONLY: YES
+    info:
+      path: ApexVoxKeyboard/Info.plist
+      properties:
+        CFBundleDisplayName: Apex Vox
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        AppGroupID: $(APP_GROUP_ID)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.keyboard-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
+          NSExtensionAttributes:
+            IsASCIICapable: false
+            PrefersRightToLeft: false
+            PrimaryLanguage: es
+            RequestsOpenAccess: true
+    entitlements:
+      path: ApexVoxKeyboard/ApexVoxKeyboard.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.app.ialabs.apexvox
+
+schemes:
+  ApexVox:
+    build:
+      targets:
+        ApexVox: all
+    run:
+      config: Debug
+    archive:
+      config: Release

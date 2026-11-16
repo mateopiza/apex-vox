@@ -26,6 +26,7 @@ Out of scope by design: Apex Vox processes audio through third parties (Groq, De
 - **Google / GitHub:** Supabase Auth with PKCE. The verifier is kept in an HttpOnly, `SameSite=Lax` cookie scoped to `/api/auth/oauth` (secure when the callback is https). The browser receives only a single-use handoff code valid for 120 s. (`routes_auth.py`, `oauth_service.py`)
 - **Password reset:** single-use token valid 60 min, stored as an HMAC. The endpoint always answers `sent_if_exists`, so it cannot be used to tell whether an account exists.
 - **Account sharing guard:** an account can be used from at most `MAX_IPS_PER_MONTH` distinct networks per month. Only an HMAC of each IP is stored. (`deps.enforce_ip_limit`)
+  - A session opened with `X-Apex-Device` (the iOS app) is tied to that install id and counts as one slot on any network, since a phone changes networks all day. The id is read only at sign-in and stored as an HMAC in the session. Limit: the id is not attested, so a client that sends one at sign-in can then use that one session from any network. Apple App Attest would close this.
 
 ### Authorization and ownership
 

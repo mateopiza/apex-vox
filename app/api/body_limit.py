@@ -27,6 +27,8 @@ def _limit_for(path: str) -> int:
         return settings.MAX_TOTAL_UPLOAD_SIZE_MB * _MB + _MULTIPART_OVERHEAD
     if _BOX_BLOCK_PATH.match(path):
         return settings.MAX_BOX_BLOCK_MB * _MB + _MULTIPART_OVERHEAD
+    if path.rstrip("/") == "/api/dictation":
+        return settings.DICTATION_MAX_MB * _MB + _MULTIPART_OVERHEAD
     if path.rstrip("/") == "/api/voice-profiles":
         return settings.MAX_VOICE_SAMPLE_MB * _MB + _MULTIPART_OVERHEAD
     return settings.MAX_REQUEST_BODY_MB * _MB

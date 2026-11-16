@@ -543,3 +543,20 @@ class BoxFinalizeResponse(BaseModel):
     minutes_document: Optional[MinutesDocumentResponse] = None
     minutes: Optional[MinutesDocumentResponse] = None
 
+
+
+class DictationRewriteRequest(BaseModel):
+    """Text to rewrite in a tone (see GET /api/dictation/tones)."""
+    text: str
+    tone: str = "clean"
+    instructions: str = ""
+
+
+class DictationResponse(BaseModel):
+    """One dictation: `text` in the chosen tone, `raw_text` as spoken."""
+    text: str
+    raw_text: str
+    tone: str
+    rewritten: bool = False
+    language: Optional[str] = None
+    duration_sec: float = 0.0
