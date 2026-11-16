@@ -451,6 +451,23 @@ class JobManager:
                 self._finished_at[status.job_id] = time.monotonic()
         self._persist_job(status.job_id)
 
+    def register_finished_result(self, result: TranscriptionResult, owner: str, record: Dict) -> None:
+        """
+        A result made without the pipeline (e.g. from a video's captions). A guest's lives in memory
+        for GUEST_RESULT_TTL_MINUTES; an account's is saved like any other, with its history record.
+        """
+        status = JobStatusResponse(
+            job_id=result.job_id, session_id=result.session_id or "", status="completed", progress=100,
+            current_step="Transcripción lista.",
+        )
+        self.register_job(status, result, owner)
+        if result.plan == "guest":
+            with self._lock:
+                self._guest_expiry[result.job_id] = time.time() + settings.GUEST_RESULT_TTL_MINUTES * 60
+            return
+        self._save_result(result)
+        supabase_service.save_transcription_record(record)
+
     def job_owner(self, job_id: str) -> Optional[str]:
         """Quién creó el trabajo (se guarda al crearlo: la sesión de un invitado se descarta al terminar)."""
         with self._lock:

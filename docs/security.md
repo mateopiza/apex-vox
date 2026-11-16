@@ -37,6 +37,16 @@ Out of scope by design: Apex Vox processes audio through third parties (Groq, De
 - Share links (`/s/<token>`): only the owner of a saved result can create, read or revoke its link (`POST/GET/DELETE /api/jobs/{id}/share`, 404 for anyone else, 401 for guests). The token is `<nonce>.<hmac>`: a 144-bit `secrets.token_urlsafe` nonce, unrelated to the job id, plus an HMAC of it with the app secret. The state (and its Postgres replica) stores only the nonce, so a copy of it cannot rebuild a working link. The page is read-only, rendered on the server with autoescaping, sent with `Referrer-Policy: no-referrer`, `X-Robots-Tag: noindex` and `Cache-Control: no-store`, and shows what the owner's plan allows at the time of the visit. The job id appears in the page only when the owner includes the audio (as the signed `?t=` audio URL). Links are deleted with the job, by the retention sweep and with the account.
 - Admin endpoints (`/api/metrics/*`, `/api/telegram/setup`, detailed `/api/health`) need `X-Admin-Key` compared in constant time. They return 404 when the key is missing or wrong, so they are not discoverable.
 
+### Links fetched by the server (`app/services/url_ingest.py`)
+
+`POST /api/upload/url` makes the server download a URL the user pasted, so it is built against SSRF:
+
+- Only `http`/`https`, no credentials in the URL, ports 80, 443, 8080 and 8443.
+- The host is resolved once and **every** address must be global (no private, loopback, link-local such as `169.254.169.254`, CGNAT, multicast or reserved ranges, including IPv4-mapped IPv6). The request then goes to that checked address with the original `Host` header and TLS SNI, so a second DNS answer (DNS rebinding) cannot redirect it.
+- Redirects are followed by hand, at most 5, and each target is checked the same way. Environment proxies are ignored (`trust_env=False`).
+- Size (`MAX_FILE_SIZE_MB`, also enforced while streaming) and total time (`URL_INGEST_TIMEOUT_SECONDS`) are capped; the file must be audio and is probed with ffprobe like any upload.
+- YouTube links go only to yt-dlp's YouTube extractor (`allowed_extractors`), never its generic one, and only YouTube hosts take that path. `URL_INGEST_PROXY` applies to yt-dlp only.
+
 ### Rate limits and throttling
 
 The in-process sliding window (`deps.throttle`) returns 429:
@@ -51,6 +61,7 @@ The in-process sliding window (`deps.throttle`) returns 429:
 | OAuth client registration per IP | 20 per hour |
 | OAuth token per IP | 60 per 10 min |
 | MCP calls per account | 120 per minute |
+| Links pasted (`/api/upload/url`) per account or guest | 20 per hour |
 | Share links created per account | 30 per hour |
 | Result emails per account | `EMAIL_SHARE_DAILY_LIMIT` (50) recipients per day |
 | Share page views per IP | `SHARE_VIEWS_PER_MINUTE` (60) per minute |

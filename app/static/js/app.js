@@ -178,6 +178,8 @@
       btn_play_sequence: "Escuchar en orden",
       dropzone_title: "Arrastra tus archivos de audio aquí o haz clic para seleccionarlos",
       dropzone_hint: "MP3, OGG, WAV, M4A, FLAC o WEBM · uno o varios audios",
+      url_ingest_lbl: "O pega un enlace de YouTube o de un archivo de audio",
+      url_ingest_btn: "Pegar enlace",
       reorder_hint: "Arrastra desde <strong>⠿</strong> (o usa <strong>↑ / ↓</strong>) para ordenar y pulsa <strong>Escuchar</strong> para revisar cada audio.",
       step2_title: "Modelo",
       lbl_engine_select: "Modelo",
@@ -416,6 +418,8 @@
       btn_play_sequence: "Play in order",
       dropzone_title: "Drag and drop your audio files here or click to browse",
       dropzone_hint: "MP3, OGG, WAV, M4A, FLAC or WEBM · one or more audios",
+      url_ingest_lbl: "Or paste a YouTube link or a link to an audio file",
+      url_ingest_btn: "Paste link",
       reorder_hint: "Drag from <strong>⠿</strong> (or use <strong>↑ / ↓</strong>) to reorder and press <strong>Listen</strong> to check each audio.",
       step2_title: "Model",
       lbl_engine_select: "Model",
@@ -2026,6 +2030,48 @@
     }
   }
 
+  async function ingestUrl(event) {
+    event.preventDefault();
+    const input = document.getElementById("url-ingest-input");
+    const btn = document.getElementById("url-ingest-btn");
+    const status = document.getElementById("url-ingest-status");
+    const url = (input.value || "").trim();
+    if (!url) return;
+    hideAlert();
+    btn.disabled = true;
+    transcribeBtn.disabled = true;
+    status.textContent = t("Descargando el audio del enlace…", "Downloading the audio from the link…");
+    status.classList.remove("hidden");
+    try {
+      const res = await authFetch("/api/upload/url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, session_id: state.sessionId, language: state.lang }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.detail || t("No se pudo usar ese enlace.", "Could not use that link."));
+      state.sessionId = data.session_id;
+      state.files = data.files || [];
+      state.sessionMediaToken = data.media_token || state.sessionMediaToken;
+      renderTrackQueue();
+      input.value = "";
+      if (data.kind === "captions" && data.job_id) {
+        showAlert(t(
+          "YouTube no permitió descargar el audio: usamos los subtítulos del video (sin identificar oradores).",
+          "YouTube did not allow the audio download: we used the video's captions (speakers are not identified)."
+        ), "success");
+        state.currentJobId = data.job_id;
+        await loadJobResult(data.job_id);
+      }
+    } catch (err) {
+      showAlert(err.message);
+    } finally {
+      btn.disabled = false;
+      status.classList.add("hidden");
+      transcribeBtn.disabled = state.files.length === 0;
+    }
+  }
+
   function renderTrackQueue() {
     trackListEl.innerHTML = "";
     const count = state.files.length;
@@ -3261,6 +3307,8 @@
 
 
   dropzone.addEventListener("click", () => fileInput.click());
+  const urlIngestForm = document.getElementById("url-ingest-form");
+  if (urlIngestForm) urlIngestForm.addEventListener("submit", ingestUrl);
   dropzone.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();

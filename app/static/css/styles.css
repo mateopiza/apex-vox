@@ -1322,6 +1322,10 @@ select.form-control {
   background: var(--text-primary);
   color: var(--bg);
 }
+.export-btn[aria-expanded="true"] {
+  background: var(--text-primary);
+  color: var(--bg);
+}
 .export-btn.green {
   border-color: var(--brand);
   color: var(--orange-dark);
@@ -3430,6 +3434,23 @@ html.is-desktop .install-android { display: none; }
 #call-card .mcp-url-row select { flex: 0 0 auto; width: auto; }
 .btn-link { background: none; border: 0; padding: 0; cursor: pointer; font: inherit; }
 
+/* Paste a link next to the drop zone */
+.url-ingest {
+  margin-top: var(--space-2);
+}
+.url-ingest-row {
+  display: flex;
+  gap: var(--space-1);
+}
+.url-ingest-row .form-control {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.url-ingest-row .btn-secondary {
+  flex: none;
+  white-space: nowrap;
+}
+
 /* Share panel (result view) and public share page (/s/<token>) */
 .share-panel {
   margin-bottom: var(--space-3);
@@ -3437,6 +3458,9 @@ html.is-desktop .install-android { display: none; }
   border: 1px solid var(--line);
   border-radius: var(--bdrs-control);
   background: var(--bg-section-98);
+}
+.share-panel .field-hint {
+  margin: 0 0 var(--space-2);
 }
 .share-panel-title {
   margin-bottom: 8px;

@@ -324,6 +324,20 @@ class UploadResponse(BaseModel):
     media_token: Optional[str] = Field(default=None, description="Signed token for <audio> previews (?t=)")
 
 
+class UrlIngestRequest(BaseModel):
+    """Add the audio of a YouTube video or of a direct audio link to an upload session."""
+    url: str = Field(..., max_length=2048)
+    session_id: Optional[str] = None
+    language: str = Field(default="es", description="Preferred captions language if only captions can be used")
+
+
+class UrlIngestResponse(UploadResponse):
+    """`kind` is `audio` (a new track in the session) or `captions` (a finished transcript, `job_id`)."""
+    kind: str = "audio"
+    title: str = ""
+    job_id: Optional[str] = None
+
+
 class ReorderRequest(BaseModel):
     """Request payload for updating file sequence order in a session."""
     session_id: str

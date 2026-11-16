@@ -431,6 +431,15 @@
           <input type="file" id="file-input" multiple accept=".mp3,.ogg,.wav,.m4a,.flac,.webm,.mp4,audio/*" class="hidden" />
         </div>
 
+        <form id="url-ingest-form" class="url-ingest" novalidate>
+          <label class="form-label" for="url-ingest-input" data-i18n="url_ingest_lbl">O pega un enlace de YouTube o de un archivo de audio</label>
+          <div class="url-ingest-row">
+            <input type="url" id="url-ingest-input" class="form-control" inputmode="url" autocomplete="off" maxlength="2048" placeholder="https://www.youtube.com/watch?v=..." />
+            <button type="submit" id="url-ingest-btn" class="btn-secondary btn-small" data-i18n="url_ingest_btn">Pegar enlace</button>
+          </div>
+          <p id="url-ingest-status" class="field-hint hidden" aria-live="polite"></p>
+        </form>
+
         <div id="queue-summary" class="queue-summary hidden">
           <span id="queue-count-label">0 archivos en orden</span>
           <div class="row">

@@ -128,5 +128,7 @@ webencodings==0.6.1
     #   tinyhtml5
 websockets==17.4
     # via uvicorn
+yt-dlp==2026.10.26
+    # via -r requirements.txt
 zopfli==0.4.3
     # via fonttools

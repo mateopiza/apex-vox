@@ -182,6 +182,7 @@ TERMS_ES: List[Section] = [
     ("8. Tu contenido y la autorización de terceros", [
         "Conservas todos los derechos sobre tus audios, transcripciones, notas y actas. Nos otorgas solo la licencia necesaria para procesarlos y prestarte el servicio; no los usamos para entrenar modelos propios.",
         "Declaras que tienes la autorización de las personas grabadas para grabarlas y tratar su voz y lo que dicen, conforme a la ley. Eres responsable del contenido que subes.",
+        "Si pegas un enlace (por ejemplo, de YouTube), declaras que tienes derecho a usar ese contenido. Descargamos solo su audio, o sus subtítulos si el audio no está disponible, y lo tratamos como un archivo que subiste.",
         "Si compartes un resultado con un enlace, decides tú a quién se lo envías y debes contar con la autorización de las personas grabadas para compartirlo. Quien tenga el enlace puede verlo hasta que lo revoques o el resultado venza.",
     ]),
     ("9. Uso aceptable", [
@@ -248,6 +249,7 @@ TERMS_EN: List[Section] = [
     ("8. Your content and third-party consent", [
         "You keep all rights to your audio, transcripts, notes and minutes. You grant us only the license needed to process them and provide the service; we do not use them to train our own models.",
         "You confirm you have the consent of the people recorded to record them and process their voice and words, as required by law. You are responsible for the content you upload.",
+        "If you paste a link (for example, to YouTube), you confirm you have the right to use that content. We download only its audio, or its captions when the audio is not available, and treat it like a file you uploaded.",
         "If you share a result with a link, you decide who receives it and must have the consent of the people recorded to share it. Anyone with the link can see it until you revoke it or the result expires.",
     ]),
     ("9. Acceptable use", [
