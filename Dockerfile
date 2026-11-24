@@ -31,6 +31,9 @@ RUN apt-get update && \
         fonts-dejavu-core && \
     rm -rf /var/lib/apt/lists/*
 
+# 1b. Deno: yt-dlp runs YouTube's JavaScript challenge with it (links pasted in /api/upload/url)
+COPY --from=denoland/deno:bin-2.7.0 /deno /usr/local/bin/deno
+
 # 2. Create non-root application user matching host UID/GID
 RUN (getent group ${APP_GID} || groupadd -g ${APP_GID} appuser) && \
     (getent passwd ${APP_UID} || useradd -u ${APP_UID} -g ${APP_GID} -d /home/appuser -m -s /bin/bash appuser)
